@@ -1,0 +1,23 @@
+# MCP sidecars — optional HTTP proxies in front of official MCP servers
+# Orkestria calls platform APIs directly when MCP_*_URL is unset.
+#
+# Google Ads official MCP (Python stdio): https://github.com/googleads/google-ads-mcp
+# Run an HTTP bridge or point MCP_GOOGLE_ADS_READ_URL to your deployed sidecar.
+#
+# docker compose -f docker-compose.mcp.yml up -d
+
+services:
+  mcp-bridge:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./mcp-sidecars:/app
+    ports:
+      - "3101:3101"
+      - "3102:3102"
+      - "3103:3103"
+      - "3104:3104"
+    environment:
+      MCP_BRIDGE_PORT: "3101"
+    command: ["node", "bridge.mjs"]
+    restart: unless-stopped
