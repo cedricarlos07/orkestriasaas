@@ -31,7 +31,7 @@ function Detail() {
     );
   }
 
-  const B = badge[c.status];
+  const B = badge[(c.status as CampaignStatus)] ?? badge.draft;
   const timeline = [
     { t: c.createdAt, label: "Créée", body: c.externalId ? `ID externe : ${c.externalId}` : "Brouillon local." },
     ...(c.updatedAt !== c.createdAt
