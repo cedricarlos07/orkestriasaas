@@ -8,7 +8,7 @@ import {
   isAdkitEnabled,
   listAdkitProjects,
 } from "@/lib/mcp/clients/adkit";
-import { getOrgAdkitProjectId, requireOrgAdkitProjectId, ADKIT_LINK_MARKER } from "@/lib/mcp/adkit-org";
+import { ADKIT_LINK_MARKER } from "@/lib/mcp/adkit-org";
 import { getActiveOrgId } from "./context";
 import { uid } from "./utils";
 
