@@ -1,41 +1,34 @@
 import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { organizationMetadata } from "@/db/schema/index";
+import { connections, organizationMetadata } from "@/db/schema/index";
 import { ensureSession } from "@/lib/auth.functions";
 import {
-  adkitCheckin,
   adkitStatus,
   isAdkitEnabled,
   listAdkitProjects,
 } from "@/lib/mcp/clients/adkit";
+import { getOrgAdkitProjectId, requireOrgAdkitProjectId, ADKIT_LINK_MARKER } from "@/lib/mcp/adkit-org";
 import { getActiveOrgId } from "./context";
+import { uid } from "./utils";
 
-type AdkitStatusView = {
-  connected: boolean;
-  projectId: string | null;
-  projectName: string | null;
-  metaConnected: boolean;
-  metaAccountName: string | null;
-  canPublish: boolean;
+export type AdsPlatformStatus = {
+  id: "meta_ads" | "google_ads" | "tiktok_ads";
+  label: string;
+  linked: boolean;
+  accountName: string | null;
 };
 
-function toStatusView(raw: unknown, projectId: string): AdkitStatusView {
-  const s = (raw ?? {}) as {
-    connected?: boolean;
-    project?: { id?: string; name?: string };
-    platforms?: { meta?: { connected?: boolean; accounts?: { name?: string }[] } };
-    permissions?: { canPublish?: boolean };
+type RawStatus = {
+  connected?: boolean;
+  project?: { id?: string; name?: string };
+  platforms?: {
+    meta?: { connected?: boolean; accounts?: { name?: string; id?: string }[] };
+    google?: { connected?: boolean; accounts?: { name?: string; id?: string }[] };
+    tiktok?: { connected?: boolean; accounts?: { name?: string; id?: string }[] };
   };
-  return {
-    connected: Boolean(s.connected ?? true),
-    projectId: s.project?.id ?? projectId,
-    projectName: s.project?.name ?? null,
-    metaConnected: Boolean(s.platforms?.meta?.connected),
-    metaAccountName: s.platforms?.meta?.accounts?.[0]?.name ?? null,
-    canPublish: Boolean(s.permissions?.canPublish),
-  };
-}
+  permissions?: { canPublish?: boolean };
+};
 
 async function ensureOrgMeta(orgId: string) {
   const rows = await db
@@ -53,38 +46,159 @@ async function ensureOrgMeta(orgId: string) {
   return created[0]!;
 }
 
-export const getAdkitConfig = createServerFn({ method: "GET" }).handler(async () => {
+async function resolveProjectId(orgId: string): Promise<string | null> {
+  const meta = await ensureOrgMeta(orgId);
+  if (meta.adkitProjectId?.trim()) return meta.adkitProjectId.trim();
+  const fromEnv = process.env.ADKIT_PROJECT_ID?.trim();
+  if (fromEnv) {
+    await db
+      .update(organizationMetadata)
+      .set({ adkitProjectId: fromEnv, updatedAt: new Date() })
+      .where(eq(organizationMetadata.organizationId, orgId));
+    return fromEnv;
+  }
+  const projects = await listAdkitProjects();
+  const first = projects[0]?.projectId;
+  if (first) {
+    await db
+      .update(organizationMetadata)
+      .set({ adkitProjectId: first, updatedAt: new Date() })
+      .where(eq(organizationMetadata.organizationId, orgId));
+    return first;
+  }
+  return null;
+}
+
+function platformsFromStatus(raw: RawStatus): AdsPlatformStatus[] {
+  const p = raw.platforms ?? {};
+  return [
+    {
+      id: "meta_ads",
+      label: "Meta Ads",
+      linked: Boolean(p.meta?.connected),
+      accountName: p.meta?.accounts?.[0]?.name ?? p.meta?.accounts?.[0]?.id ?? null,
+    },
+    {
+      id: "google_ads",
+      label: "Google Ads",
+      linked: Boolean(p.google?.connected),
+      accountName: p.google?.accounts?.[0]?.name ?? p.google?.accounts?.[0]?.id ?? null,
+    },
+    {
+      id: "tiktok_ads",
+      label: "TikTok Ads",
+      linked: Boolean(p.tiktok?.connected),
+      accountName: p.tiktok?.accounts?.[0]?.name ?? p.tiktok?.accounts?.[0]?.id ?? null,
+    },
+  ];
+}
+
+/** Upsert local connection rows from unified ads MCP status. */
+async function upsertAdkitConnection(
+  orgId: string,
+  connector: AdsPlatformStatus["id"],
+  linked: boolean,
+  accountName: string | null,
+) {
+  const rows = await db.select().from(connections).where(eq(connections.organizationId, orgId));
+  const existing = rows.find((r) => r.connector === connector);
+  const now = new Date();
+
+  if (linked) {
+    const values = {
+      status: "connectée",
+      externalAccount: accountName ?? "Compte lié",
+      encryptedTokens: ADKIT_LINK_MARKER,
+      lastSync: now,
+      updatedAt: now,
+    };
+    if (existing) {
+      // Don't overwrite a real OAuth token connection
+      if (existing.encryptedTokens && existing.encryptedTokens !== ADKIT_LINK_MARKER) {
+        await db
+          .update(connections)
+          .set({ status: "connectée", externalAccount: accountName ?? existing.externalAccount, lastSync: now, updatedAt: now })
+          .where(eq(connections.id, existing.id));
+        return;
+      }
+      await db.update(connections).set(values).where(eq(connections.id, existing.id));
+    } else {
+      await db.insert(connections).values({
+        id: uid("conn"),
+        organizationId: orgId,
+        connector,
+        scopes: [],
+        createdAt: now,
+        ...values,
+      });
+    }
+  } else if (existing?.encryptedTokens === ADKIT_LINK_MARKER) {
+    await db
+      .update(connections)
+      .set({ status: "déconnectée", externalAccount: null, encryptedTokens: null, updatedAt: now })
+      .where(eq(connections.id, existing.id));
+  }
+}
+
+/**
+ * User-facing ads connection status (powered by AdKit MCP when configured).
+ * Does not expose AdKit branding in the payload labels used by the UI.
+ */
+export const getAdsLinkStatus = createServerFn({ method: "GET" }).handler(async () => {
   const session = await ensureSession();
   const orgId = await getActiveOrgId(session);
-  const meta = await ensureOrgMeta(orgId);
   const enabled = isAdkitEnabled();
-  let projects: Awaited<ReturnType<typeof listAdkitProjects>> = [];
-  let status: AdkitStatusView | null = null;
-  let error: string | null = null;
 
-  if (enabled) {
-    try {
-      projects = await listAdkitProjects();
-      const projectId = meta.adkitProjectId ?? process.env.ADKIT_PROJECT_ID ?? projects[0]?.projectId ?? null;
-      if (projectId) {
-        status = toStatusView(await adkitStatus(projectId), projectId);
-      }
-    } catch (e) {
-      error = e instanceof Error ? e.message : "AdKit indisponible";
-    }
+  if (!enabled) {
+    return {
+      enabled: false as const,
+      connectUrl: "https://app.adkit.so",
+      projectName: null as string | null,
+      platforms: [] as AdsPlatformStatus[],
+      error: null as string | null,
+    };
   }
 
-  return {
-    enabled,
-    orgId,
-    adkitProjectId: meta.adkitProjectId,
-    defaultProjectId: process.env.ADKIT_PROJECT_ID?.trim() || null,
-    projects,
-    status,
-    error,
-    writeEnabled: process.env.MCP_WRITE_ENABLED === "true",
-  };
+  try {
+    const projectId = await resolveProjectId(orgId);
+    if (!projectId) {
+      return {
+        enabled: true as const,
+        connectUrl: "https://app.adkit.so",
+        projectName: null,
+        platforms: platformsFromStatus({}),
+        error: "Aucun espace publicitaire disponible. Contactez le support Orkestria.",
+      };
+    }
+    const raw = (await adkitStatus(projectId)) as RawStatus;
+    const platforms = platformsFromStatus(raw);
+    for (const p of platforms) {
+      await upsertAdkitConnection(orgId, p.id, p.linked, p.accountName);
+    }
+    return {
+      enabled: true as const,
+      connectUrl: "https://app.adkit.so",
+      projectName: raw.project?.name ?? null,
+      platforms,
+      error: null as string | null,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Connexion indisponible";
+    const retry = /429|Too many requests/i.test(msg)
+      ? "Trop de requêtes — réessayez dans quelques secondes."
+      : msg;
+    return {
+      enabled: true as const,
+      connectUrl: "https://app.adkit.so",
+      projectName: null,
+      platforms: [] as AdsPlatformStatus[],
+      error: retry,
+    };
+  }
 });
+
+/** @deprecated Prefer getAdsLinkStatus — kept for admin/scripts. */
+export const getAdkitConfig = getAdsLinkStatus;
 
 export const setAdkitProject = createServerFn({ method: "POST" })
   .inputValidator((data: { projectId: string | null }) => data)
@@ -101,17 +215,7 @@ export const setAdkitProject = createServerFn({ method: "POST" })
 
 export const checkinAdkit = createServerFn({ method: "POST" }).handler(async () => {
   await ensureSession();
-  if (!isAdkitEnabled()) throw new Error("ADKIT_API_KEY non configuré");
-  const raw = (await adkitCheckin("orkestria")) as {
-    connected?: boolean;
-    checkedIn?: boolean;
-    project?: { name?: string };
-  };
-  return {
-    connected: Boolean(raw.connected),
-    checkedIn: Boolean(raw.checkedIn),
-    projectName: raw.project?.name ?? null,
-  };
+  return getAdsLinkStatus();
 });
 
 export { getOrgAdkitProjectId, requireOrgAdkitProjectId } from "@/lib/mcp/adkit-org";

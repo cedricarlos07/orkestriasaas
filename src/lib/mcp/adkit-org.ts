@@ -3,6 +3,9 @@ import { db } from "@/db";
 import { organizationMetadata } from "@/db/schema/index";
 import { resolveAdkitProjectId } from "@/lib/mcp/clients/adkit";
 
+/** DB marker: connection linked via AdKit MCP (no native OAuth tokens). */
+export const ADKIT_LINK_MARKER = "adkit:linked";
+
 export async function getOrgAdkitProjectId(orgId: string): Promise<string | null> {
   const rows = await db
     .select()

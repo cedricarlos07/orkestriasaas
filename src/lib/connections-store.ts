@@ -29,6 +29,10 @@ export function useConnections() {
     if (item && !item.configured) {
       throw new Error(`${item.label} n'est pas configuré sur le serveur (credentials manquantes).`);
     }
+    if (item?.connectMode === "unified") {
+      window.open("https://app.adkit.so", "_blank", "noopener,noreferrer");
+      return;
+    }
     window.location.href = `/api/oauth/${connector}/authorize`;
   };
 

@@ -77,11 +77,15 @@ export const syncCampaignsFromMeta = createServerFn({ method: "POST" }).handler(
   if (isAdkitEnabled()) {
     try {
       const projectId = await requireOrgAdkitProjectId(orgId);
-      const meta = await getMetaConnection(orgId);
+      const meta = await getMetaConnection(orgId).catch(() => null);
+      const accountId =
+        meta?.via === "oauth" && meta.tokens.accountId
+          ? metaAdAccountId(meta.tokens)
+          : undefined;
       const snapshot = await fetchAdkitAccountSnapshot({
         projectId,
         platform: "meta",
-        accountId: meta?.tokens.accountId ? metaAdAccountId(meta.tokens) : undefined,
+        accountId,
         period: "30 derniers jours",
       });
       snapshotCampaigns = snapshot.campaigns.map((c) => ({
@@ -98,8 +102,8 @@ export const syncCampaignsFromMeta = createServerFn({ method: "POST" }).handler(
   }
 
   if (!snapshotCampaigns.length) {
-    const meta = await getMetaConnection(orgId);
-    if (!meta) return { synced: 0, via: "none" as const };
+    const meta = await getMetaConnection(orgId).catch(() => null);
+    if (!meta || meta.via === "adkit") return { synced: 0, via: "none" as const };
     const snapshot = await fetchMetaAdsSnapshot(
       meta.tokens.accessToken,
       meta.tokens.accountId!,
@@ -223,7 +227,10 @@ export const launchCampaign = createServerFn({ method: "POST" })
       if (isAdkitEnabled()) {
         via = "adkit";
         const projectId = await requireOrgAdkitProjectId(orgId);
-        const accountId = meta ? metaAdAccountId(meta.tokens) : undefined;
+        const accountId =
+          meta?.via === "oauth" && meta.tokens.accountId
+            ? metaAdAccountId(meta.tokens)
+            : undefined;
         const daily = toAdkitDailyBudget(dailyBudget);
         const result = await adkitManage(projectId, {
           platform: "meta",

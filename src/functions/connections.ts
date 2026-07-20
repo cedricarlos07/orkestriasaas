@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { connections } from "@/db/schema/index";
 import { ensureSession } from "@/lib/auth.functions";
 import { CONNECTORS, hasOAuthCredentials, type ConnectorId } from "@/lib/oauth/connectors";
+import { isAdkitEnabled } from "@/lib/mcp/clients/adkit";
 import { disconnectConnection, getAuthorizeRedirectAsync } from "@/lib/oauth/service";
 import { getActiveOrgId } from "./context";
 
@@ -16,7 +17,17 @@ export type ConnectionView = {
   externalAccount: string | null;
   lastSync: string | null;
   scopes: string[];
+  via: "oauth" | "unified" | "none";
 };
+
+function connectorConfigured(id: ConnectorId): boolean {
+  if (hasOAuthCredentials(id)) return true;
+  // Ads régies: available via unified MCP (AdKit) when API key is on the server
+  if (id === "meta_ads" || id === "google_ads" || id === "tiktok_ads") {
+    return isAdkitEnabled();
+  }
+  return false;
+}
 
 export const listConnections = createServerFn({ method: "GET" }).handler(async () => {
   const session = await ensureSession();
@@ -24,6 +35,12 @@ export const listConnections = createServerFn({ method: "GET" }).handler(async (
   const rows = await db.select().from(connections).where(eq(connections.organizationId, orgId));
   return rows.map((r) => {
     const cfg = CONNECTORS[r.connector as ConnectorId];
+    const via =
+      r.encryptedTokens === "adkit:linked"
+        ? ("unified" as const)
+        : r.encryptedTokens
+          ? ("oauth" as const)
+          : ("none" as const);
     return {
       id: r.id,
       connector: r.connector as ConnectorId,
@@ -33,6 +50,7 @@ export const listConnections = createServerFn({ method: "GET" }).handler(async (
       externalAccount: r.externalAccount,
       lastSync: r.lastSync?.toISOString() ?? null,
       scopes: (r.scopes as string[]) ?? [],
+      via,
     } satisfies ConnectionView;
   });
 });
@@ -61,6 +79,11 @@ export const listConnectionCatalog = createServerFn({ method: "GET" }).handler(a
     id: c.id,
     label: c.label,
     group: c.group,
-    configured: hasOAuthCredentials(c.id),
+    configured: connectorConfigured(c.id),
+    connectMode: connectorConfigured(c.id)
+      ? hasOAuthCredentials(c.id)
+        ? ("oauth" as const)
+        : ("unified" as const)
+      : ("none" as const),
   }));
 });

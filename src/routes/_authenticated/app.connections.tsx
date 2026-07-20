@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { CheckCircle2, PlugZap, Loader2 } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, PlugZap, Loader2, RefreshCw, ExternalLink } from "lucide-react";
 import { CONNECTORS, type ConnectorId } from "@/lib/oauth/connectors";
 import { useConnections } from "@/lib/connections-store";
+import { getAdsLinkStatus } from "@/functions/adkit";
 
 export const Route = createFileRoute("/_authenticated/app/connections")({ component: Connections });
 
@@ -13,6 +15,18 @@ const EXTRA = [
 
 function Connections() {
   const { isLoading, connect, disconnect, byConnector, catalog } = useConnections();
+  const qc = useQueryClient();
+  const {
+    data: adsLink,
+    isLoading: adsLoading,
+    isFetching: adsFetching,
+    refetch: refetchAds,
+  } = useQuery({
+    queryKey: ["ads-link-status"],
+    queryFn: () => getAdsLinkStatus(),
+    staleTime: 60_000,
+    retry: 1,
+  });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -21,22 +35,60 @@ function Connections() {
     }
   }, []);
 
+  useEffect(() => {
+    if (adsLink?.platforms?.length) {
+      void qc.invalidateQueries({ queryKey: ["connections"] });
+      void qc.invalidateQueries({ queryKey: ["dashboard-kpis"] });
+    }
+  }, [adsLink?.platforms, qc]);
+
   const groups = [
     { title: "Régies publicitaires", filter: "ads" as const },
     { title: "Analytics & tracking", filter: "analytics" as const },
   ];
 
+  const platformMap = Object.fromEntries((adsLink?.platforms ?? []).map((p) => [p.id, p]));
+
+  const openConnect = (id: ConnectorId) => {
+    const item = catalog.find((c) => c.id === id);
+    if (item?.connectMode === "unified" || (adsLink?.enabled && (id === "meta_ads" || id === "google_ads" || id === "tiktok_ads"))) {
+      window.open(adsLink?.connectUrl ?? "https://app.adkit.so", "_blank", "noopener,noreferrer");
+      return;
+    }
+    void connect(id);
+  };
+
+  const refresh = async () => {
+    await refetchAds();
+    await qc.invalidateQueries({ queryKey: ["connections"] });
+    await qc.invalidateQueries({ queryKey: ["dashboard-kpis"] });
+  };
+
   return (
     <div className="mx-auto max-w-[1000px] space-y-6">
-      <header>
-        <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Connexions</p>
-        <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Comptes publicitaires et outils</h1>
-        <p className="text-[13px] text-ink-soft">
-          Connectez vos comptes publicitaires pour piloter campagnes, budgets et rapports depuis Orkestria.
-        </p>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Connexions</p>
+          <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Comptes publicitaires et outils</h1>
+          <p className="text-[13px] text-ink-soft">
+            Connectez Meta, Google ou TikTok en un clic — sans créer d&apos;app développeur.
+          </p>
+        </div>
+        {adsLink?.enabled && (
+          <button type="button" className="chip-ghost" disabled={adsFetching} onClick={() => void refresh()}>
+            {adsFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Actualiser
+          </button>
+        )}
       </header>
 
-      {isLoading ? (
+      {adsLink?.error && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
+          {adsLink.error}
+        </p>
+      )}
+
+      {isLoading || adsLoading ? (
         <div className="flex items-center gap-2 text-[13px] text-ink-soft">
           <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
         </div>
@@ -51,9 +103,14 @@ function Connections() {
                 .filter((c) => c.group === g.filter)
                 .map((cfg) => {
                   const conn = byConnector(cfg.id);
-                  const connected = conn?.status === "connectée";
+                  const ads = platformMap[cfg.id as keyof typeof platformMap];
+                  const linkedViaAds = Boolean(ads?.linked);
+                  const connected = conn?.status === "connectée" || linkedViaAds;
                   const catalogItem = catalog.find((c) => c.id === cfg.id);
                   const configured = catalogItem?.configured ?? false;
+                  const accountLabel =
+                    ads?.accountName ?? conn?.externalAccount ?? (connected ? "Compte lié" : null);
+
                   return (
                     <li key={cfg.id} className="flex items-center justify-between gap-4 px-5 py-4">
                       <div className="flex items-center gap-3">
@@ -63,7 +120,11 @@ function Connections() {
                         <div>
                           <p className="text-[14px] font-medium text-ink">{cfg.label}</p>
                           <p className="text-[12px] text-ink-soft">
-                            {connected ? conn?.externalAccount : configured ? "Non connecté" : "Non configuré sur le serveur"}
+                            {connected
+                              ? accountLabel
+                              : configured
+                                ? "Non connecté"
+                                : "Non disponible"}
                           </p>
                         </div>
                       </div>
@@ -72,17 +133,37 @@ function Connections() {
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
                             <CheckCircle2 className="h-3.5 w-3.5" /> Connecté
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => conn && disconnect(conn.id)}
-                            className="chip-ghost text-[12px]"
-                          >
-                            Déconnecter
-                          </button>
+                          {(catalogItem?.connectMode === "unified" || conn?.via === "unified") ? (
+                            <button
+                              type="button"
+                              onClick={() => openConnect(cfg.id)}
+                              className="chip-ghost text-[12px]"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" /> Gérer
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => conn && disconnect(conn.id)}
+                              className="chip-ghost text-[12px]"
+                            >
+                              Déconnecter
+                            </button>
+                          )}
                         </div>
                       ) : configured ? (
-                        <button type="button" onClick={() => void connect(cfg.id as ConnectorId)} className="btn-primary !px-3 !py-1.5 !text-[12px]">
-                          Connecter
+                        <button
+                          type="button"
+                          onClick={() => openConnect(cfg.id)}
+                          className="btn-primary !px-3 !py-1.5 !text-[12px]"
+                        >
+                          {catalogItem?.connectMode === "unified" ? (
+                            <>
+                              Connecter <ExternalLink className="h-3.5 w-3.5" />
+                            </>
+                          ) : (
+                            "Connecter"
+                          )}
                         </button>
                       ) : (
                         <span className="chip-ghost text-[12px] text-ink-soft">Bientôt</span>
@@ -93,6 +174,12 @@ function Connections() {
             </ul>
           </section>
         ))
+      )}
+
+      {adsLink?.enabled && (
+        <p className="text-center text-[12px] text-ink-soft">
+          Après avoir autorisé un compte, revenez ici et cliquez sur Actualiser.
+        </p>
       )}
 
       <section className="rounded-2xl border border-line/70 bg-white">
