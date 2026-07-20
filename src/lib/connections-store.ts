@@ -29,9 +29,11 @@ export function useConnections() {
     if (item && !item.configured) {
       throw new Error(`${item.label} n'est pas configuré sur le serveur (credentials manquantes).`);
     }
+    // Unified MCP links are provisioned server-side — never bounce users to an external dashboard.
     if (item?.connectMode === "unified") {
-      window.open("https://app.adkit.so", "_blank", "noopener,noreferrer");
-      return;
+      throw new Error(
+        "Ce compte se lie côté Orkestria. Actualisez la page Connexions ou contactez le support.",
+      );
     }
     window.location.href = `/api/oauth/${connector}/authorize`;
   };

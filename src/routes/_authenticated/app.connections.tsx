@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, PlugZap, Loader2, RefreshCw, ExternalLink } from "lucide-react";
-import { CONNECTORS, type ConnectorId } from "@/lib/oauth/connectors";
+import { CheckCircle2, PlugZap, Loader2, RefreshCw } from "lucide-react";
+import { CONNECTORS } from "@/lib/oauth/connectors";
 import { useConnections } from "@/lib/connections-store";
 import { getAdsLinkStatus } from "@/functions/adkit";
 
@@ -14,7 +14,7 @@ const EXTRA = [
 ];
 
 function Connections() {
-  const { isLoading, connect, disconnect, byConnector, catalog } = useConnections();
+  const { isLoading, byConnector, catalog } = useConnections();
   const qc = useQueryClient();
   const {
     data: adsLink,
@@ -49,15 +49,6 @@ function Connections() {
 
   const platformMap = Object.fromEntries((adsLink?.platforms ?? []).map((p) => [p.id, p]));
 
-  const openConnect = (id: ConnectorId) => {
-    const item = catalog.find((c) => c.id === id);
-    if (item?.connectMode === "unified" || (adsLink?.enabled && (id === "meta_ads" || id === "google_ads" || id === "tiktok_ads"))) {
-      window.open(adsLink?.connectUrl ?? "https://app.adkit.so", "_blank", "noopener,noreferrer");
-      return;
-    }
-    void connect(id);
-  };
-
   const refresh = async () => {
     await refetchAds();
     await qc.invalidateQueries({ queryKey: ["connections"] });
@@ -71,7 +62,7 @@ function Connections() {
           <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Connexions</p>
           <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Comptes publicitaires et outils</h1>
           <p className="text-[13px] text-ink-soft">
-            Connectez Meta, Google ou TikTok en un clic — sans créer d&apos;app développeur.
+            Statut de vos régies — tout se gère dans Orkestria, sans quitter l&apos;app.
           </p>
         </div>
         {adsLink?.enabled && (
@@ -123,48 +114,17 @@ function Connections() {
                             {connected
                               ? accountLabel
                               : configured
-                                ? "Non connecté"
+                                ? "En attente de liaison par Orkestria"
                                 : "Non disponible"}
                           </p>
                         </div>
                       </div>
                       {connected ? (
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Connecté
-                          </span>
-                          {(catalogItem?.connectMode === "unified" || conn?.via === "unified") ? (
-                            <button
-                              type="button"
-                              onClick={() => openConnect(cfg.id)}
-                              className="chip-ghost text-[12px]"
-                            >
-                              <ExternalLink className="h-3.5 w-3.5" /> Gérer
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => conn && disconnect(conn.id)}
-                              className="chip-ghost text-[12px]"
-                            >
-                              Déconnecter
-                            </button>
-                          )}
-                        </div>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Connecté
+                        </span>
                       ) : configured ? (
-                        <button
-                          type="button"
-                          onClick={() => openConnect(cfg.id)}
-                          className="btn-primary !px-3 !py-1.5 !text-[12px]"
-                        >
-                          {catalogItem?.connectMode === "unified" ? (
-                            <>
-                              Connecter <ExternalLink className="h-3.5 w-3.5" />
-                            </>
-                          ) : (
-                            "Connecter"
-                          )}
-                        </button>
+                        <span className="chip-ghost text-[12px] text-ink-soft">À activer</span>
                       ) : (
                         <span className="chip-ghost text-[12px] text-ink-soft">Bientôt</span>
                       )}
@@ -174,12 +134,6 @@ function Connections() {
             </ul>
           </section>
         ))
-      )}
-
-      {adsLink?.enabled && (
-        <p className="text-center text-[12px] text-ink-soft">
-          Après avoir autorisé un compte, revenez ici et cliquez sur Actualiser.
-        </p>
       )}
 
       <section className="rounded-2xl border border-line/70 bg-white">

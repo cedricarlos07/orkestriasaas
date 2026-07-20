@@ -152,7 +152,6 @@ export const getAdsLinkStatus = createServerFn({ method: "GET" }).handler(async 
   if (!enabled) {
     return {
       enabled: false as const,
-      connectUrl: "https://app.adkit.so",
       projectName: null as string | null,
       platforms: [] as AdsPlatformStatus[],
       error: null as string | null,
@@ -164,7 +163,6 @@ export const getAdsLinkStatus = createServerFn({ method: "GET" }).handler(async 
     if (!projectId) {
       return {
         enabled: true as const,
-        connectUrl: "https://app.adkit.so",
         projectName: null,
         platforms: platformsFromStatus({}),
         error: "Aucun espace publicitaire disponible. Contactez le support Orkestria.",
@@ -177,7 +175,6 @@ export const getAdsLinkStatus = createServerFn({ method: "GET" }).handler(async 
     }
     return {
       enabled: true as const,
-      connectUrl: "https://app.adkit.so",
       projectName: raw.project?.name ?? null,
       platforms,
       error: null as string | null,
@@ -189,7 +186,6 @@ export const getAdsLinkStatus = createServerFn({ method: "GET" }).handler(async 
       : msg;
     return {
       enabled: true as const,
-      connectUrl: "https://app.adkit.so",
       projectName: null,
       platforms: [] as AdsPlatformStatus[],
       error: retry,
