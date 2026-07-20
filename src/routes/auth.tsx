@@ -58,7 +58,6 @@ function AuthPage() {
     setInfo(null);
     if (!validate()) return;
     setLoading("submit");
-    await new Promise((r) => setTimeout(r, 600)); // fake latency
     try {
       if (mode === "signup") {
         const { error } = await authClient.signUp.email({

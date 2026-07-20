@@ -19,13 +19,7 @@ const STEPS = [
   "Synthèse",
 ];
 
-const FINAL_FINDINGS: { label: string; kind: "problem" | "opportunity" }[] = [
-  { label: "Tracking WhatsApp partiellement cassé", kind: "problem" },
-  { label: "Meta « Menu Poulet » : 63 000 FCFA sans vente", kind: "problem" },
-  { label: "Créations Meta épuisées (fréquence 4,8)", kind: "problem" },
-  { label: "Google Search : ROAS 5,6x — à financer", kind: "opportunity" },
-  { label: "TikTok « Combo » : audience élargissable", kind: "opportunity" },
-];
+const FINAL_FINDINGS: { label: string; kind: "problem" | "opportunity" }[] = [];
 
 function Audit() {
   const { current, completed, start, update } = useAudits();

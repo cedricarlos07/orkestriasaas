@@ -4,20 +4,9 @@ import { useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/app/automations")({ component: Automations });
 
-const RULES = [
-  { name: "Auto-pause si 20 000 FCFA sans vente", scope: "Toutes campagnes", on: true },
-  { name: "Réduire budget si CPA +30% sur 3 jours", scope: "Meta · TikTok", on: true },
-  { name: "Alerte si fréquence Meta > 4", scope: "Meta", on: true },
-  { name: "Auto-refresh créations fatiguées (CTR -20%)", scope: "Toutes", on: false },
-  { name: "Basculer budget vers meilleur canal (weekly)", scope: "Meta ↔ TikTok", on: false },
-];
+const RULES: { name: string; scope: string; on: boolean }[] = [];
 
-const ALERTS = [
-  { level: "Critique", icon: AlertTriangle, tone: "from-red-50 to-white ring-red-200 text-red-700 bg-red-500", text: "TikTok « Combo » a dépensé 3× sa moyenne sans résultat — budget réduit automatiquement.", action: "Voir l'analyse" },
-  { level: "Élevé", icon: AlertCircle, tone: "from-amber-50 to-white ring-amber-200 text-amber-700 bg-amber-500", text: "Meta « Menu Poulet » : 63 000 FCFA sans vente confirmée. Approbation demandée pour arrêt.", action: "Approuver l'arrêt" },
-  { level: "Modéré", icon: Info, tone: "from-yellow-50 to-white ring-yellow-200 text-yellow-700 bg-yellow-400", text: "Fréquence Meta > 4 sur audience « Cocody 25-34 ». Fatigue probable.", action: "Rafraîchir créations" },
-  { level: "Faible", icon: Info, tone: "from-slate-50 to-white ring-slate-200 text-slate-600 bg-slate-300", text: "Nouvelle audience lookalike détectée sur TikTok.", action: "Voir" },
-];
+const ALERTS: { level: string; icon: typeof AlertTriangle; tone: string; text: string; action: string }[] = [];
 
 const LEVELS = [
   { id: 0, t: "Observation", d: "Lecture et rapports uniquement.", grad: "from-slate-100 to-white", accent: "text-slate-600" },
@@ -121,7 +110,12 @@ function Automations() {
             <ShieldCheck className="h-4 w-4 text-[#ff6c02]" /> Règles de protection
           </p>
           <ul className="space-y-2">
-            {rules.map((r, i) => (
+            {rules.length === 0 ? (
+              <li className="rounded-xl bg-white/60 px-3 py-6 text-center text-[13px] text-ink-soft ring-1 ring-line/60">
+                Aucune règle active. Ajoutez une protection quand vous serez prêt.
+              </li>
+            ) : (
+              rules.map((r, i) => (
               <li key={r.name} className={`flex items-center justify-between gap-4 rounded-xl px-3 py-3 ring-1 transition ${r.on ? "bg-gradient-to-br from-[#fff6ec] to-white ring-[#ff6c02]/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]" : "bg-white/60 ring-line/60"}`}>
                 <div>
                   <p className="text-[14px] font-medium text-ink">{r.name}</p>
@@ -135,7 +129,8 @@ function Automations() {
                   <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.2)] transition ${r.on ? "left-5" : "left-0.5"}`} />
                 </button>
               </li>
-            ))}
+              ))
+            )}
           </ul>
           <button className="chip-ghost mt-4"><Zap className="h-4 w-4" /> Ajouter une règle</button>
         </div>
@@ -145,7 +140,12 @@ function Automations() {
             <ShieldAlert className="h-4 w-4 text-[#ff6c02]" /> Alertes Guardian
           </p>
           <ul className="space-y-3">
-            {ALERTS.map((a) => {
+            {ALERTS.length === 0 ? (
+              <li className="rounded-xl bg-white/60 p-4 text-center text-[13px] text-ink-soft ring-1 ring-line/60">
+                Aucune alerte — les alertes Guardian apparaîtront ici sur données réelles.
+              </li>
+            ) : (
+              ALERTS.map((a) => {
               const [gradFrom, gradTo, ring, text, dot] = a.tone.split(" ");
               const Icon = a.icon;
               return (
@@ -162,7 +162,8 @@ function Automations() {
                   </button>
                 </li>
               );
-            })}
+              })
+            )}
           </ul>
         </div>
       </section>

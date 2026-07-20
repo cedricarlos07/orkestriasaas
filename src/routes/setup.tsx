@@ -132,7 +132,7 @@ function SetupPage() {
                   <input
                     value={company}
                     onChange={(e) => setCompany(e.target.value)}
-                    placeholder={role === "agency" ? "Velvet Studio" : "Ma boutique"}
+                    placeholder={role === "agency" ? "Nom de l'agence" : "Ma boutique"}
                     className="block w-full rounded-xl border border-line bg-white px-4 py-2.5 text-[14px] text-ink focus:border-[#ff6c02] focus:outline-none focus:ring-2 focus:ring-[#ff6c02]/20"
                   />
                 </label>

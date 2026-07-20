@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Building2, Users2, ShieldCheck, CreditCard, BellRing, Save, UserPlus, Trash2, X, Check, KeyRound, Smartphone, Mail, MessageSquare, Sparkles, Monitor } from "lucide-react";
 import { getProfile } from "@/functions/profiles";
+import { authClient } from "@/lib/auth-client";
 
 export const Route = createFileRoute("/_authenticated/app/settings")({ component: Settings });
 
@@ -17,6 +18,7 @@ const TABS = [
 function Settings() {
   const [tab, setTab] = useState(0);
   const { data: profile } = useQuery({ queryKey: ["profile"], queryFn: () => getProfile() });
+  const { data: session } = authClient.useSession();
   const companyFields: [string, string][] = [
     ["Nom de l'entreprise", profile?.company ?? "—"],
     ["Secteur", profile?.sector ?? "—"],
@@ -24,6 +26,10 @@ function Settings() {
     ["Devise", profile?.currency ?? "FCFA"],
     ["Site web", "—"],
   ];
+  const owner = {
+    n: session?.user?.name || profile?.company || "Vous",
+    e: session?.user?.email || "—",
+  };
   return (
     <div className="mx-auto max-w-[1100px] space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -68,7 +74,7 @@ function Settings() {
           <div aria-hidden className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-[#ff6c02]/10 blur-3xl" />
           <div className="relative">
             {tab === 0 && <Form fields={companyFields} />}
-            {tab === 1 && <Members />}
+            {tab === 1 && <Members owner={owner} />}
             {tab === 2 && <Security />}
             {tab === 3 && <Billing />}
             {tab === 4 && <Notifications />}
@@ -95,13 +101,11 @@ function Form({ fields }: { fields: [string, string][] }) {
 
 type Member = { n: string; r: string; e: string };
 
-function Members() {
-  const [list, setList] = useState<Member[]>([
-    { n: "Aïcha Diallo", r: "Propriétaire", e: "aicha@velvetstudio.ci" },
-    { n: "Marc Kouassi", r: "Media buyer", e: "marc@agence.ci" },
-    { n: "Nina Toure", r: "Créatif", e: "nina@agence.ci" },
-  ]);
+function Members({ owner }: { owner: { n: string; e: string } }) {
+  const list: Member[] = [{ n: owner.n, r: "Propriétaire", e: owner.e }];
   const [invite, setInvite] = useState(false);
+  const [extra, setExtra] = useState<Member[]>([]);
+  const all = [...list, ...extra];
   const roleTint: Record<string, string> = {
     "Propriétaire": "bg-gradient-to-r from-[#ff8a3c] to-[#ff6c02] text-white",
     "Media buyer": "bg-sky-100 text-sky-800 ring-1 ring-sky-200",
@@ -111,10 +115,10 @@ function Members() {
     <div>
       <div className="mb-3 flex items-center justify-between">
         <p className="font-display text-[16px] font-semibold text-ink">Équipe</p>
-        <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-ink-soft ring-1 ring-line/60">{list.length} membres</span>
+        <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-ink-soft ring-1 ring-line/60">{all.length} membre{all.length > 1 ? "s" : ""}</span>
       </div>
       <ul className="divide-y divide-line/60 rounded-xl border border-line/60 bg-gradient-to-b from-white to-[#faf6ef] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-        {list.map((m) => (
+        {all.map((m) => (
           <li key={m.e} className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex items-center gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff8a3c] to-[#ff6c02] text-[12px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">
@@ -129,7 +133,7 @@ function Members() {
               <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] ${roleTint[m.r] ?? "bg-surface-2 text-ink"}`}>{m.r}</span>
               {m.r !== "Propriétaire" && (
                 <button
-                  onClick={() => setList((l) => l.filter((x) => x.e !== m.e))}
+                  onClick={() => setExtra((l) => l.filter((x) => x.e !== m.e))}
                   className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-ink-soft ring-1 ring-line/60 transition hover:-translate-y-0.5 hover:text-rose-600"
                   title="Retirer"
                 >
@@ -141,10 +145,11 @@ function Members() {
         ))}
       </ul>
       <button onClick={() => setInvite(true)} className="mt-4 btn-primary"><UserPlus className="h-4 w-4" /> Inviter un membre</button>
+      <p className="mt-2 text-[12px] text-ink-soft">Les invitations locales ne sont pas encore synchronisées en base.</p>
       {invite && (
         <InviteDialog
           onClose={() => setInvite(false)}
-          onInvite={(m) => { setList((l) => [...l, m]); setInvite(false); }}
+          onInvite={(m) => { setExtra((l) => [...l, m]); setInvite(false); }}
         />
       )}
     </div>
@@ -203,12 +208,8 @@ function TextInput({ label, value, onChange, placeholder }: { label: string; val
 }
 
 function Security() {
-  const [twoFA, setTwoFA] = useState(true);
+  const [twoFA, setTwoFA] = useState(false);
   const [alerts, setAlerts] = useState(true);
-  const sessions = [
-    { device: "MacBook Pro · Chrome", loc: "Abidjan, CI", when: "Actif maintenant", current: true, icon: Monitor },
-    { device: "iPhone 14 · Safari", loc: "Abidjan, CI", when: "Il y a 2 h", current: false, icon: Smartphone },
-  ];
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border border-line/60 bg-gradient-to-br from-white to-[#faf6ef] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
@@ -217,10 +218,10 @@ function Security() {
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-sky-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"><KeyRound className="h-4 w-4" /></span>
             <div>
               <p className="text-[14px] font-medium text-ink">Mot de passe</p>
-              <p className="text-[12px] text-ink-soft">Dernière modification il y a 46 jours.</p>
+              <p className="text-[12px] text-ink-soft">Géré via Better Auth.</p>
             </div>
           </div>
-          <button className="chip-ghost">Modifier</button>
+          <button className="chip-ghost" type="button" disabled title="Bientôt">Modifier</button>
         </div>
       </div>
 
@@ -230,7 +231,7 @@ function Security() {
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"><ShieldCheck className="h-4 w-4" /></span>
             <div>
               <p className="text-[14px] font-medium text-ink">Authentification à deux facteurs</p>
-              <p className="text-[12px] text-ink-soft">Code par SMS ou application d'authentification.</p>
+              <p className="text-[12px] text-ink-soft">Pas encore branchée — préférence locale uniquement.</p>
             </div>
           </div>
           <SwitchToggle on={twoFA} onChange={() => setTwoFA((v) => !v)} />
@@ -242,21 +243,18 @@ function Security() {
           <p className="font-display text-[14px] font-semibold text-ink">Sessions actives</p>
           <SwitchToggle on={alerts} onChange={() => setAlerts((v) => !v)} label="Alertes de connexion" />
         </div>
-        <ul className="divide-y divide-line/60">
-          {sessions.map((s) => (
-            <li key={s.device} className="flex items-center justify-between gap-3 py-2.5">
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-ink-soft ring-1 ring-line/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"><s.icon className="h-4 w-4" /></span>
-                <div>
-                  <p className="text-[13px] font-medium text-ink">{s.device}</p>
-                  <p className="text-[11px] text-ink-soft">{s.loc} · {s.when}</p>
-                </div>
+        <p className="text-[13px] text-ink-soft">Session actuelle uniquement — le listing multi-appareils n’est pas encore disponible.</p>
+        <ul className="mt-3 divide-y divide-line/60">
+          <li className="flex items-center justify-between gap-3 py-2.5">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-ink-soft ring-1 ring-line/60"><Monitor className="h-4 w-4" /></span>
+              <div>
+                <p className="text-[13px] font-medium text-ink">Cet appareil</p>
+                <p className="text-[11px] text-ink-soft">Session en cours</p>
               </div>
-              {s.current
-                ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">Cet appareil</span>
-                : <button className="chip-ghost text-rose-600">Déconnecter</button>}
-            </li>
-          ))}
+            </div>
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">Actif</span>
+          </li>
         </ul>
       </div>
     </div>

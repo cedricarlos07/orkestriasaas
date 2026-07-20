@@ -5,7 +5,6 @@ import { checkSuperAdminSession } from "@/lib/admin-store";
 import { authClient } from "@/lib/auth-client";
 import { getProfile, saveUserProfile } from "@/functions/profiles";
 import { useEffect, useRef, useState } from "react";
-import { DashboardSkeleton } from "@/components/DashboardSkeleton";
 import { BrandLogo } from "@/components/BrandLogo";
 
 import { useNotifications, timeAgo, type Notification } from "@/lib/notifications-store";
@@ -82,36 +81,6 @@ function AppLayout() {
     if (typeof window !== "undefined") window.localStorage.setItem("orkestria:sidebar:collapsed", collapsed ? "1" : "0");
   }, [collapsed]);
   const { unread } = useNotifications();
-  // Show skeleton only if the new route hasn't rendered within THRESHOLD_MS.
-  // Once shown, keep it visible at least MIN_VISIBLE_MS to avoid flashing.
-  const THRESHOLD_MS = 400;
-  const MIN_VISIBLE_MS = 140;
-  const [showSkeleton, setShowSkeleton] = useState(false);
-  const [contentReady, setContentReady] = useState(false);
-  useEffect(() => {
-    setContentReady(false);
-    setShowSkeleton(false);
-    const shownAt = { t: 0 };
-    const showTimer = setTimeout(() => {
-      setShowSkeleton(true);
-      shownAt.t = Date.now();
-    }, THRESHOLD_MS);
-    // Simulate "data ready" on next frame after route mount so the skeleton
-    // only appears for genuinely slow renders. Real async pages can plug into
-    // this by delaying their internal state resolution.
-    const readyTimer = setTimeout(() => {
-      const elapsed = shownAt.t ? Date.now() - shownAt.t : 0;
-      const wait = shownAt.t && elapsed < MIN_VISIBLE_MS ? MIN_VISIBLE_MS - elapsed : 0;
-      setTimeout(() => {
-        setShowSkeleton(false);
-        setContentReady(true);
-      }, wait);
-    }, 0);
-    return () => {
-      clearTimeout(showTimer);
-      clearTimeout(readyTimer);
-    };
-  }, [location.pathname]);
   const { list: campaigns } = useCampaigns();
   const liveCount = campaigns.filter((c) => c.status === "live").length;
   const draftCount = campaigns.filter((c) => c.status === "draft").length;
@@ -381,19 +350,7 @@ function AppLayout() {
           <AccountMenu profile={profile} initials={initials} isAdmin={isAdmin} />
         </header>
         <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-8">
-          <div className="relative">
-            <div
-              className={`transition-opacity duration-300 ${showSkeleton ? "opacity-100" : "pointer-events-none absolute inset-0 opacity-0"}`}
-              aria-hidden={!showSkeleton}
-            >
-              <DashboardSkeleton pathname={location.pathname} />
-            </div>
-            <div
-              className={`transition-opacity duration-300 ${contentReady && !showSkeleton ? "opacity-100" : "opacity-0"}`}
-            >
-              <Outlet />
-            </div>
-          </div>
+          <Outlet />
         </main>
       </div>
     </div>
