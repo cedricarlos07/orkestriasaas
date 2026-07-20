@@ -73,12 +73,12 @@ function AppLayout() {
 
   const isActive = (to: string) =>
     to === "/app" ? location.pathname === "/app" : location.pathname.startsWith(to);
-  const [collapsed, setCollapsed] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("orkestria:sidebar:collapsed") === "1";
-  });
+  const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
-    if (typeof window !== "undefined") window.localStorage.setItem("orkestria:sidebar:collapsed", collapsed ? "1" : "0");
+    setCollapsed(window.localStorage.getItem("orkestria:sidebar:collapsed") === "1");
+  }, []);
+  useEffect(() => {
+    window.localStorage.setItem("orkestria:sidebar:collapsed", collapsed ? "1" : "0");
   }, [collapsed]);
   const { unread } = useNotifications();
   const { list: campaigns } = useCampaigns();

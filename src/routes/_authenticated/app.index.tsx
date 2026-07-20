@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, Megaphone, ShieldAlert, Sparkles, TrendingUp, TrendingDown, Minus, Wallet, Target, Coins, PiggyBank, CheckCircle2, Plug, Activity, XCircle, Check, X, Pencil, Loader2 } from "lucide-react";
+import { ArrowUpRight, Megaphone, ShieldAlert, Sparkles, TrendingUp, TrendingDown, Minus, Wallet, Target, Coins, CheckCircle2, Plug, Activity, Check, X, Pencil, Loader2 } from "lucide-react";
 import { useNotifications } from "@/lib/notifications-store";
 import { approveActionFn, listPendingApprovals, rejectActionFn } from "@/functions/ad-actions";
 import { getDashboardKpis } from "@/functions/dashboard";
@@ -166,23 +166,9 @@ function Today() {
               <h2 className="relative flex items-center gap-2 font-display text-[16px] font-semibold text-ink"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#2fbf6b] to-[#0f7a3c] text-white shadow-[0_6px_16px_-6px_rgba(15,122,60,0.6)]"><Activity className="h-4 w-4" /></span> Actions réalisées</h2>
               <Link to="/app/reports" className="chip-ghost">Voir le rapport <ArrowUpRight className="h-3.5 w-3.5" /></Link>
             </div>
-            <ul className="stagger relative space-y-3 text-[14px] text-ink">
-              {[
-                { i: TrendingUp, t: "Campagne « Menu weekend » analysée — CTR +14 %", tag: "Analyse", c: "from-[#7a4ff0] to-[#4a2a9e]" },
-                { i: PiggyBank, t: "Budget Meta réduit de 15 % sur audience broad", tag: "Budget", c: "from-[#3a6bff] to-[#1b3a8a]" },
-                { i: ShieldAlert, t: "Anomalie détectée sur TikTok « Combo » — auto-pause", tag: "Guardian", c: "from-[#ff5e5e] to-[#a01b1b]" },
-                { i: Megaphone, t: "Rapport hebdomadaire envoyé au dirigeant", tag: "Rapport", c: "from-[#ff8a2b] to-[#ff5e00]" },
-                { i: Sparkles, t: "Nouvelle variante vidéo préparée à partir du menu", tag: "Créations", c: "from-[#ff3d78] to-[#9e1e4a]" },
-              ].map((r, i) => (
-                <li key={i} className="card-hover flex items-start gap-3 rounded-xl border border-white/70 bg-white/85 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur hover:bg-white">
-                  <div className={`flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br ${r.c} text-white shadow-[0_6px_14px_-6px_rgba(0,0,0,0.35)] ring-1 ring-white/40 transition-transform group-hover:scale-110`}><r.i className="h-4 w-4" /></div>
-                  <div className="flex-1">
-                    <p>{r.t}</p>
-                    <p className="mt-0.5 text-[12px] text-ink-soft">{r.tag}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <p className="relative text-[13px] text-ink-soft">
+              Aucune action exécutée récemment. Les pauses, créations et syncs Meta / AdKit apparaîtront ici.
+            </p>
           </div>
         </div>
 
@@ -190,27 +176,27 @@ function Today() {
           <div className="card-hover anim-slide-r relative overflow-hidden rounded-2xl border border-[#ffd0c2] bg-gradient-to-br from-[#fff1ea] via-[#ffdbc7] to-[#ffc4a3] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_14px_30px_-20px_rgba(180,60,0,0.3)]" style={{ animationDelay: "120ms" }}>
             <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[#ff5e5e]/15 blur-3xl" />
             <h3 className="relative mb-3 flex items-center gap-2 font-display text-[16px] font-semibold text-ink"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#ff7a4a] to-[#c93a12] text-white shadow-[0_6px_16px_-6px_rgba(200,60,20,0.6)]"><ShieldAlert className="h-4 w-4" /></span> Alertes</h3>
-            <ul className="stagger relative space-y-3 text-[13px]">
-              {[
-                { i: Plug, t: "Compte TikTok déconnecté", grad: "from-[#ffd36b] to-[#e0a020]" },
-                { i: PiggyBank, t: "Budget presque épuisé sur « Combo Vendredi »", grad: "from-[#ffb066] to-[#c94a00]" },
-                { i: Activity, t: "Tracking pixel interrompu (2h)", grad: "from-[#ff7a7a] to-[#a01b1b]" },
-                { i: XCircle, t: "Campagne Meta refusée — visuel à modifier", grad: "from-[#ff5e5e] to-[#7a1414]" },
-              ].map((a, i) => (
-                <li key={i} className="card-hover flex items-start gap-3 rounded-xl border border-white/70 bg-white/85 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur">
-                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${a.grad} text-white shadow-[0_6px_14px_-6px_rgba(0,0,0,0.35)] ring-1 ring-white/40 anim-pulse-dot`}><a.i className="h-4 w-4" /></span>
-                  <p className="pt-1 text-ink">{a.t}</p>
-                </li>
-              ))}
-            </ul>
+            {!dashboard?.metaConnected ? (
+              <p className="relative text-[13px] text-ink">
+                Connectez Meta Ads pour activer les alertes.{" "}
+                <Link to="/app/connections" className="font-semibold underline">Connexions</Link>
+              </p>
+            ) : (
+              <p className="relative text-[13px] text-ink-soft">Aucune alerte — tout est calme pour le moment.</p>
+            )}
           </div>
 
           <div className="card-ink card-hover anim-slide-r p-5" style={{ animationDelay: "220ms" }}>
-            <p className="relative text-[12px] font-medium uppercase tracking-wider text-[#ff8a3d]">Recommandation</p>
-            <p className="relative mt-2 text-[14px]">Une création Meta commence à fatiguer. Je propose de la remplacer par une variante testée sur TikTok.</p>
+            <p className="relative text-[12px] font-medium uppercase tracking-wider text-[#ff8a3d]">Prochaine étape</p>
+            <p className="relative mt-2 text-[14px]">
+              {dashboard?.metaConnected
+                ? "Lancez une analyse ou créez une campagne Meta via AdKit."
+                : "Connectez Meta Ads pour piloter vos campagnes."}
+            </p>
             <div className="relative mt-3 flex gap-2">
-              <button className="btn-primary btn-halo !px-3 !py-1.5 !text-[12px]">Lancer le test</button>
-              <button className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[12px] text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] transition hover:bg-white/10">Plus tard</button>
+              <Link to={dashboard?.metaConnected ? "/app/campaigns/new" : "/app/connections"} className="btn-primary btn-halo !px-3 !py-1.5 !text-[12px]">
+                {dashboard?.metaConnected ? "Nouvelle campagne" : "Connecter Meta"}
+              </Link>
             </div>
           </div>
         </aside>

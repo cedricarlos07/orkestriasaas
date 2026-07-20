@@ -13,7 +13,7 @@ function Leads() {
         <div>
           <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Prospects · Ventes</p>
           <h1 className="mt-0.5 font-display text-[26px] font-semibold text-ink">Leads & ventes</h1>
-          <p className="text-[13px] text-ink-soft">Aucun lead mock — la capture WhatsApp / formulaires arrive ensuite.</p>
+          <p className="text-[13px] text-ink-soft">Aucun lead pour le moment — la capture WhatsApp / formulaires arrive ensuite.</p>
         </div>
       </header>
 

@@ -19,6 +19,7 @@ export type Campaign = {
   roas: string;
   zone?: string | null;
   budget?: string | null;
+  externalId?: string | null;
   createdAt: Date | number;
   updatedAt: Date | number;
 };

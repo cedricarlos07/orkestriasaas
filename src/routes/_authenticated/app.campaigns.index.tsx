@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CampaignsShell } from "./app.campaigns";
 import { CheckCircle2, PauseCircle, AlertTriangle, Search, Copy, Play, Pause, Loader2 } from "lucide-react";
 import { useCampaigns, type CampaignStatus } from "@/lib/campaigns-store";

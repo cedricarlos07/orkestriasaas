@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   useAgentRuns,
   STATE_LABELS,
@@ -19,8 +19,7 @@ export const Route = createFileRoute("/_authenticated/app/runs")({
 });
 
 function RunsPage() {
-  const { list, createDemo } = useAgentRuns();
-  const nav = useNavigate();
+  const { list } = useAgentRuns();
 
   const kpis = [
     {
@@ -72,15 +71,9 @@ function RunsPage() {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => {
-            const r = createDemo("Nouveau run démo", "Objectif conversationnel");
-            nav({ to: "/app/runs/$id", params: { id: r.id } });
-          }}
-          className="btn-primary btn-halo"
-        >
-          <Activity className="h-4 w-4" /> Nouveau run
-        </button>
+        <Link to="/app/orkestria" className="btn-primary btn-halo">
+          <Activity className="h-4 w-4" /> Lancer via Orkestria
+        </Link>
       </header>
 
       <div className="stagger grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -90,9 +83,13 @@ function RunsPage() {
       </div>
 
       <section className="stagger mt-6 space-y-3">
-        {list.map((r) => (
-          <RunRow key={r.id} r={r} />
-        ))}
+        {list.length === 0 ? (
+          <div className="rounded-2xl border border-line/70 bg-white p-10 text-center text-[13px] text-ink-soft">
+            Aucun run pour le moment. Les exécutions agent apparaissent ici après une action réelle.
+          </div>
+        ) : (
+          list.map((r) => <RunRow key={r.id} r={r} />)
+        )}
       </section>
     </div>
   );

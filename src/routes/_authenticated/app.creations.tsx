@@ -20,7 +20,7 @@ function Creations() {
           <div>
             <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Studio créatif</p>
             <h1 className="mt-0.5 font-display text-[26px] font-semibold text-ink">Créations</h1>
-            <p className="text-[13px] text-ink-soft">Aucune création mock — branchez AdKit Studio ou une clé IA pour générer.</p>
+            <p className="text-[13px] text-ink-soft">Aucune création pour le moment — branchez AdKit Studio ou une clé IA pour générer.</p>
           </div>
         </div>
         <div className="flex gap-2">
