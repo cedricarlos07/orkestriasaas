@@ -36,6 +36,7 @@ import {
   Users,
 } from "lucide-react";
 
+import aichaPhoto from "@/assets/aicha-konate.png";
 import heroBg from "@/assets/sasonix/hero.png";
 import brand1 from "@/assets/sasonix/brand-4fMdQURZjmnz4MzthqdHnuPRWG0.svg";
 import brand2 from "@/assets/sasonix/brand-dB1PWeivPriYzrOzFLIvXFX8teA.svg";
@@ -973,11 +974,10 @@ function Testimonial() {
 }
 
 function TestimonialVisual() {
-  const photo = "/__l5e/assets-v1/2aaad3b9-5ced-4e6c-9219-e9765d18d18f/aicha-konate.png";
   return (
     <div className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl bg-[#1a0f08] text-white ring-1 ring-black/10 sm:aspect-[3/4] md:aspect-auto md:min-h-[520px]">
       <img
-        src={photo}
+        src={aichaPhoto}
         alt="Aïcha Konaté, fondatrice d'une boutique de mode à Abidjan"
         className="absolute inset-0 h-full w-full object-cover object-[50%_20%] md:object-[50%_25%]"
         loading="lazy"
