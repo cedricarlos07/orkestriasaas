@@ -34,7 +34,7 @@ function Reports() {
           <div>
             <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Rapports</p>
             <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Performances réelles</h1>
-            <p className="text-[13px] text-ink-soft">Données Meta / AdKit — aucun chiffre fictif.</p>
+            <p className="text-[13px] text-ink-soft">Données issues de vos comptes publicitaires connectés.</p>
           </div>
         </div>
       </header>

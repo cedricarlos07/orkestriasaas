@@ -96,7 +96,7 @@ function Detail() {
           <section className="rounded-2xl border border-line/70 bg-white p-6">
             <h3 className="mb-2 font-display text-[16px] font-semibold text-ink">Plan média</h3>
             <p className="text-[13px] text-ink-soft">
-              Les ad sets / audiences Meta seront listés ici après sync AdKit (pas de données fictives).
+              Les ad sets / audiences Meta seront listés ici après synchronisation.
             </p>
           </section>
 

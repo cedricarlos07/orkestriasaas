@@ -167,7 +167,7 @@ function Today() {
               <Link to="/app/reports" className="chip-ghost">Voir le rapport <ArrowUpRight className="h-3.5 w-3.5" /></Link>
             </div>
             <p className="relative text-[13px] text-ink-soft">
-              Aucune action exécutée récemment. Les pauses, créations et syncs Meta / AdKit apparaîtront ici.
+              Aucune action exécutée récemment. Les pauses, créations et syncs Meta apparaîtront ici.
             </p>
           </div>
         </div>
@@ -190,7 +190,7 @@ function Today() {
             <p className="relative text-[12px] font-medium uppercase tracking-wider text-[#ff8a3d]">Prochaine étape</p>
             <p className="relative mt-2 text-[14px]">
               {dashboard?.metaConnected
-                ? "Lancez une analyse ou créez une campagne Meta via AdKit."
+                ? "Lancez une analyse ou créez une campagne Meta."
                 : "Connectez Meta Ads pour piloter vos campagnes."}
             </p>
             <div className="relative mt-3 flex gap-2">
