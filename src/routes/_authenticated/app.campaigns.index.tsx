@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { CampaignsShell } from "./app.campaigns";
-import { CheckCircle2, PauseCircle, AlertTriangle, Search, Copy, Play, Pause } from "lucide-react";
+import { CheckCircle2, PauseCircle, AlertTriangle, Search, Copy, Play, Pause, Loader2 } from "lucide-react";
 import { useCampaigns, type CampaignStatus } from "@/lib/campaigns-store";
 import { useNotifications } from "@/lib/notifications-store";
+import { syncCampaignsFromMeta } from "@/functions/campaigns";
 
 export const Route = createFileRoute("/_authenticated/app/campaigns/")({ component: List });
 
@@ -27,10 +28,22 @@ const CHANNEL_STYLE: Record<string, { grad: string; ic: string; ring: string }> 
 };
 
 function List() {
-  const { list, duplicate, setStatus } = useCampaigns();
+  const { list, duplicate, setStatus, isLoading, syncMeta } = useCampaigns();
   const { push } = useNotifications();
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("all");
+  const [syncing, setSyncing] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      setSyncing(true);
+      try {
+        await syncMeta();
+      } finally {
+        setSyncing(false);
+      }
+    })();
+  }, [syncMeta]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -73,6 +86,14 @@ function List() {
   return (
     <CampaignsShell>
       <div className="anim-fade-up mb-4 flex flex-wrap items-center gap-3">
+        {syncing && (
+          <span className="flex items-center gap-2 text-[12px] text-ink-soft">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Sync Meta…
+          </span>
+        )}
+        {isLoading && !syncing && (
+          <span className="text-[12px] text-ink-soft">Chargement…</span>
+        )}
         <div className="flex items-center gap-2 rounded-full border border-white/70 px-3 py-2 text-[13px] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_6px_16px_-14px_rgba(20,20,20,0.25)] focus-within:ring-2 focus-within:ring-[#ff6c02]/30"
           style={{ backgroundImage: "linear-gradient(180deg,#ffffff 0%,#faf7f2 100%)" }}
         >

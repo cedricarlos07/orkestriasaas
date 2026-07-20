@@ -3,6 +3,7 @@ import {
   createCampaign as createCampaignFn,
   duplicateCampaign as duplicateCampaignFn,
   listCampaigns,
+  syncCampaignsFromMeta,
   updateCampaignStatus,
 } from "@/functions/campaigns";
 
@@ -58,11 +59,17 @@ export function useCampaigns() {
     onSuccess: invalidate,
   });
 
+  const syncMut = useMutation({
+    mutationFn: () => syncCampaignsFromMeta(),
+    onSuccess: invalidate,
+  });
+
   return {
     list,
     isLoading,
     duplicate: (id: string) => duplicateMut.mutateAsync(id).then(mapCampaign),
     setStatus: (id: string, status: CampaignStatus) => statusMut.mutate({ id, status }),
+    syncMeta: () => syncMut.mutateAsync(),
     add: (c: Omit<Campaign, "id" | "createdAt" | "updatedAt" | "status" | "spend" | "conv" | "roas">) =>
       addMut.mutateAsync(c).then(mapCampaign),
   };

@@ -1,0 +1,115 @@
+import { createServerFn } from "@tanstack/react-start";
+import { ensureSession } from "@/lib/auth.functions";
+import { getActiveOrgId, getUserProfile } from "./context";
+import { getMetaConnection } from "@/lib/platforms/meta-connection";
+import { fetchMetaAdsSnapshot } from "@/lib/platforms/meta-api";
+
+export type DashboardKpi = {
+  key: string;
+  label: string;
+  value: string;
+  delta: string;
+  trend: "up" | "down" | "flat";
+  deltaLabel: string;
+};
+
+export type DashboardData = {
+  greeting: string;
+  company: string;
+  metaConnected: boolean;
+  kpis: DashboardKpi[];
+  pendingApprovalsHint: string;
+};
+
+export const getDashboardKpis = createServerFn({ method: "GET" }).handler(async (): Promise<DashboardData> => {
+  const session = await ensureSession();
+  const orgId = await getActiveOrgId(session);
+  const profile = await getUserProfile(session.user.id);
+  const company = profile?.company ?? session.user.name ?? "votre entreprise";
+
+  const meta = await getMetaConnection(orgId).catch(() => null);
+
+  if (!meta) {
+    return {
+      greeting: session.user.name ? `Bonjour ${session.user.name.split(" ")[0]} 👋` : "Bonjour 👋",
+      company,
+      metaConnected: false,
+      kpis: [],
+      pendingApprovalsHint: "Connectez Meta Ads pour voir vos performances réelles.",
+    };
+  }
+
+  const snapshot = await fetchMetaAdsSnapshot(
+    meta.tokens.accessToken,
+    meta.tokens.accountId!,
+    "30 derniers jours",
+  );
+
+  const spend = snapshot.spend;
+  const conv = snapshot.conversions;
+  const cpa = snapshot.cpa;
+  const currency = snapshot.currency === "USD" ? "$" : snapshot.currency === "EUR" ? "€" : " FCFA";
+  const fmtMoney = (n: number) =>
+    snapshot.currency === "XOF" || snapshot.currency === "XAF"
+      ? `${Math.round(n).toLocaleString("fr-FR")} FCFA`
+      : `${currency}${n.toFixed(0)}`;
+
+  const activeCampaigns = snapshot.campaigns.filter((c) => c.status === "ACTIVE").length;
+
+  return {
+    greeting: session.user.name ? `Bonjour ${session.user.name.split(" ")[0]} 👋` : "Bonjour 👋",
+    company,
+    metaConnected: true,
+    kpis: [
+      {
+        key: "spend",
+        label: "Dépense (30j)",
+        value: fmtMoney(spend),
+        delta: "—",
+        trend: "flat",
+        deltaLabel: "Meta Ads",
+      },
+      {
+        key: "results",
+        label: "Conversions",
+        value: String(conv),
+        delta: "—",
+        trend: conv > 0 ? "up" : "flat",
+        deltaLabel: "30 jours",
+      },
+      {
+        key: "cpa",
+        label: "Coût / résultat",
+        value: cpa != null ? fmtMoney(cpa) : "—",
+        delta: "—",
+        trend: "flat",
+        deltaLabel: "Meta",
+      },
+      {
+        key: "campaigns",
+        label: "Campagnes actives",
+        value: String(activeCampaigns),
+        delta: String(snapshot.campaigns.length),
+        trend: "flat",
+        deltaLabel: "total compte",
+      },
+      {
+        key: "account",
+        label: "Compte",
+        value: snapshot.accountName.slice(0, 18),
+        delta: snapshot.currency,
+        trend: "flat",
+        deltaLabel: "devise",
+      },
+      {
+        key: "issues",
+        label: "Alertes audit",
+        value: String(snapshot.issues.length),
+        delta: String(snapshot.opportunities.length),
+        trend: snapshot.issues.length ? "down" : "up",
+        deltaLabel: "opportunités",
+      },
+    ],
+    pendingApprovalsHint: "",
+  };
+});

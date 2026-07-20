@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, Megaphone, ShieldAlert, Sparkles, TrendingUp, TrendingDown, Minus, Wallet, Target, Coins, PiggyBank, CheckCircle2, Plug, Activity, XCircle, Check, X, Pencil } from "lucide-react";
+import { ArrowUpRight, Megaphone, ShieldAlert, Sparkles, TrendingUp, TrendingDown, Minus, Wallet, Target, Coins, PiggyBank, CheckCircle2, Plug, Activity, XCircle, Check, X, Pencil, Loader2 } from "lucide-react";
 import { useNotifications } from "@/lib/notifications-store";
 import { approveActionFn, listPendingApprovals, rejectActionFn } from "@/functions/ad-actions";
+import { getDashboardKpis } from "@/functions/dashboard";
 
 export const Route = createFileRoute("/_authenticated/app/")({ component: Today });
 
@@ -19,10 +20,32 @@ type Approval = {
 function Today() {
   const { push } = useNotifications();
   const qc = useQueryClient();
+  const { data: dashboard, isLoading: dashLoading } = useQuery({
+    queryKey: ["dashboard-kpis"],
+    queryFn: () => getDashboardKpis(),
+  });
   const { data: pending = [] } = useQuery({
     queryKey: ["pending-approvals"],
     queryFn: () => listPendingApprovals(),
   });
+
+  const kpiIcons: Record<string, typeof Wallet> = {
+    spend: Wallet,
+    results: Target,
+    cpa: Coins,
+    campaigns: Megaphone,
+    account: Plug,
+    issues: ShieldAlert,
+  };
+
+  const kpiStyles = [
+    { grad: "from-[#fff1e2] via-[#ffe0c2] to-[#ffcf9c]", ring: "ring-[#ffb066]/50", ic: "text-[#c94a00]" },
+    { grad: "from-[#e6f7ee] via-[#c9edd8] to-[#a9e0bf]", ring: "ring-[#5cc281]/50", ic: "text-[#0f7a3c]" },
+    { grad: "from-[#fff7d6] via-[#ffe7a3] to-[#ffd36b]", ring: "ring-[#e8b83a]/50", ic: "text-[#8a5a00]" },
+    { grad: "from-[#e8f0ff] via-[#c9dcff] to-[#a3c1ff]", ring: "ring-[#6b95ff]/50", ic: "text-[#1b3a8a]" },
+    { grad: "from-[#f0e6ff] via-[#dcc7ff] to-[#c2a3ff]", ring: "ring-[#9b74ff]/50", ic: "text-[#4a2a9e]" },
+    { grad: "from-[#ffe6ee] via-[#ffc7d8] to-[#ffa3bd]", ring: "ring-[#ff74a1]/50", ic: "text-[#9e1e4a]" },
+  ];
 
   const approvals: Approval[] = pending.map((p) => ({
     id: p.id,
@@ -46,9 +69,13 @@ function Today() {
     <div className="mx-auto max-w-[1200px] space-y-8">
       <header className="flex flex-wrap items-end justify-between gap-4 anim-fade-up">
         <div>
-          <p className="text-[13px] text-ink-soft">Bonjour Velvet Studio 👋</p>
+          <p className="text-[13px] text-ink-soft">{dashboard?.greeting ?? "Bonjour 👋"}</p>
           <h1 className="mt-1 font-display text-[28px] font-semibold text-ink">Aujourd'hui</h1>
-          <p className="mt-1 max-w-[560px] text-[13px] text-ink-soft">Vos campagnes sont stables. {approvals.length} action{approvals.length > 1 ? "s" : ""} attend{approvals.length > 1 ? "ent" : ""} votre validation.</p>
+          <p className="mt-1 max-w-[560px] text-[13px] text-ink-soft">
+            {dashboard?.metaConnected
+              ? `Données Meta · ${dashboard.company}. ${approvals.length} action${approvals.length > 1 ? "s" : ""} en attente.`
+              : dashboard?.pendingApprovalsHint ?? "Connectez Meta Ads pour piloter vos campagnes."}
+          </p>
         </div>
         <div className="flex gap-2">
           <Link to="/app/orkestria" className="btn-dark btn-halo">Parler à Orkestria</Link>
@@ -56,43 +83,49 @@ function Today() {
         </div>
       </header>
 
+      {!dashboard?.metaConnected && !dashLoading && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-[14px] text-amber-900">
+          Connectez votre compte Meta Ads pour afficher vos KPIs réels.{" "}
+          <Link to="/app/connections" className="font-semibold underline">Aller aux connexions</Link>
+        </div>
+      )}
+
       <section className="stagger grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        {[
-          // trend: "up" = amélioration métier, "down" = dégradation, "flat" = stable
-          // Pour les coûts, une baisse (-) est une amélioration => trend up.
-          { k: "Dépense du jour", v: "38 400 FCFA", i: Wallet, d: "-6%", trend: "up" as const,   label: "vs hier",   grad: "from-[#fff1e2] via-[#ffe0c2] to-[#ffcf9c]", ring: "ring-[#ffb066]/50", ic: "text-[#c94a00]" },
-          { k: "Résultats",       v: "17",          i: Target, d: "+3",  trend: "up" as const,   label: "vs hier",   grad: "from-[#e6f7ee] via-[#c9edd8] to-[#a9e0bf]", ring: "ring-[#5cc281]/50", ic: "text-[#0f7a3c]" },
-          { k: "Coût / résultat", v: "2 258 FCFA", i: Coins,  d: "-9%", trend: "up" as const,   label: "vs 7j",     grad: "from-[#fff7d6] via-[#ffe7a3] to-[#ffd36b]", ring: "ring-[#e8b83a]/50", ic: "text-[#8a5a00]" },
-          { k: "Budget restant",  v: "146 000 FCFA", i: PiggyBank, d: "j+2", trend: "flat" as const, label: "autonomie", grad: "from-[#e8f0ff] via-[#c9dcff] to-[#a3c1ff]", ring: "ring-[#6b95ff]/50", ic: "text-[#1b3a8a]" },
-          { k: "Revenu attribué", v: "184 000 FCFA", i: TrendingUp, d: "+22%", trend: "up" as const, label: "vs 7j", grad: "from-[#f0e6ff] via-[#dcc7ff] to-[#c2a3ff]", ring: "ring-[#9b74ff]/50", ic: "text-[#4a2a9e]" },
-          { k: "Profit estimé",   v: "62 000 FCFA",  i: Sparkles,   d: "+18%", trend: "up" as const, label: "vs 7j", grad: "from-[#ffe6ee] via-[#ffc7d8] to-[#ffa3bd]", ring: "ring-[#ff74a1]/50", ic: "text-[#9e1e4a]" },
-        ].map((s: { k: string; v: string; i: typeof Wallet; d: string; trend: "up" | "down" | "flat"; label: string; grad: string; ring: string; ic: string }) => {
+        {dashLoading ? (
+          <div className="col-span-full flex items-center gap-2 text-[13px] text-ink-soft">
+            <Loader2 className="h-4 w-4 animate-spin" /> Chargement des métriques…
+          </div>
+        ) : (
+          (dashboard?.kpis ?? []).map((s, idx) => {
+          const Icon = kpiIcons[s.key] ?? Sparkles;
+          const style = kpiStyles[idx % kpiStyles.length];
           const TrendIcon = s.trend === "up" ? TrendingUp : s.trend === "down" ? TrendingDown : Minus;
           const badgeCls = s.trend === "up" ? "kpi-up" : s.trend === "down" ? "kpi-down" : "kpi-flat";
           const trendLabel = s.trend === "up" ? "Amélioration" : s.trend === "down" ? "Baisse" : "Stable";
           return (
             <div
-              key={s.k}
-              className={`card-hover relative overflow-hidden rounded-2xl border border-white/60 bg-gradient-to-br ${s.grad} p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_24px_-16px_rgba(20,20,20,0.25)]`}
+              key={s.key}
+              className={`card-hover relative overflow-hidden rounded-2xl border border-white/60 bg-gradient-to-br ${style.grad} p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_24px_-16px_rgba(20,20,20,0.25)]`}
             >
               <div className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-full bg-white/40 blur-xl anim-pulse-dot" />
               <div className="relative flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-ink/70">
-                  <span className={`flex h-6 w-6 items-center justify-center rounded-md bg-white/80 ${s.ic} ring-1 ${s.ring} shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]`}>
-                    <s.i className="h-3.5 w-3.5" />
+                  <span className={`flex h-6 w-6 items-center justify-center rounded-md bg-white/80 ${style.ic} ring-1 ${style.ring} shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]`}>
+                    <Icon className="h-3.5 w-3.5" />
                   </span>
-                  {s.k}
+                  {s.label}
                 </div>
                 <span className={`kpi-badge ${badgeCls}`} title={trendLabel}>
                   <TrendIcon className="h-2.5 w-2.5" strokeWidth={3} />
-                  {s.d}
+                  {s.delta}
                 </span>
               </div>
-              <p className="relative mt-2 font-display text-[18px] font-semibold text-ink">{s.v}</p>
-              <p className="relative mt-0.5 text-[11px] text-ink-soft">{s.label} · {trendLabel}</p>
+              <p className="relative mt-2 font-display text-[18px] font-semibold text-ink">{s.value}</p>
+              <p className="relative mt-0.5 text-[11px] text-ink-soft">{s.deltaLabel} · {trendLabel}</p>
             </div>
           );
-        })}
+        })
+        )}
       </section>
 
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">

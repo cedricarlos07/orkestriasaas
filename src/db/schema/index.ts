@@ -176,6 +176,8 @@ export const organizationMetadata = pgTable("organization_metadata", {
   health: text("health").default("ok"),
   autopilot: boolean("autopilot").default(false),
   writeBlocked: boolean("write_blocked").default(false),
+  /** AdKit project id for this org (multi-brand: one project per marque). */
+  adkitProjectId: text("adkit_project_id"),
   adSpend: numeric("ad_spend", { precision: 14, scale: 2 }).default("0"),
   aiSpend: numeric("ai_spend", { precision: 14, scale: 2 }).default("0"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -207,6 +209,8 @@ export const campaigns = pgTable(
     roas: text("roas").default("—"),
     zone: text("zone"),
     budget: text("budget"),
+    externalId: text("external_id"),
+    connector: text("connector"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

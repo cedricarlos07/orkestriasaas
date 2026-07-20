@@ -20,12 +20,7 @@ const TYPE_STYLE: Record<string, string> = {
   Technique: "bg-emerald-50 text-emerald-700 ring-emerald-200",
 };
 
-const REPORTS = [
-  { title: "Semaine du 14 juillet", type: "Dirigeant", date: "Il y a 2 jours" },
-  { title: "Bilan Juin 2026", type: "Marketing", date: "Il y a 3 semaines" },
-  { title: "Rapport client — Velvet Studio", type: "Agence", date: "Il y a 5 jours" },
-  { title: "Audit tracking WhatsApp", type: "Technique", date: "Il y a 1 mois" },
-];
+const REPORTS: { title: string; type: string; date: string }[] = [];
 
 type PeriodKey = "current_week" | "previous_week" | "current_month" | "previous_month" | "june_2026" | "may_2026";
 
@@ -199,7 +194,12 @@ function Reports() {
           <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-ink-soft ring-1 ring-line/60">{REPORTS.length} rapports</span>
         </div>
         <ul className="divide-y divide-line/60">
-          {REPORTS.map((r) => (
+          {REPORTS.length === 0 ? (
+            <li className="px-5 py-8 text-center text-[14px] text-ink-soft">
+              Aucun rapport enregistré. Demandez à Orkestria un rapport depuis l'onglet Orkestria.
+            </li>
+          ) : (
+          REPORTS.map((r) => (
             <li key={r.title} className="flex items-center justify-between gap-3 px-5 py-3 transition hover:bg-white/70">
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-white to-[#faf6ef] text-ink-soft ring-1 ring-line/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
@@ -215,7 +215,8 @@ function Reports() {
               </div>
               <button className="chip-ghost"><Download className="h-4 w-4" /> Télécharger</button>
             </li>
-          ))}
+          ))
+          )}
         </ul>
       </section>
 

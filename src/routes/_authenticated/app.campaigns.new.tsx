@@ -8,6 +8,7 @@ import {
 import { printHtmlAsPdf } from "@/lib/print-pdf";
 import { useCampaigns } from "@/lib/campaigns-store";
 import { useNotifications } from "@/lib/notifications-store";
+import { launchCampaign } from "@/functions/campaigns";
 
 export const Route = createFileRoute("/_authenticated/app/campaigns/new")({
   head: () => ({ meta: [{ title: "Nouvelle campagne — Orkestria" }, { name: "robots", content: "noindex" }] }),
@@ -69,7 +70,9 @@ function NewCampaign() {
           {step === "preview" && plan && (
             <Preview plan={plan} onEdit={() => setStep("chat")} onApprove={() => setStep("execute")} />
           )}
-          {step === "execute" && <Execute onDone={() => setStep("done")} />}
+          {step === "execute" && plan && (
+            <Execute brief={brief} plan={plan} onDone={() => setStep("done")} />
+          )}
           {step === "done" && <Done />}
         </div>
 
@@ -567,57 +570,85 @@ function Preview({ plan, onEdit, onApprove }: { plan: Plan; onEdit: () => void; 
 }
 
 /* -------------------------------- Execute -------------------------------- */
-function Execute({ onDone }: { onDone: () => void }) {
+function Execute({
+  brief,
+  plan,
+  onDone,
+}: {
+  brief: Brief;
+  plan: Plan;
+  onDone: () => void;
+}) {
   const { push } = useNotifications();
-  const { add } = useCampaigns();
+  const { syncMeta } = useCampaigns();
+  const [error, setError] = useState<string | null>(null);
+  const [stepIndex, setStepIndex] = useState(0);
   const steps = [
-    "Campagne Meta préparée",
-    "Budget Meta vérifié",
-    "Publicités Meta créées en pause",
-    "Campagne Google préparée",
-    "Groupe d'annonces créé",
-    "Campagne TikTok préparée",
-    "Vérification finale…",
-    "Toutes les campagnes sont prêtes",
+    "Vérification connexion Meta",
+    "Création campagne (pause)",
+    "Création ensemble publicitaire",
+    "Enregistrement Orkestria",
+    "Terminé",
   ];
-  const [i, setI] = useState(0);
+
   useEffect(() => {
-    if (i >= steps.length) {
-      const t = setTimeout(() => {
-        add({ name: "Nouveau menu — Livraison 30 min", channel: "Meta", status: "paused", spend: "0", conv: 0, roas: "—", zone: "Cocody", budget: "250 000 FCFA" });
-        push({
-          kind: "approval",
-          title: "Campagne prête à approuver",
-          body: "« Nouveau menu » attend votre validation finale avant diffusion.",
+    let cancelled = false;
+    void (async () => {
+      try {
+        setStepIndex(1);
+        const name = brief.product ?? plan.goal.slice(0, 80) ?? "Campagne Orkestria";
+        setStepIndex(2);
+        const result = await launchCampaign({
+          data: {
+            name,
+            budget: plan.budget,
+            duration: plan.duration,
+            zone: brief.zone,
+          },
         });
-        onDone();
-      }, 500);
-      return () => clearTimeout(t);
-    }
-    const t = setTimeout(() => setI(i + 1), 550);
-    return () => clearTimeout(t);
-  }, [i]);
+        if (cancelled) return;
+        setStepIndex(3);
+        await syncMeta();
+        setStepIndex(steps.length);
+        push({
+          kind: "status",
+          title: "Campagne Meta créée",
+          body: result.message ?? "Campagne en pause sur Meta Ads.",
+        });
+        setTimeout(onDone, 600);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Échec de création");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="rounded-2xl border border-line/70 bg-white p-6">
       <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Exécution</p>
-      <h2 className="mt-1 font-display text-[20px] font-semibold text-ink">Je prépare vos campagnes</h2>
-      <ul className="mt-5 space-y-2.5 text-[14px]">
-        {steps.map((s, idx) => (
-          <li key={s} className="flex items-center gap-3">
-            {idx < i ? (
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white">
-                <Check className="h-3 w-3" />
-              </span>
-            ) : idx === i ? (
-              <Loader2 className="h-5 w-5 animate-spin text-[#ff6c02]" />
-            ) : (
-              <span className="h-5 w-5 rounded-full border border-line" />
-            )}
-            <span className={idx < i ? "text-ink" : idx === i ? "text-ink" : "text-ink-soft"}>{s}</span>
-          </li>
-        ))}
-      </ul>
+      <h2 className="mt-1 font-display text-[20px] font-semibold text-ink">Création sur Meta Ads</h2>
+      {error ? (
+        <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[14px] text-rose-700">{error}</p>
+      ) : (
+        <ul className="mt-5 space-y-2.5 text-[14px]">
+          {steps.map((s, idx) => (
+            <li key={s} className="flex items-center gap-3">
+              {idx < stepIndex ? (
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white">
+                  <Check className="h-3 w-3" />
+                </span>
+              ) : idx === stepIndex ? (
+                <Loader2 className="h-5 w-5 animate-spin text-[#ff6c02]" />
+              ) : (
+                <span className="h-5 w-5 rounded-full border border-line" />
+              )}
+              <span className={idx <= stepIndex ? "text-ink" : "text-ink-soft"}>{s}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

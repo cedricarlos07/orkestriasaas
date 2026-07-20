@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Building2, Users2, ShieldCheck, CreditCard, BellRing, Save, UserPlus, Trash2, X, Check, KeyRound, Smartphone, Mail, MessageSquare, Sparkles, Monitor } from "lucide-react";
+import { getProfile } from "@/functions/profiles";
 
 export const Route = createFileRoute("/_authenticated/app/settings")({ component: Settings });
 
@@ -14,6 +16,14 @@ const TABS = [
 
 function Settings() {
   const [tab, setTab] = useState(0);
+  const { data: profile } = useQuery({ queryKey: ["profile"], queryFn: () => getProfile() });
+  const companyFields: [string, string][] = [
+    ["Nom de l'entreprise", profile?.company ?? "—"],
+    ["Secteur", profile?.sector ?? "—"],
+    ["Pays", profile?.country ?? "Côte d'Ivoire"],
+    ["Devise", profile?.currency ?? "FCFA"],
+    ["Site web", "—"],
+  ];
   return (
     <div className="mx-auto max-w-[1100px] space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -57,13 +67,7 @@ function Settings() {
         <section className="card-soft relative overflow-hidden p-6">
           <div aria-hidden className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-[#ff6c02]/10 blur-3xl" />
           <div className="relative">
-            {tab === 0 && <Form fields={[
-              ["Nom de l'entreprise", "Velvet Studio"],
-              ["Secteur", "Restauration"],
-              ["Pays", "Côte d'Ivoire"],
-              ["Devise", "FCFA"],
-              ["Site web", "https://velvetstudio.ci"],
-            ]} />}
+            {tab === 0 && <Form fields={companyFields} />}
             {tab === 1 && <Members />}
             {tab === 2 && <Security />}
             {tab === 3 && <Billing />}
@@ -262,50 +266,11 @@ function Security() {
 function Billing() {
   return (
     <div className="space-y-4">
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1a1a1a] via-[#242424] to-[#0f0f0f] p-6 text-white shadow-[0_20px_40px_-20px_rgba(0,0,0,0.6)] ring-1 ring-white/10">
-        <div aria-hidden className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-[#ff6c02]/30 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence baseFrequency='0.9'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")" }} />
-        <div className="relative flex items-center justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-wider text-[#ffbb85]">Plan actuel</p>
-            <p className="mt-1 font-display text-[22px] font-semibold">Pro · 49 000 FCFA / mois</p>
-            <p className="mt-1 max-w-md text-[13px] text-white/70">3 comptes publicitaires, créations illimitées (moteur interne), Ads Guardian, rapports avancés.</p>
-          </div>
-          <button className="btn-primary shrink-0">Changer de plan</button>
-        </div>
-        <div className="relative mt-5 grid grid-cols-3 gap-3 text-center">
-          {[["Comptes", "3 / 3"], ["Créations", "128"], ["Prochain paiement", "12 août"]].map(([k, v]) => (
-            <div key={k} className="rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
-              <p className="text-[10px] uppercase tracking-wider text-white/60">{k}</p>
-              <p className="mt-0.5 text-[14px] font-semibold text-white">{v}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-line/60 bg-gradient-to-br from-white to-[#faf6ef] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff8a3c] to-[#ff6c02] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"><CreditCard className="h-4 w-4" /></span>
-            <div>
-              <p className="text-[14px] font-medium text-ink">Mobile Money</p>
-              <p className="text-[12px] text-ink-soft">+225 07 •• •• 43 · par défaut</p>
-            </div>
-          </div>
-          <button className="chip-ghost">Mettre à jour</button>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-line/60 bg-white p-5">
-        <p className="mb-2 font-display text-[14px] font-semibold text-ink">Dernières factures</p>
-        <ul className="divide-y divide-line/60 text-[13px]">
-          {[["FCT-2026-07", "12 juil.", "49 000 FCFA"], ["FCT-2026-06", "12 juin", "49 000 FCFA"], ["FCT-2026-05", "12 mai", "49 000 FCFA"]].map(([id, d, m]) => (
-            <li key={id} className="flex items-center justify-between py-2.5">
-              <span className="text-ink">{id} <span className="text-ink-soft">· {d}</span></span>
-              <span className="flex items-center gap-3"><span className="text-ink">{m}</span><button className="text-[12px] font-medium text-[#ff6c02] hover:underline">Télécharger</button></span>
-            </li>
-          ))}
-        </ul>
+      <div className="rounded-2xl border border-line/60 bg-gradient-to-br from-white to-[#faf6ef] p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+        <p className="font-display text-[18px] font-semibold text-ink">Facturation</p>
+        <p className="mt-2 text-[14px] text-ink-soft">
+          Les plans et abonnements seront affichés ici dès activation de la facturation. Contactez le support pour changer de plan.
+        </p>
       </div>
     </div>
   );

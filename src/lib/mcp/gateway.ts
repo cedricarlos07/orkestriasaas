@@ -8,6 +8,9 @@ import {
   readAccountSnapshot,
   type MCPClientContext,
 } from "@/lib/mcp/clients/base";
+import { isAdkitEnabled, probeAdkitHealth } from "@/lib/mcp/clients/adkit";
+import { executeAdkitWrite, serverToAdkitPlatform, tryAdkitReadSnapshot } from "@/lib/mcp/adkit-bridge";
+import { getOrgAdkitProjectId } from "@/lib/mcp/adkit-org";
 import { isWriteEnabled, requireMcpOrDirectApi } from "@/lib/platforms/config";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 import type { ConnectorId } from "@/lib/oauth/connectors";
@@ -36,7 +39,7 @@ export async function checkPolicy(orgId: string, mode: "read" | "write"): Promis
 }
 
 export async function invokeMCP(call: MCPCallInput): Promise<{ result: unknown; latencyMs: number; fromMcp: boolean }> {
-  const toolDef = getTool(call.tool);
+  const toolDef = getTool(call.tool, call.server);
   if (!toolDef) throw new Error(`Tool inconnu : ${call.tool}`);
   if (toolDef.server !== call.server) throw new Error("Tool/server mismatch");
 
@@ -58,6 +61,8 @@ export async function invokeMCP(call: MCPCallInput): Promise<{ result: unknown; 
   const connector = conn.connector as ConnectorId;
 
   const tokens = await ensureFreshTokens(call.connectionId, call.orgId, connector);
+  const orgAdkitProjectId = await getOrgAdkitProjectId(call.orgId);
+  const useAdkit = isAdkitEnabled() && Boolean(serverToAdkitPlatform(call.server));
 
   const envKey = MCP_SERVER_ENV[call.server];
   const mcpUrl = process.env[envKey]?.trim() || undefined;
@@ -77,19 +82,48 @@ export async function invokeMCP(call: MCPCallInput): Promise<{ result: unknown; 
 
   try {
     if (call.mode === "write") {
-      await executePlatformWrite(call.server, call.tool, tokens, call.params ?? {});
-      if (mcpUrl) {
-        const { invokeMcpHttp } = await import("@/lib/mcp/clients/base");
-        const writeRes = await invokeMcpHttp(mcpUrl, call.tool, call.params ?? {}, tokens);
-        if (!writeRes.ok) throw new Error(writeRes.error ?? "Échec MCP write");
-        result = writeRes.data;
+      if (useAdkit) {
+        const { resolveAdkitProjectId } = await import("@/lib/mcp/clients/adkit");
+        const projectId = await resolveAdkitProjectId(orgAdkitProjectId);
+        result = await executeAdkitWrite({
+          projectId,
+          server: call.server,
+          tool: call.tool,
+          tokens,
+          params: call.params ?? {},
+          publish: true,
+        });
         fromMcp = true;
       } else {
-        result = { ok: true, tool: call.tool, server: call.server };
+        await executePlatformWrite(call.server, call.tool, tokens, call.params ?? {});
+        if (mcpUrl) {
+          const { invokeMcpHttp } = await import("@/lib/mcp/clients/base");
+          const writeRes = await invokeMcpHttp(mcpUrl, call.tool, call.params ?? {}, tokens);
+          if (!writeRes.ok) throw new Error(writeRes.error ?? "Échec MCP write");
+          result = writeRes.data;
+          fromMcp = true;
+        } else {
+          result = { ok: true, tool: call.tool, server: call.server };
+        }
+      }
+    } else if (useAdkit) {
+      const snapshot = await tryAdkitReadSnapshot({
+        orgProjectId: orgAdkitProjectId,
+        server: call.server,
+        tokens,
+        period: ctx.period,
+      });
+      if (snapshot) {
+        result = snapshot;
+        fromMcp = true;
+      } else {
+        const read = await readAccountSnapshot(ctx, mcpUrl, call.tool);
+        result = read.snapshot;
+        fromMcp = read.fromMcp;
       }
     } else {
       const read = await readAccountSnapshot(ctx, mcpUrl, call.tool);
-      result = read.fromMcp ? read.snapshot : read.snapshot;
+      result = read.snapshot;
       fromMcp = read.fromMcp;
     }
   } catch (e) {
@@ -120,18 +154,25 @@ export async function invokeMCP(call: MCPCallInput): Promise<{ result: unknown; 
 
 export async function probeMcpHealth(): Promise<void> {
   const services = [
+    { serviceId: "adkit_mcp", label: "AdKit (unified)", env: "ADKIT_MCP_URL", adkit: true },
     { serviceId: "google_ads_mcp", label: "Google Ads", env: "MCP_GOOGLE_ADS_READ_URL", needsDevToken: true },
     { serviceId: "meta_mcp", label: "Meta Ads", env: "MCP_META_ADS_URL", needsDevToken: false },
     { serviceId: "tiktok_mcp", label: "TikTok Ads", env: "MCP_TIKTOK_ADS_URL", needsDevToken: false },
     { serviceId: "ga4_mcp", label: "GA4", env: "MCP_GA4_URL", needsDevToken: false },
-  ];
+  ] as const;
 
   for (const s of services) {
     const url = process.env[s.env]?.trim();
     let status = "ok";
     let latency = 0;
+    let mode: string = url ? "mcp_sidecar" : "direct_api";
 
-    if (url) {
+    if ("adkit" in s && s.adkit) {
+      const probe = await probeAdkitHealth();
+      latency = probe.latencyMs;
+      status = probe.ok ? "ok" : "degradé";
+      mode = isAdkitEnabled() ? "adkit" : "disabled";
+    } else if (url) {
       const start = Date.now();
       try {
         const res = await fetch(url, { method: "GET", signal: AbortSignal.timeout(5000) });
@@ -141,9 +182,9 @@ export async function probeMcpHealth(): Promise<void> {
         status = "degradé";
         latency = 5000;
       }
-    } else if (s.needsDevToken && !process.env.GOOGLE_ADS_DEVELOPER_TOKEN) {
+    } else if ("needsDevToken" in s && s.needsDevToken && !process.env.GOOGLE_ADS_DEVELOPER_TOKEN) {
       status = "degradé";
-    } else if (s.serviceId === "meta_mcp" && !process.env.META_APP_ID) {
+    } else if (s.serviceId === "meta_mcp" && !process.env.META_APP_ID && !isAdkitEnabled()) {
       status = "degradé";
     }
 
@@ -160,7 +201,7 @@ export async function probeMcpHealth(): Promise<void> {
       uptime: status === "ok" ? "99.9" : "95.0",
       errorRate: status === "degradé" ? "2.0" : "0",
       calls24h: 0,
-      data: { url: url ?? null, mode: url ? "mcp_sidecar" : "direct_api" },
+      data: { url: url ?? (isAdkitEnabled() && "adkit" in s ? "https://mcp.adkit.so" : null), mode },
       updatedAt: new Date(),
     };
     if (existing[0]) {

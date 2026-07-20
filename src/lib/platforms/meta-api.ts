@@ -114,3 +114,76 @@ export async function pauseMetaCampaign(accessToken: string, campaignId: string)
   });
   if (!res.ok) throw new Error(`Meta pause campaign: ${await res.text()}`);
 }
+
+export async function resumeMetaCampaign(accessToken: string, campaignId: string): Promise<void> {
+  const url = new URL(`${GRAPH}/${campaignId}`);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ status: "ACTIVE", access_token: accessToken }),
+  });
+  if (!res.ok) throw new Error(`Meta activate campaign: ${await res.text()}`);
+}
+
+export type CreateMetaCampaignInput = {
+  accessToken: string;
+  adAccountId: string;
+  name: string;
+  dailyBudget: number;
+  objective?: string;
+  countries?: string[];
+};
+
+export type CreateMetaCampaignResult = {
+  campaignId: string;
+  adSetId: string;
+};
+
+export async function createMetaCampaignPaused(
+  input: CreateMetaCampaignInput,
+): Promise<CreateMetaCampaignResult> {
+  const actId = input.adAccountId.startsWith("act_")
+    ? input.adAccountId
+    : `act_${input.adAccountId.replace(/\D/g, "")}`;
+
+  const campaignRes = await fetch(`${GRAPH}/${actId}/campaigns`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      name: input.name,
+      objective: input.objective ?? "OUTCOME_TRAFFIC",
+      status: "PAUSED",
+      special_ad_categories: "[]",
+      access_token: input.accessToken,
+    }),
+  });
+  if (!campaignRes.ok) throw new Error(`Meta create campaign: ${await campaignRes.text()}`);
+  const campaign = (await campaignRes.json()) as { id?: string };
+  if (!campaign.id) throw new Error("Meta create campaign: id manquant");
+
+  const countries = input.countries?.length ? input.countries : ["CI"];
+  const targeting = JSON.stringify({
+    geo_locations: { countries },
+  });
+
+  const adSetRes = await fetch(`${GRAPH}/${actId}/adsets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      name: `${input.name} — ensemble`,
+      campaign_id: campaign.id,
+      daily_budget: String(Math.max(1000, Math.round(input.dailyBudget))),
+      billing_event: "IMPRESSIONS",
+      optimization_goal: "LINK_CLICKS",
+      bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+      targeting,
+      status: "PAUSED",
+      access_token: input.accessToken,
+    }),
+  });
+  if (!adSetRes.ok) throw new Error(`Meta create ad set: ${await adSetRes.text()}`);
+  const adSet = (await adSetRes.json()) as { id?: string };
+  if (!adSet.id) throw new Error("Meta create ad set: id manquant");
+
+  return { campaignId: campaign.id, adSetId: adSet.id };
+}

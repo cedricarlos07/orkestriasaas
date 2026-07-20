@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { adActions, approvals, connections, globalPolicies, killSwitches } from "@/db/schema/index";
 import { invokeMCP } from "@/lib/mcp/gateway";
-import { getTool } from "@/lib/mcp/tool-registry";
+import { getWriteToolForConnector } from "@/lib/mcp/tool-registry";
 import { uid } from "@/functions/utils";
 
 export type ActionRisk = "low" | "medium" | "high";
@@ -81,7 +81,7 @@ export async function executeAdAction(orgId: string, actionId: string, _actorId:
   const action = rows[0];
   if (!action || action.organizationId !== orgId) throw new Error("Not found");
 
-  const tool = getTool(action.action);
+  const tool = getWriteToolForConnector(action.connector, action.action);
   if (!tool || tool.mode !== "write") {
     await db.update(adActions).set({ status: "failed" }).where(eq(adActions.id, actionId));
     throw new Error("Action write non disponible ou tool inconnu");

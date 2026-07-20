@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { connections } from "@/db/schema/index";
 import { ensureSession } from "@/lib/auth.functions";
-import { CONNECTORS, type ConnectorId } from "@/lib/oauth/connectors";
+import { CONNECTORS, hasOAuthCredentials, type ConnectorId } from "@/lib/oauth/connectors";
 import { disconnectConnection, getAuthorizeRedirectAsync } from "@/lib/oauth/service";
 import { getActiveOrgId } from "./context";
 
@@ -61,5 +61,6 @@ export const listConnectionCatalog = createServerFn({ method: "GET" }).handler(a
     id: c.id,
     label: c.label,
     group: c.group,
+    configured: hasOAuthCredentials(c.id),
   }));
 });

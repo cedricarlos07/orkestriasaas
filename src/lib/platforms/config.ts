@@ -26,6 +26,8 @@ export function requireOAuthCredentials(connector: ConnectorId): void {
 }
 
 export function requireMcpOrDirectApi(server: MCPServerId): void {
+  if (process.env.ADKIT_API_KEY?.trim() && server !== "ga4") return;
+
   const envKey = MCP_SERVER_ENV[server];
   const mcpUrl = process.env[envKey];
   if (mcpUrl?.trim()) return;
@@ -39,6 +41,10 @@ export function requireMcpOrDirectApi(server: MCPServerId): void {
   if (server === "ga4") return;
 
   throw new PlatformConfigError(`Aucune route API pour le serveur MCP ${server}`);
+}
+
+export function isAdkitConfigured(): boolean {
+  return Boolean(process.env.ADKIT_API_KEY?.trim());
 }
 
 export function isWriteEnabled(): boolean {

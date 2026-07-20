@@ -6,6 +6,7 @@ import {
   listConnections,
   type ConnectionView,
 } from "@/functions/connections";
+import { getOAuthAvailability } from "@/functions/platform-config";
 import type { ConnectorId } from "@/lib/oauth/connectors";
 
 export function useConnections() {
@@ -18,8 +19,16 @@ export function useConnections() {
     queryKey: ["connection-catalog"],
     queryFn: () => listConnectionCatalog(),
   });
+  const { data: platformConfig } = useQuery({
+    queryKey: ["platform-config"],
+    queryFn: () => getOAuthAvailability(),
+  });
 
-  const connect = (connector: ConnectorId) => {
+  const connect = async (connector: ConnectorId) => {
+    const item = catalog.find((c) => c.id === connector);
+    if (item && !item.configured) {
+      throw new Error(`${item.label} n'est pas configuré sur le serveur (credentials manquantes).`);
+    }
     window.location.href = `/api/oauth/${connector}/authorize`;
   };
 
@@ -34,6 +43,7 @@ export function useConnections() {
   return {
     connections,
     catalog,
+    platformConfig,
     isLoading,
     connect,
     disconnect: (id: string) => disconnectMut.mutate(id),

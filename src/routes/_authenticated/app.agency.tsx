@@ -20,103 +20,7 @@ type Client = {
   roas: string; insights: Insight[];
 };
 
-const CLIENTS: Client[] = [
-  {
-    name: "Velvet Studio", sector: "Restauration", budget: "250 000 FCFA/mois", status: "Actif", roas: "3,9x",
-    insights: [
-      {
-        id: "velvet-fatigue", severity: "warning", icon: Activity,
-        title: "Création TikTok « Combo » fatiguée",
-        summary: "La vidéo perd en performance : impressions en hausse, conversions en baisse.",
-        causes: [
-          "Fréquence moyenne 4,6 sur audience « Cocody 25-34 »",
-          "CTR en baisse de 32 % sur 7 jours",
-          "CPA en hausse de +38 % vs semaine précédente",
-        ],
-        actions: [
-          { label: "Générer 3 variantes verticales", impact: "CTR estimé +25 %" },
-          { label: "Réduire le budget de 30 %", impact: "-12 000 FCFA / jour" },
-        ],
-        evidence: [
-          { label: "Fréquence", value: "4,6" },
-          { label: "CTR 7j", value: "0,82 %" },
-          { label: "CPA 7j", value: "2 640 FCFA" },
-          { label: "Reach", value: "78 %" },
-        ],
-      },
-      {
-        id: "velvet-tracking", severity: "critical", icon: Wrench,
-        title: "Tracking WhatsApp partiellement cassé",
-        summary: "34 % des conversations ne sont pas attribuées à leur campagne d'origine.",
-        causes: [
-          "UTM manquants sur 3 boutons Click-to-WhatsApp",
-          "Redirection intermédiaire qui casse le referrer sur iOS",
-          "Événement `whatsapp_lead` absent côté TikTok",
-        ],
-        actions: [
-          { label: "Régénérer les liens avec UTM standardisés", impact: "Attribution +30 pts" },
-          { label: "Ajouter l'événement côté TikTok Pixel", impact: "Attribution TikTok restaurée" },
-        ],
-        evidence: [
-          { label: "Non attribuées", value: "34 %" },
-          { label: "Écart Meta", value: "-22 conv." },
-          { label: "Écart TikTok", value: "-11 conv." },
-          { label: "Depuis", value: "24 juin" },
-        ],
-      },
-    ],
-  },
-  {
-    name: "Nova Boutique", sector: "E-commerce", budget: "480 000 FCFA/mois", status: "Actif", roas: "4,6x",
-    insights: [
-      {
-        id: "nova-google", severity: "info", icon: TrendingUp,
-        title: "Google Search sous-financé",
-        summary: "Le meilleur ROAS de ce compte tourne à 40 % de son budget cible.",
-        causes: [
-          "Budget quotidien plafonné à 8 000 FCFA sur 3 groupes",
-          "Taux d'impression perdu (budget) : 62 %",
-          "Enchères manuelles au lieu de tCPA",
-        ],
-        actions: [
-          { label: "Basculer sur tCPA 4 500 FCFA", impact: "Volume estimé +45 %" },
-          { label: "Réallouer 40 000 FCFA depuis TikTok", impact: "ROAS global +0,4x" },
-        ],
-        evidence: [
-          { label: "ROAS Google", value: "5,6x" },
-          { label: "IS perdu", value: "62 %" },
-          { label: "Budget saturé", value: "6 / 8 j" },
-          { label: "CPA", value: "1 240 FCFA" },
-        ],
-      },
-    ],
-  },
-  {
-    name: "Studio Kola", sector: "Beauté", budget: "120 000 FCFA/mois", status: "En pause", roas: "2,8x",
-    insights: [
-      {
-        id: "kola-pause", severity: "warning", icon: AlertTriangle,
-        title: "Compte en pause depuis 12 jours",
-        summary: "Les campagnes Meta et TikTok sont arrêtées sans plan de reprise validé.",
-        causes: [
-          "Budget mensuel épuisé avant la fin de période",
-          "Pas de nouvelles créations livrées depuis mai",
-          "Attente de validation client sur le nouveau brief",
-        ],
-        actions: [
-          { label: "Proposer un plan de reprise à budget réduit", impact: "Redémarrage sous 48h" },
-          { label: "Relancer le client sur la validation du brief", impact: "Débloque 3 créations" },
-        ],
-        evidence: [
-          { label: "En pause depuis", value: "12 j" },
-          { label: "Budget consommé", value: "100 %" },
-          { label: "Dernière création", value: "Mai" },
-          { label: "ROAS historique", value: "2,8x" },
-        ],
-      },
-    ],
-  },
-];
+const CLIENTS: Client[] = [];
 
 const APPROVAL_STEPS = ["Orkestria prépare", "Media buyer vérifie", "Responsable agence approuve", "Client approuve", "Orkestria publie"];
 
@@ -129,12 +33,15 @@ const SEVERITY: Record<Insight["severity"], { chip: string; halo: string; dot: s
 function Agency() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [clients, setClients] = useState<Client[]>(CLIENTS);
-  const [activeClient, setActiveClient] = useState<string>(CLIENTS[0].name);
+  const [activeClient, setActiveClient] = useState<string>("");
   const [workflows, setWorkflows] = useState<Record<string, boolean[]>>(
-    Object.fromEntries(CLIENTS.map((c) => [c.name, [true, true, true, true, true]]))
+    Object.fromEntries(CLIENTS.map((c) => [c.name, [true, true, true, true, true]])),
   );
   const [showNew, setShowNew] = useState(false);
-  const allInsights = useMemo(() => CLIENTS.flatMap((c) => c.insights.map((i) => ({ ...i, client: c.name }))), []);
+  const allInsights = useMemo(
+    () => clients.flatMap((c) => c.insights.map((i) => ({ ...i, client: c.name }))),
+    [clients],
+  );
   const openInsight = useMemo(() => allInsights.find((i) => i.id === openId) ?? null, [openId, allInsights]);
 
   const toggleStatus = (name: string) =>
@@ -149,7 +56,7 @@ function Agency() {
     setShowNew(false);
   };
 
-  const current = clients.find((c) => c.name === activeClient) ?? clients[0];
+  const current = clients.find((c) => c.name === activeClient) ?? clients[0] ?? null;
 
   return (
     <div className="mx-auto max-w-[1200px] space-y-6">
@@ -168,6 +75,15 @@ function Agency() {
         <button onClick={() => setShowNew(true)} className="btn-primary"><UserPlus className="h-4 w-4" /> Nouveau client</button>
       </header>
 
+      {clients.length === 0 && (
+        <div className="card-soft p-8 text-center">
+          <p className="font-display text-[18px] font-semibold text-ink">Aucun client pour l'instant</p>
+          <p className="mt-2 text-[14px] text-ink-soft">Ajoutez votre premier client pour configurer workflows et insights.</p>
+          <button onClick={() => setShowNew(true)} className="btn-primary mt-4"><UserPlus className="h-4 w-4" /> Ajouter un client</button>
+        </div>
+      )}
+
+      {clients.length > 0 && current && (
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="card-soft overflow-hidden">
           <div className="flex items-center justify-between border-b border-line/60 bg-gradient-to-r from-white/80 to-[#faf6ef]/80 px-5 py-3">
@@ -257,45 +173,7 @@ function Agency() {
           <p className="mt-4 text-[12px] text-ink-soft">Configurable par client. Sélectionnez un client à gauche pour ajuster ses étapes.</p>
         </div>
       </section>
-
-      <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-slate-700 to-slate-900 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]">
-            <Sparkles className="h-3.5 w-3.5" />
-          </span>
-          <div>
-            <p className="text-[12px] font-medium uppercase tracking-wider text-ink-soft">Insights transverses</p>
-            <p className="text-[13px] text-ink-soft">Cliquez un insight pour explorer causes et actions.</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {allInsights.map((it) => {
-            const s = SEVERITY[it.severity];
-            return (
-              <button key={it.id} onClick={() => setOpenId(it.id)} className="card-soft card-hover group relative overflow-hidden p-5 text-left">
-                <div aria-hidden className={`pointer-events-none absolute -top-14 -right-14 h-36 w-36 rounded-full blur-3xl ${s.halo}`} />
-                <div className="flex items-center justify-between">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-white to-[#faf6ef] text-ink ring-1 ring-line/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-                    <it.icon className="h-4 w-4" />
-                  </span>
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${s.chip}`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} /> {s.label}
-                  </span>
-                </div>
-                <p className="mt-3 font-display text-[15px] font-semibold text-ink">{it.title}</p>
-                <p className="mt-1 text-[12px] text-ink-soft">Client · <span className="font-medium text-ink/80">{it.client}</span></p>
-                <p className="mt-2 text-[13px] leading-relaxed text-ink-soft line-clamp-2">{it.summary}</p>
-                <div className="mt-4 flex items-center justify-between text-[12px] text-ink-soft">
-                  <span>{it.causes.length} causes · {it.actions.length} actions</span>
-                  <span className="inline-flex items-center gap-1 font-medium text-[#ff6c02] transition group-hover:translate-x-0.5">
-                    Explorer <ChevronRight className="h-3.5 w-3.5" />
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </section>
+      )}
 
       <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <div className="card-soft card-hover relative overflow-hidden p-5">

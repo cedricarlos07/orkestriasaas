@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "adkit": {
+      "url": "https://mcp.adkit.so",
+      "headers": {
+        "Authorization": "Bearer ${env:ADKIT_API_KEY}"
+      }
+    }
+  }
+}

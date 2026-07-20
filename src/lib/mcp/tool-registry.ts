@@ -23,6 +23,8 @@ export const MCP_TOOL_REGISTRY: ToolDefinition[] = [
   { name: "create_campaign", server: "google_ads_write", mode: "write", label: "Créer campagne Google", risk: "high" },
   { name: "update_budget", server: "google_ads_write", mode: "write", label: "Modifier budget Google", risk: "medium" },
   { name: "pause_campaign", server: "meta_ads", mode: "write", label: "Pause campagne Meta", risk: "low" },
+  { name: "create_campaign", server: "meta_ads", mode: "write", label: "Créer campagne Meta", risk: "high" },
+  { name: "resume_campaign", server: "meta_ads", mode: "write", label: "Activer campagne Meta", risk: "medium" },
 ];
 
 export const SKILL_TOOL_MAP: Record<string, string[]> = {
@@ -30,7 +32,7 @@ export const SKILL_TOOL_MAP: Record<string, string[]> = {
   strategy: ["list_campaigns", "campaign_insights", "campaign_report", "conversion_report"],
   budget: ["account_diagnostics", "campaign_insights", "conversion_report"],
   protection: ["account_diagnostics", "realtime_users"],
-  creation: ["creative_status"],
+  creation: ["creative_status", "create_campaign"],
 };
 
 export const MCP_SERVER_ENV: Record<MCPServerId, string> = {
@@ -41,8 +43,21 @@ export const MCP_SERVER_ENV: Record<MCPServerId, string> = {
   ga4: "MCP_GA4_URL",
 };
 
-export function getTool(name: string): ToolDefinition | undefined {
+export function getTool(name: string, server?: MCPServerId): ToolDefinition | undefined {
+  if (server) return MCP_TOOL_REGISTRY.find((t) => t.name === name && t.server === server);
   return MCP_TOOL_REGISTRY.find((t) => t.name === name);
+}
+
+export function getWriteToolForConnector(connector: string, action: string): ToolDefinition | undefined {
+  const server: MCPServerId | undefined = connector.includes("meta")
+    ? "meta_ads"
+    : connector.includes("google") && !connector.includes("analytics")
+      ? "google_ads_write"
+      : connector.includes("tiktok")
+        ? "tiktok_ads"
+        : undefined;
+  if (!server) return getTool(action);
+  return getTool(action, server) ?? getTool(action);
 }
 
 export function toolsForSkill(skill: string): ToolDefinition[] {
@@ -51,6 +66,7 @@ export function toolsForSkill(skill: string): ToolDefinition[] {
 }
 
 export const MCP_CAPABILITIES = [
+  { platform: "AdKit (Meta / Google / TikTok / Reddit)", read: true, create: true, modify: true, pause: true, budget: true, creatives: true },
   { platform: "Google Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: true },
   { platform: "Meta Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: true },
   { platform: "TikTok Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: true },

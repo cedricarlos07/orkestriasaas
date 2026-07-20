@@ -1,8 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Mail, Lock, User, Sparkles, Check, Eye, EyeOff, AlertCircle, Loader2, ArrowLeft } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { getProfile } from "@/functions/profiles";
+import { getOAuthAvailability } from "@/functions/platform-config";
 import { BrandLogo } from "@/components/BrandLogo";
 
 export const Route = createFileRoute("/auth")({
@@ -18,6 +20,11 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const { data: platformConfig } = useQuery({
+    queryKey: ["platform-config"],
+    queryFn: () => getOAuthAvailability(),
+  });
+  const socialLoginEnabled = platformConfig?.googleLoginConfigured ?? false;
   const [mode, setMode] = useState<"signup" | "login" | "forgot">("signup");
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -176,7 +183,7 @@ function AuthPage() {
             {mode === "forgot" && "Indiquez votre e-mail, nous vous envoyons un lien pour définir un nouveau mot de passe."}
           </p>
 
-          {mode !== "forgot" && (
+          {mode !== "forgot" && socialLoginEnabled && (
             <>
               <div className="mt-6 grid grid-cols-2 gap-3">
                 <button type="button" onClick={() => oauthSignIn("google")} disabled={loading !== null} className="flex items-center justify-center gap-2 rounded-full border border-line bg-white py-2.5 text-[13px] font-medium text-ink hover:bg-surface-2 disabled:opacity-60">
@@ -191,6 +198,10 @@ function AuthPage() {
                 <span className="h-px flex-1 bg-line" /> ou avec un e-mail <span className="h-px flex-1 bg-line" />
               </div>
             </>
+          )}
+
+          {mode !== "forgot" && !socialLoginEnabled && (
+            <p className="mt-4 text-[13px] text-ink-soft">Connectez-vous avec votre e-mail et mot de passe.</p>
           )}
 
           {rootError && (

@@ -131,6 +131,37 @@ export async function executePlatformWrite(
     return;
   }
 
+  if (server === "meta_ads" && tool === "resume_campaign") {
+    const campaignId = String(params.campaignId ?? params.campaign_id ?? "");
+    if (!campaignId) throw new Error("campaignId requis");
+    const { resumeMetaCampaign } = await import("@/lib/platforms/meta-api");
+    await resumeMetaCampaign(tokens.accessToken, campaignId);
+    return;
+  }
+
+  if (server === "meta_ads" && tool === "create_campaign") {
+    const name = String(params.name ?? "");
+    const dailyBudget = Number(params.dailyBudget ?? params.daily_budget ?? 0);
+    if (!name || !dailyBudget) throw new Error("name et dailyBudget requis");
+    const { createMetaCampaignPaused } = await import("@/lib/platforms/meta-api");
+    const { metaAdAccountId } = await import("@/lib/platforms/meta-connection");
+    const countries = Array.isArray(params.countries)
+      ? (params.countries as string[])
+      : params.countries
+        ? [String(params.countries)]
+        : ["CI"];
+    const result = await createMetaCampaignPaused({
+      accessToken: tokens.accessToken,
+      adAccountId: metaAdAccountId(tokens),
+      name,
+      dailyBudget,
+      objective: String(params.objective ?? "OUTCOME_TRAFFIC"),
+      countries,
+    });
+    (params as Record<string, unknown>)._result = result;
+    return;
+  }
+
   if (server === "google_ads_write" && tool === "update_budget") {
     const campaignId = String(params.campaignId ?? params.campaign_id ?? "");
     const budgetMicros = Number(params.budgetMicros ?? params.budget_micros ?? 0);
