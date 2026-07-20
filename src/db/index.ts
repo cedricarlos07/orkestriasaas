@@ -1,6 +1,8 @@
 import { config } from "dotenv";
 import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
+import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "./schema/index";
 
 config({ path: ".env.local" });
@@ -11,5 +13,9 @@ if (!url) {
   throw new Error("DATABASE_URL is not set");
 }
 
-const sql = neon(url);
-export const db = drizzle(sql, { schema });
+const isNeonServerless =
+  url.includes("neon.tech") || url.includes(".neon.database");
+
+export const db = isNeonServerless
+  ? drizzleNeon(neon(url), { schema })
+  : drizzlePostgres(postgres(url), { schema });
