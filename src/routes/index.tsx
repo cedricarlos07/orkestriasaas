@@ -1492,24 +1492,24 @@ function FinalCtaInner() {
 }
 
 const MCP_PLATFORMS = [
-  "Google Ads",
-  "Meta",
-  "LinkedIn",
-  "TikTok",
-  "Snapchat",
-  "Reddit",
-  "Microsoft",
-  "X",
-  "Amazon Ads",
-  "Pinterest",
+  { name: "Google Ads", logo: "https://cdn.simpleicons.org/googleads/FBBC04", bg: "#FFF7DB" },
+  { name: "Meta", logo: "https://cdn.simpleicons.org/meta/0866FF", bg: "#E7F0FF" },
+  { name: "LinkedIn", logo: "https://cdn.simpleicons.org/linkedin/0A66C2", bg: "#E8F1FA" },
+  { name: "TikTok", logo: "https://cdn.simpleicons.org/tiktok/000000", bg: "#F1F1F1" },
+  { name: "Snapchat", logo: "https://cdn.simpleicons.org/snapchat/FFFC00", bg: "#FFFCE0" },
+  { name: "Reddit", logo: "https://cdn.simpleicons.org/reddit/FF4500", bg: "#FFEDE5" },
+  { name: "Microsoft", logo: "https://cdn.simpleicons.org/microsoft/00A4EF", bg: "#E6F6FC" },
+  { name: "X", logo: "https://cdn.simpleicons.org/x/000000", bg: "#F1F1F1" },
+  { name: "Amazon Ads", logo: "https://cdn.simpleicons.org/amazon/FF9900", bg: "#FFF4E5" },
+  { name: "Pinterest", logo: "https://cdn.simpleicons.org/pinterest/E60023", bg: "#FFE8EC" },
 ];
 
-const MCP_TOOL_FAMILIES = [
-  { t: "Launch", d: "create_campaign · set_budget · create_media_plan" },
-  { t: "Optimize", d: "update_budget · pause_campaign · reallocate_budget" },
-  { t: "Create", d: "generate_ad_copy · list_creatives" },
-  { t: "Measure", d: "get_performance · compare_campaigns · detect_anomalies" },
-  { t: "Govern", d: "approve_action · get_audit_log · set_policy" },
+const MCP_CAPABILITIES = [
+  { t: "Lancer", d: "Créer une campagne, fixer un budget, préparer un plan média" },
+  { t: "Optimiser", d: "Hausser ou baisser un budget, mettre en pause, répartir l’argent" },
+  { t: "Créer", d: "Générer des textes de pubs et voir vos créatives" },
+  { t: "Mesurer", d: "Voir les résultats, comparer, repérer ce qui dérape" },
+  { t: "Contrôler", d: "Approuver une action, voir l’historique, poser vos règles" },
 ];
 
 function McpSection() {
@@ -1528,7 +1528,7 @@ function McpSection() {
   const hostedSnippet = `{
   "mcpServers": {
     "orkestria": {
-      "url": "https://orkestria.one/api/mcp",
+      "url": "https://orkestria.top/api/mcp",
       "headers": { "Authorization": "Bearer ork_..." }
     }
   }
@@ -1546,11 +1546,11 @@ function McpSection() {
       <div className="mb-10 max-w-2xl">
         <p className="text-[13px] font-semibold uppercase tracking-wider text-[#ff6c02]">Orkestria MCP</p>
         <h2 className="mt-2 font-display text-[40px] font-semibold leading-tight tracking-tight text-ink md:text-[52px]">
-          Vos agents IA pilotent vos pubs. Vous gardez le contrôle.
+          Parlez à votre IA. Elle gère vos pubs — sans vous surprendre.
         </h2>
         <p className="mt-4 text-[16px] text-ink-soft">
-          Branchez Cursor, Claude ou n&apos;importe quel agent MCP sur vos 10 régies publicitaires. Chaque écriture
-          passe par le moteur de policy : dry-run par défaut, approbation humaine, spend caps et journal d&apos;audit.
+          Connectez Cursor ou Claude à Orkestria. Demandez en français de créer, pause ou ajuster une campagne sur
+          Google, Meta, TikTok et 7 autres réseaux. Rien ne part en live sans votre feu vert.
         </p>
       </div>
 
@@ -1566,14 +1566,14 @@ function McpSection() {
                   mcpTab === t ? "bg-ink text-white" : "text-ink-soft hover:text-ink"
                 }`}
               >
-                {t === "local" ? "MCP local (npx)" : "MCP hébergé"}
+                {t === "local" ? "Sur mon ordi" : "En un clic (lien)"}
               </button>
             ))}
           </div>
           <div className="relative overflow-hidden rounded-2xl bg-[#101014] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.5)]">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
               <span className="text-[12px] text-white/50">
-                {mcpTab === "local" ? "~/.cursor/mcp.json" : "Configuration hosted"}
+                {mcpTab === "local" ? "Fichier à coller dans Cursor" : "Lien à coller dans Cursor"}
               </span>
               <button
                 type="button"
@@ -1587,34 +1587,45 @@ function McpSection() {
             <pre className="overflow-x-auto p-5 text-[13px] leading-relaxed text-emerald-100">{snippet}</pre>
           </div>
           <p className="mt-3 text-[13px] text-ink-soft">
-            Créez votre clé <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[12px]">ork_...</code> dans le
-            dashboard, collez la config, demandez à votre agent <em>« valide mon setup Orkestria »</em>.{" "}
+            1. Créez une clé dans votre espace Orkestria · 2. Collez la config · 3. Dites à votre agent{" "}
+            <em>« vérifie mon compte Orkestria »</em>.{" "}
             <Link to="/docs" className="font-medium text-[#ff6c02] hover:underline">
-              Voir la doc →
+              Guide pas à pas →
             </Link>
           </p>
         </div>
 
         <div className="space-y-5">
-          <div className="rounded-2xl border border-line/70 bg-white p-5">
-            <p className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-ink-soft">10 plateformes</p>
+          <div>
+            <p className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-ink-soft">
+              10 réseaux publicitaires
+            </p>
             <div className="flex flex-wrap gap-2">
               {MCP_PLATFORMS.map((p) => (
-                <span key={p} className="rounded-full bg-surface-2 px-3 py-1.5 text-[13px] font-medium text-ink">
-                  {p}
+                <span
+                  key={p.name}
+                  className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-[13px] font-medium text-ink ring-1 ring-black/5"
+                >
+                  <span
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded-md ring-1 ring-black/5"
+                    style={{ background: p.bg }}
+                  >
+                    <img src={p.logo} alt="" className="h-3.5 w-3.5 object-contain" loading="lazy" />
+                  </span>
+                  {p.name}
                 </span>
               ))}
             </div>
           </div>
-          <div className="rounded-2xl border border-line/70 bg-white p-5">
+          <div>
             <p className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-ink-soft">
-              25+ tools en 5 familles
+              Ce que votre agent peut faire
             </p>
-            <ul className="space-y-2">
-              {MCP_TOOL_FAMILIES.map((f) => (
-                <li key={f.t} className="flex items-baseline gap-3 text-[14px]">
-                  <span className="w-20 flex-none font-semibold text-ink">{f.t}</span>
-                  <code className="text-[12px] text-ink-soft">{f.d}</code>
+            <ul className="space-y-3">
+              {MCP_CAPABILITIES.map((f) => (
+                <li key={f.t} className="flex items-start gap-3 text-[14px]">
+                  <span className="mt-0.5 w-[5.5rem] flex-none font-semibold text-ink">{f.t}</span>
+                  <span className="text-ink-soft">{f.d}</span>
                 </li>
               ))}
             </ul>
@@ -1622,8 +1633,8 @@ function McpSection() {
           <div className="flex items-start gap-3 rounded-2xl bg-[#fff1e2] p-5">
             <ShieldCheck className="mt-0.5 h-5 w-5 flex-none text-[#ff6c02]" />
             <p className="text-[14px] text-ink">
-              <span className="font-semibold">Aucune écriture directe.</span> Tout passe par la policy du workspace :
-              dry-run par défaut, approbations, plafonds de dépense, campagnes protégées — et chaque appel est audité.
+              <span className="font-semibold">Vous restez le patron.</span> L’agent propose, vous validez. Plafonds de
+              budget, campagnes protégées, et chaque action est tracée — rien ne part tout seul.
             </p>
           </div>
         </div>
