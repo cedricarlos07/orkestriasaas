@@ -1,0 +1,496 @@
+import { and, eq, like } from "drizzle-orm";
+import { db } from "@/db";
+import {
+  actionRuns,
+  adActions,
+  approvals,
+  connections,
+  killSwitches,
+  orgPolicies,
+  spendTracking,
+} from "@/db/schema/index";
+import type { ConnectorId } from "@/lib/oauth/connectors";
+import { CONNECTORS, hasOAuthCredentials } from "@/lib/oauth/connectors";
+import { getAdapter } from "@/lib/platforms/adapter";
+import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
+import { uid } from "@/functions/utils";
+
+export type ExecutionMode = "dry_run" | "approval" | "live";
+
+export type OrgPolicy = {
+  defaultMode: ExecutionMode;
+  dailySpendCap: number | null;
+  monthlySpendCap: number | null;
+  maxBudgetChangePct: number;
+  protectedCampaignIds: string[];
+  platformCaps: Record<string, { daily?: number; monthly?: number }>;
+};
+
+const DEFAULT_POLICY: OrgPolicy = {
+  defaultMode: "dry_run",
+  dailySpendCap: null,
+  monthlySpendCap: null,
+  maxBudgetChangePct: 50,
+  protectedCampaignIds: [],
+  platformCaps: {},
+};
+
+export async function getOrgPolicy(orgId: string): Promise<OrgPolicy> {
+  const rows = await db.select().from(orgPolicies).where(eq(orgPolicies.organizationId, orgId)).limit(1);
+  const row = rows[0];
+  if (!row) return DEFAULT_POLICY;
+  return {
+    defaultMode: (row.defaultMode as ExecutionMode) ?? "dry_run",
+    dailySpendCap: row.dailySpendCap !== null ? Number(row.dailySpendCap) : null,
+    monthlySpendCap: row.monthlySpendCap !== null ? Number(row.monthlySpendCap) : null,
+    maxBudgetChangePct: row.maxBudgetChangePct ?? 50,
+    protectedCampaignIds: (row.protectedCampaignIds as string[]) ?? [],
+    platformCaps: (row.platformCaps as OrgPolicy["platformCaps"]) ?? {},
+  };
+}
+
+export async function updateOrgPolicy(orgId: string, patch: Partial<OrgPolicy>): Promise<OrgPolicy> {
+  const existing = await db.select().from(orgPolicies).where(eq(orgPolicies.organizationId, orgId)).limit(1);
+  const values = {
+    defaultMode: patch.defaultMode,
+    dailySpendCap: patch.dailySpendCap !== undefined ? (patch.dailySpendCap === null ? null : String(patch.dailySpendCap)) : undefined,
+    monthlySpendCap: patch.monthlySpendCap !== undefined ? (patch.monthlySpendCap === null ? null : String(patch.monthlySpendCap)) : undefined,
+    maxBudgetChangePct: patch.maxBudgetChangePct,
+    protectedCampaignIds: patch.protectedCampaignIds,
+    platformCaps: patch.platformCaps,
+    updatedAt: new Date(),
+  };
+  const clean = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined));
+  if (existing[0]) {
+    await db.update(orgPolicies).set(clean).where(eq(orgPolicies.organizationId, orgId));
+  } else {
+    await db.insert(orgPolicies).values({
+      organizationId: orgId,
+      defaultMode: patch.defaultMode ?? "dry_run",
+      dailySpendCap: patch.dailySpendCap != null ? String(patch.dailySpendCap) : null,
+      monthlySpendCap: patch.monthlySpendCap != null ? String(patch.monthlySpendCap) : null,
+      maxBudgetChangePct: patch.maxBudgetChangePct ?? 50,
+      protectedCampaignIds: patch.protectedCampaignIds ?? [],
+      platformCaps: patch.platformCaps ?? {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+  return getOrgPolicy(orgId);
+}
+
+// ─── Write actions ────────────────────────────────────────────────────────────
+
+export type WriteActionName =
+  | "create_campaign"
+  | "update_budget"
+  | "pause_campaign"
+  | "enable_campaign";
+
+export type WriteActionInput = {
+  orgId: string;
+  apiKeyId?: string;
+  connector: ConnectorId;
+  action: WriteActionName;
+  campaignId?: string;
+  accountId?: string;
+  /** Requested mode; policy can force approval. Defaults to org policy default. */
+  mode?: ExecutionMode;
+  params: {
+    name?: string;
+    dailyBudget?: number;
+    objective?: string;
+    countries?: string[];
+    currentDailyBudget?: number;
+  };
+};
+
+export type WriteActionOutcome = {
+  status: "dry_run" | "pending_approval" | "executed" | "blocked";
+  mode: ExecutionMode;
+  actionId?: string;
+  approvalId?: string;
+  diff: Record<string, unknown>;
+  message: string;
+  result?: Record<string, unknown>;
+};
+
+async function resolveConnection(orgId: string, connector: ConnectorId) {
+  const rows = await db.select().from(connections).where(eq(connections.organizationId, orgId));
+  const conn = rows.find((c) => c.connector === connector && c.status === "connectée");
+  if (!conn) {
+    if (!hasOAuthCredentials(connector)) {
+      throw new Error(
+        `Connexion ${CONNECTORS[connector].label} non configurée : les identifiants OAuth (${CONNECTORS[connector].oauth.clientIdEnv}) ne sont pas définis côté serveur.`,
+      );
+    }
+    throw new Error(
+      `Aucun compte ${CONNECTORS[connector].label} connecté. Connectez-le depuis le dashboard Orkestria (Connexions).`,
+    );
+  }
+  return conn;
+}
+
+async function checkSpendCaps(orgId: string, connector: ConnectorId, policy: OrgPolicy): Promise<string | null> {
+  const today = new Date().toISOString().slice(0, 10);
+  const month = today.slice(0, 7);
+
+  const dayRows = await db
+    .select()
+    .from(spendTracking)
+    .where(and(eq(spendTracking.organizationId, orgId), eq(spendTracking.day, today)));
+  const monthRows = await db
+    .select()
+    .from(spendTracking)
+    .where(and(eq(spendTracking.organizationId, orgId), like(spendTracking.day, `${month}%`)));
+
+  const dailyTotal = dayRows.reduce((s, r) => s + Number(r.spend), 0);
+  const monthlyTotal = monthRows.reduce((s, r) => s + Number(r.spend), 0);
+  const dailyConnector = dayRows.filter((r) => r.connector === connector).reduce((s, r) => s + Number(r.spend), 0);
+  const monthlyConnector = monthRows.filter((r) => r.connector === connector).reduce((s, r) => s + Number(r.spend), 0);
+
+  if (policy.dailySpendCap !== null && dailyTotal >= policy.dailySpendCap) {
+    return `Spend cap journalier atteint (${dailyTotal} ≥ ${policy.dailySpendCap})`;
+  }
+  if (policy.monthlySpendCap !== null && monthlyTotal >= policy.monthlySpendCap) {
+    return `Spend cap mensuel atteint (${monthlyTotal} ≥ ${policy.monthlySpendCap})`;
+  }
+  const caps = policy.platformCaps[connector];
+  if (caps?.daily !== undefined && dailyConnector >= caps.daily) {
+    return `Spend cap journalier ${CONNECTORS[connector].label} atteint`;
+  }
+  if (caps?.monthly !== undefined && monthlyConnector >= caps.monthly) {
+    return `Spend cap mensuel ${CONNECTORS[connector].label} atteint`;
+  }
+  return null;
+}
+
+function buildDiff(input: WriteActionInput): Record<string, unknown> {
+  switch (input.action) {
+    case "create_campaign":
+      return {
+        action: "create_campaign",
+        platform: input.connector,
+        name: input.params.name,
+        dailyBudget: input.params.dailyBudget,
+        objective: input.params.objective ?? null,
+        countries: input.params.countries ?? null,
+        note: "La campagne sera créée en PAUSE quand la plateforme le permet",
+      };
+    case "update_budget":
+      return {
+        action: "update_budget",
+        platform: input.connector,
+        campaignId: input.campaignId,
+        before: input.params.currentDailyBudget ?? "inconnu",
+        after: input.params.dailyBudget,
+      };
+    case "pause_campaign":
+      return { action: "pause_campaign", platform: input.connector, campaignId: input.campaignId, before: "ACTIVE", after: "PAUSED" };
+    case "enable_campaign":
+      return { action: "enable_campaign", platform: input.connector, campaignId: input.campaignId, before: "PAUSED", after: "ACTIVE" };
+  }
+}
+
+async function logRun(opts: {
+  orgId: string;
+  apiKeyId?: string;
+  connector: string;
+  tool: string;
+  mode: string;
+  status: string;
+  params: Record<string, unknown>;
+  result?: unknown;
+  error?: string;
+  approvalId?: string;
+  latencyMs?: number;
+}): Promise<string> {
+  const id = uid("run");
+  await db.insert(actionRuns).values({
+    id,
+    organizationId: opts.orgId,
+    apiKeyId: opts.apiKeyId ?? null,
+    connector: opts.connector,
+    tool: opts.tool,
+    mode: opts.mode,
+    status: opts.status,
+    params: opts.params,
+    result: opts.result ? (opts.result as object) : null,
+    error: opts.error ?? null,
+    approvalId: opts.approvalId ?? null,
+    latencyMs: opts.latencyMs ?? 0,
+    createdAt: new Date(),
+  });
+  return id;
+}
+
+export async function logReadRun(opts: {
+  orgId: string;
+  apiKeyId?: string;
+  connector?: string;
+  tool: string;
+  params: Record<string, unknown>;
+  status: "ok" | "error";
+  error?: string;
+  latencyMs: number;
+}): Promise<void> {
+  await logRun({
+    orgId: opts.orgId,
+    apiKeyId: opts.apiKeyId,
+    connector: opts.connector ?? "",
+    tool: opts.tool,
+    mode: "read",
+    status: opts.status,
+    params: opts.params,
+    error: opts.error,
+    latencyMs: opts.latencyMs,
+  });
+}
+
+/**
+ * Central pipeline for every write: validate → resolve connection → policy check
+ * → dry-run diff / approval queue / live execution. Everything is logged.
+ */
+export async function runWriteAction(input: WriteActionInput): Promise<WriteActionOutcome> {
+  const start = Date.now();
+  const policy = await getOrgPolicy(input.orgId);
+  const diff = buildDiff(input);
+
+  const mode: ExecutionMode = input.mode ?? policy.defaultMode;
+
+  // Kill switch (admin-level, per platform family)
+  const ksKey = `${input.connector.replace(/_ads$/, "")}_write`;
+  const ks = await db.select().from(killSwitches).where(eq(killSwitches.key, ksKey)).limit(1);
+  if (ks[0]?.active) {
+    await logRun({
+      orgId: input.orgId, apiKeyId: input.apiKeyId, connector: input.connector, tool: input.action,
+      mode, status: "blocked", params: diff, error: "Kill switch actif",
+    });
+    return { status: "blocked", mode, diff, message: `Écritures ${CONNECTORS[input.connector].label} désactivées par l'administrateur (kill switch).` };
+  }
+
+  // Protected campaigns
+  if (input.campaignId && policy.protectedCampaignIds.includes(input.campaignId)) {
+    await logRun({
+      orgId: input.orgId, apiKeyId: input.apiKeyId, connector: input.connector, tool: input.action,
+      mode, status: "blocked", params: diff, error: "Campagne protégée",
+    });
+    return { status: "blocked", mode, diff, message: `La campagne ${input.campaignId} est protégée par la policy du workspace.` };
+  }
+
+  // Budget change guardrail
+  if (
+    input.action === "update_budget" &&
+    input.params.currentDailyBudget &&
+    input.params.dailyBudget &&
+    policy.maxBudgetChangePct > 0
+  ) {
+    const pct = ((input.params.dailyBudget - input.params.currentDailyBudget) / input.params.currentDailyBudget) * 100;
+    if (pct > policy.maxBudgetChangePct) {
+      await logRun({
+        orgId: input.orgId, apiKeyId: input.apiKeyId, connector: input.connector, tool: input.action,
+        mode, status: "blocked", params: diff, error: `Hausse de budget ${Math.round(pct)}% > ${policy.maxBudgetChangePct}%`,
+      });
+      return {
+        status: "blocked", mode, diff,
+        message: `Hausse de budget de ${Math.round(pct)} % refusée : la policy limite à +${policy.maxBudgetChangePct} %. Passez par une approbation ou ajustez la policy.`,
+      };
+    }
+  }
+
+  // Spend caps (only block spend-increasing actions)
+  if (input.action === "create_campaign" || input.action === "update_budget" || input.action === "enable_campaign") {
+    const capError = await checkSpendCaps(input.orgId, input.connector, policy);
+    if (capError) {
+      await logRun({
+        orgId: input.orgId, apiKeyId: input.apiKeyId, connector: input.connector, tool: input.action,
+        mode, status: "blocked", params: diff, error: capError,
+      });
+      return { status: "blocked", mode, diff, message: `${capError}. Action refusée par la policy.` };
+    }
+  }
+
+  // Resolve connection early so dry runs report real connectivity problems.
+  const conn = await resolveConnection(input.orgId, input.connector);
+  const accountId = input.accountId ?? "";
+
+  if (mode === "dry_run") {
+    await logRun({
+      orgId: input.orgId, apiKeyId: input.apiKeyId, connector: input.connector, tool: input.action,
+      mode: "dry_run", status: "ok", params: diff, result: { wouldExecute: true }, latencyMs: Date.now() - start,
+    });
+    return {
+      status: "dry_run", mode, diff,
+      message: "Dry run : aucune modification effectuée. Relancez avec mode « live » (ou « approval ») pour appliquer.",
+    };
+  }
+
+  if (mode === "approval") {
+    const actionId = uid("act");
+    await db.insert(adActions).values({
+      id: actionId,
+      organizationId: input.orgId,
+      connector: input.connector,
+      action: input.action,
+      status: "pending_approval",
+      before: (diff.before as object) ?? null,
+      after: diff,
+      createdAt: new Date(),
+    });
+    const approvalId = uid("appr");
+    await db.insert(approvals).values({
+      id: approvalId,
+      organizationId: input.orgId,
+      actionId,
+      track: "mcp",
+      status: "pending",
+      requiredApprovers: 1,
+      expiresAt: new Date(Date.now() + 3 * 86400_000),
+      createdAt: new Date(),
+    });
+    await logRun({
+      orgId: input.orgId, apiKeyId: input.apiKeyId, connector: input.connector, tool: input.action,
+      mode: "approval", status: "pending_approval", params: diff, approvalId, latencyMs: Date.now() - start,
+    });
+    return {
+      status: "pending_approval", mode, diff, approvalId, actionId,
+      message: `Action en attente d'approbation (id: ${approvalId}). Un membre du workspace doit l'approuver depuis le dashboard ou via approve_action.`,
+    };
+  }
+
+  // live
+  const result = await executeWrite(input, conn.id, accountId);
+  await logRun({
+    orgId: input.orgId, apiKeyId: input.apiKeyId, connector: input.connector, tool: input.action,
+    mode: "live", status: "ok", params: diff, result, latencyMs: Date.now() - start,
+  });
+  return { status: "executed", mode, diff, result, message: "Action exécutée sur la plateforme." };
+}
+
+async function executeWrite(
+  input: WriteActionInput,
+  connectionId: string,
+  accountIdOverride: string,
+): Promise<Record<string, unknown>> {
+  const adapter = getAdapter(input.connector);
+  const tokens = await ensureFreshTokens(connectionId, input.orgId, input.connector);
+  const accountId = accountIdOverride || tokens.accountId || "";
+
+  switch (input.action) {
+    case "create_campaign": {
+      if (!adapter.createCampaign) {
+        throw new Error(`Création de campagne non supportée pour ${adapter.label} — créez-la dans la console puis pilotez-la ici.`);
+      }
+      if (!input.params.name || !input.params.dailyBudget) throw new Error("name et dailyBudget requis");
+      const res = await adapter.createCampaign(tokens, accountId, {
+        name: input.params.name,
+        dailyBudget: input.params.dailyBudget,
+        objective: input.params.objective,
+        countries: input.params.countries,
+      });
+      return { campaignId: res.campaignId, ...res.details };
+    }
+    case "update_budget": {
+      if (!input.campaignId || !input.params.dailyBudget) throw new Error("campaignId et dailyBudget requis");
+      await adapter.updateBudget(tokens, accountId, input.campaignId, input.params.dailyBudget);
+      return { campaignId: input.campaignId, dailyBudget: input.params.dailyBudget };
+    }
+    case "pause_campaign": {
+      if (!input.campaignId) throw new Error("campaignId requis");
+      await adapter.pauseCampaign(tokens, accountId, input.campaignId);
+      return { campaignId: input.campaignId, status: "PAUSED" };
+    }
+    case "enable_campaign": {
+      if (!input.campaignId) throw new Error("campaignId requis");
+      await adapter.enableCampaign(tokens, accountId, input.campaignId);
+      return { campaignId: input.campaignId, status: "ACTIVE" };
+    }
+  }
+}
+
+/** Approve a pending MCP action then execute it live. */
+export async function approveAndExecute(orgId: string, approvalId: string): Promise<WriteActionOutcome> {
+  const rows = await db.select().from(approvals).where(eq(approvals.id, approvalId)).limit(1);
+  const appr = rows[0];
+  if (!appr || appr.organizationId !== orgId) throw new Error("Approbation introuvable");
+  if (appr.status !== "pending") throw new Error(`Approbation déjà traitée (statut : ${appr.status})`);
+
+  const actRows = appr.actionId
+    ? await db.select().from(adActions).where(eq(adActions.id, appr.actionId)).limit(1)
+    : [];
+  const act = actRows[0];
+  if (!act) throw new Error("Action liée introuvable");
+
+  const after = (act.after ?? {}) as Record<string, unknown>;
+  const input: WriteActionInput = {
+    orgId,
+    connector: act.connector as ConnectorId,
+    action: act.action as WriteActionName,
+    campaignId: (after.campaignId as string) ?? undefined,
+    mode: "live",
+    params: {
+      name: (after.name as string) ?? undefined,
+      dailyBudget: (after.after as number) ?? (after.dailyBudget as number) ?? undefined,
+      objective: (after.objective as string) ?? undefined,
+      countries: (after.countries as string[]) ?? undefined,
+    },
+  };
+
+  await db.update(approvals).set({ status: "approved" }).where(eq(approvals.id, approvalId));
+  try {
+    const outcome = await runWriteAction(input);
+    await db.update(adActions).set({ status: "executed" }).where(eq(adActions.id, act.id));
+    return outcome;
+  } catch (e) {
+    await db.update(adActions).set({ status: "failed" }).where(eq(adActions.id, act.id));
+    throw e;
+  }
+}
+
+export async function rejectPendingAction(orgId: string, approvalId: string): Promise<void> {
+  const rows = await db.select().from(approvals).where(eq(approvals.id, approvalId)).limit(1);
+  const appr = rows[0];
+  if (!appr || appr.organizationId !== orgId) throw new Error("Approbation introuvable");
+  await db.update(approvals).set({ status: "rejected" }).where(eq(approvals.id, approvalId));
+  if (appr.actionId) {
+    await db.update(adActions).set({ status: "rejected" }).where(eq(adActions.id, appr.actionId));
+  }
+}
+
+export async function recordSpend(opts: {
+  orgId: string;
+  connector: string;
+  accountId?: string;
+  spend: number;
+  currency?: string;
+}): Promise<void> {
+  const day = new Date().toISOString().slice(0, 10);
+  const rows = await db
+    .select()
+    .from(spendTracking)
+    .where(
+      and(
+        eq(spendTracking.organizationId, opts.orgId),
+        eq(spendTracking.connector, opts.connector),
+        eq(spendTracking.day, day),
+      ),
+    )
+    .limit(1);
+  if (rows[0]) {
+    await db
+      .update(spendTracking)
+      .set({ spend: String(opts.spend), updatedAt: new Date() })
+      .where(eq(spendTracking.id, rows[0].id));
+  } else {
+    await db.insert(spendTracking).values({
+      id: uid("spend"),
+      organizationId: opts.orgId,
+      connector: opts.connector,
+      accountId: opts.accountId ?? null,
+      day,
+      spend: String(opts.spend),
+      currency: opts.currency ?? "USD",
+      updatedAt: new Date(),
+    });
+  }
+}

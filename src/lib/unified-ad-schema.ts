@@ -1,4 +1,16 @@
-export type MCPServerId = "google_ads_read" | "google_ads_write" | "meta_ads" | "tiktok_ads" | "ga4";
+export type MCPServerId =
+  | "google_ads_read"
+  | "google_ads_write"
+  | "meta_ads"
+  | "linkedin_ads"
+  | "tiktok_ads"
+  | "snapchat_ads"
+  | "reddit_ads"
+  | "microsoft_ads"
+  | "x_ads"
+  | "amazon_ads"
+  | "pinterest_ads"
+  | "ga4";
 
 export type MCPMode = "read" | "write";
 

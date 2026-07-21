@@ -1491,6 +1491,147 @@ function FinalCtaInner() {
   );
 }
 
+const MCP_PLATFORMS = [
+  "Google Ads",
+  "Meta",
+  "LinkedIn",
+  "TikTok",
+  "Snapchat",
+  "Reddit",
+  "Microsoft",
+  "X",
+  "Amazon Ads",
+  "Pinterest",
+];
+
+const MCP_TOOL_FAMILIES = [
+  { t: "Launch", d: "create_campaign · set_budget · create_media_plan" },
+  { t: "Optimize", d: "update_budget · pause_campaign · reallocate_budget" },
+  { t: "Create", d: "generate_ad_copy · list_creatives" },
+  { t: "Measure", d: "get_performance · compare_campaigns · detect_anomalies" },
+  { t: "Govern", d: "approve_action · get_audit_log · set_policy" },
+];
+
+function McpSection() {
+  const [mcpTab, setMcpTab] = useState<"local" | "hosted">("local");
+  const [copied, setCopied] = useState(false);
+
+  const localSnippet = `{
+  "mcpServers": {
+    "orkestria": {
+      "command": "npx",
+      "args": ["-y", "orkestria-mcp"],
+      "env": { "ORKESTRIA_API_KEY": "ork_..." }
+    }
+  }
+}`;
+  const hostedSnippet = `{
+  "mcpServers": {
+    "orkestria": {
+      "url": "https://orkestria.one/api/mcp",
+      "headers": { "Authorization": "Bearer ork_..." }
+    }
+  }
+}`;
+  const snippet = mcpTab === "local" ? localSnippet : hostedSnippet;
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(snippet);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <section id="mcp" className="mx-auto max-w-[1240px] px-6 py-24 scroll-mt-24">
+      <div className="mb-10 max-w-2xl">
+        <p className="text-[13px] font-semibold uppercase tracking-wider text-[#ff6c02]">Orkestria MCP</p>
+        <h2 className="mt-2 font-display text-[40px] font-semibold leading-tight tracking-tight text-ink md:text-[52px]">
+          Vos agents IA pilotent vos pubs. Vous gardez le contrôle.
+        </h2>
+        <p className="mt-4 text-[16px] text-ink-soft">
+          Branchez Cursor, Claude ou n&apos;importe quel agent MCP sur vos 10 régies publicitaires. Chaque écriture
+          passe par le moteur de policy : dry-run par défaut, approbation humaine, spend caps et journal d&apos;audit.
+        </p>
+      </div>
+
+      <div className="grid gap-8 lg:grid-cols-2">
+        <div>
+          <div className="mb-3 inline-flex rounded-full border border-line/70 bg-white p-1">
+            {(["local", "hosted"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setMcpTab(t)}
+                className={`rounded-full px-4 py-1.5 text-[13px] font-medium transition ${
+                  mcpTab === t ? "bg-ink text-white" : "text-ink-soft hover:text-ink"
+                }`}
+              >
+                {t === "local" ? "MCP local (npx)" : "MCP hébergé"}
+              </button>
+            ))}
+          </div>
+          <div className="relative overflow-hidden rounded-2xl bg-[#101014] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.5)]">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
+              <span className="text-[12px] text-white/50">
+                {mcpTab === "local" ? "~/.cursor/mcp.json" : "Configuration hosted"}
+              </span>
+              <button
+                type="button"
+                onClick={() => void copy()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1 text-[12px] text-white/80 hover:bg-white/20"
+              >
+                {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Paperclip className="h-3 w-3" />}
+                {copied ? "Copié" : "Copier"}
+              </button>
+            </div>
+            <pre className="overflow-x-auto p-5 text-[13px] leading-relaxed text-emerald-100">{snippet}</pre>
+          </div>
+          <p className="mt-3 text-[13px] text-ink-soft">
+            Créez votre clé <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[12px]">ork_...</code> dans le
+            dashboard, collez la config, demandez à votre agent <em>« valide mon setup Orkestria »</em>.{" "}
+            <Link to="/docs" className="font-medium text-[#ff6c02] hover:underline">
+              Voir la doc →
+            </Link>
+          </p>
+        </div>
+
+        <div className="space-y-5">
+          <div className="rounded-2xl border border-line/70 bg-white p-5">
+            <p className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-ink-soft">10 plateformes</p>
+            <div className="flex flex-wrap gap-2">
+              {MCP_PLATFORMS.map((p) => (
+                <span key={p} className="rounded-full bg-surface-2 px-3 py-1.5 text-[13px] font-medium text-ink">
+                  {p}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-line/70 bg-white p-5">
+            <p className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-ink-soft">
+              25+ tools en 5 familles
+            </p>
+            <ul className="space-y-2">
+              {MCP_TOOL_FAMILIES.map((f) => (
+                <li key={f.t} className="flex items-baseline gap-3 text-[14px]">
+                  <span className="w-20 flex-none font-semibold text-ink">{f.t}</span>
+                  <code className="text-[12px] text-ink-soft">{f.d}</code>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="flex items-start gap-3 rounded-2xl bg-[#fff1e2] p-5">
+            <ShieldCheck className="mt-0.5 h-5 w-5 flex-none text-[#ff6c02]" />
+            <p className="text-[14px] text-ink">
+              <span className="font-semibold">Aucune écriture directe.</span> Tout passe par la policy du workspace :
+              dry-run par défaut, approbations, plafonds de dépense, campagnes protégées — et chaque appel est audité.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Footer() {
   return (
     <footer className="border-t border-line/60 bg-white">
@@ -1522,6 +1663,7 @@ function Index() {
       <Intro />
       <Features />
       <Compare />
+      <McpSection />
       <HowItWorks />
       <Sectors />
       <Testimonial />

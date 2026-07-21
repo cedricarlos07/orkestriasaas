@@ -87,13 +87,18 @@ async function refreshConnectorTokens(
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: refreshToken,
-    client_id: clientId,
-    client_secret: clientSecret,
   });
+  const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
+  if (cfg.oauth.tokenAuth === "basic") {
+    headers.Authorization = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
+  } else {
+    body.set("client_id", clientId);
+    body.set("client_secret", clientSecret);
+  }
 
   const res = await fetch(cfg.oauth.tokenUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers,
     body,
   });
   if (!res.ok) throw new Error(`Token refresh failed (${connector}): ${await res.text()}`);

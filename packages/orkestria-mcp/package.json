@@ -1,0 +1,29 @@
+{
+  "name": "orkestria-mcp",
+  "version": "1.0.0",
+  "description": "Orkestria MCP server — control your ad campaigns (Google, Meta, LinkedIn, TikTok, Snapchat, Reddit, Microsoft, X, Amazon, Pinterest) from any MCP-compatible agent, with policy gates, dry-run and audit trail.",
+  "type": "module",
+  "bin": {
+    "orkestria-mcp": "bin/orkestria-mcp.mjs"
+  },
+  "files": [
+    "bin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ads",
+    "google-ads",
+    "meta-ads",
+    "advertising",
+    "ai-agent",
+    "orkestria"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  }
+}

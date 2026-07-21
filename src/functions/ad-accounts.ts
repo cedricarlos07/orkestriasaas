@@ -125,6 +125,23 @@ export const listAdAccounts = createServerFn({ method: "GET" }).handler(async ()
           }
           break;
         }
+        default: {
+          const { getAdapter } = await import("@/lib/platforms/adapter");
+          const rows = await getAdapter(connector).listAccounts(tokens);
+          for (const a of rows) {
+            accounts.push({
+              id: `${conn.id}:${a.id}`,
+              connectionId: conn.id,
+              connector,
+              platform: cfg.label,
+              name: a.name,
+              masked: maskId(a.id),
+              currency: a.currency ?? "—",
+              timezone: "—",
+            });
+          }
+          break;
+        }
       }
     } catch {
       // skip broken connection — user sees partial list

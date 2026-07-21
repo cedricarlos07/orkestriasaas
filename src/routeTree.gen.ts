@@ -15,6 +15,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CookiesRouteImport } from './routes/cookies'
+import { Route as DocsRouteImport } from './routes/docs'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -70,11 +71,15 @@ import { Route as AuthenticatedAppCampaignsRouteImport } from './routes/_authent
 import { Route as AuthenticatedAppConnectionsRouteImport } from './routes/_authenticated/app.connections'
 import { Route as AuthenticatedAppCreationsRouteImport } from './routes/_authenticated/app.creations'
 import { Route as AuthenticatedAppLeadsRouteImport } from './routes/_authenticated/app.leads'
+import { Route as AuthenticatedAppMcpRouteImport } from './routes/_authenticated/app.mcp'
 import { Route as AuthenticatedAppOrkestriaRouteImport } from './routes/_authenticated/app.orkestria'
 import { Route as AuthenticatedAppReportsRouteImport } from './routes/_authenticated/app.reports'
 import { Route as AuthenticatedAppRunsRouteImport } from './routes/_authenticated/app.runs'
 import { Route as AuthenticatedAppSettingsRouteImport } from './routes/_authenticated/app.settings'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiMcpIndexRouteImport } from './routes/api/mcp/index'
+import { Route as ApiMcpCallRouteImport } from './routes/api/mcp/call'
+import { Route as ApiMcpToolsRouteImport } from './routes/api/mcp/tools'
 import { Route as PubliciteSectorCityRouteImport } from './routes/publicite.$sector.$city'
 import { Route as AdminAdminConnectionsIdRouteImport } from './routes/_admin/admin.connections.$id'
 import { Route as AdminAdminOrganizationsIdRouteImport } from './routes/_admin/admin.organizations.$id'
@@ -113,6 +118,11 @@ const ContactRoute = ContactRouteImport.update({
 const CookiesRoute = CookiesRouteImport.update({
   id: '/cookies',
   path: '/cookies',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocsRoute = DocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingRoute = OnboardingRouteImport.update({
@@ -395,6 +405,11 @@ const AuthenticatedAppLeadsRoute = AuthenticatedAppLeadsRouteImport.update({
   path: '/leads',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
+const AuthenticatedAppMcpRoute = AuthenticatedAppMcpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => AuthenticatedAppRoute,
+} as any)
 const AuthenticatedAppOrkestriaRoute =
   AuthenticatedAppOrkestriaRouteImport.update({
     id: '/orkestria',
@@ -420,6 +435,21 @@ const AuthenticatedAppSettingsRoute =
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMcpIndexRoute = ApiMcpIndexRouteImport.update({
+  id: '/api/mcp/',
+  path: '/api/mcp/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMcpCallRoute = ApiMcpCallRouteImport.update({
+  id: '/api/mcp/call',
+  path: '/api/mcp/call',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMcpToolsRoute = ApiMcpToolsRouteImport.update({
+  id: '/api/mcp/tools',
+  path: '/api/mcp/tools',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PubliciteSectorCityRoute = PubliciteSectorCityRouteImport.update({
@@ -489,6 +519,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
   '/cookies': typeof CookiesRoute
+  '/docs': typeof DocsRoute
   '/onboarding': typeof OnboardingRouteWithChildren
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -542,14 +573,18 @@ export interface FileRoutesByFullPath {
   '/app/connections': typeof AuthenticatedAppConnectionsRoute
   '/app/creations': typeof AuthenticatedAppCreationsRoute
   '/app/leads': typeof AuthenticatedAppLeadsRoute
+  '/app/mcp': typeof AuthenticatedAppMcpRoute
   '/app/orkestria': typeof AuthenticatedAppOrkestriaRoute
   '/app/reports': typeof AuthenticatedAppReportsRoute
   '/app/runs': typeof AuthenticatedAppRunsRouteWithChildren
   '/app/settings': typeof AuthenticatedAppSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/mcp/call': typeof ApiMcpCallRoute
+  '/api/mcp/tools': typeof ApiMcpToolsRoute
   '/publicite/$sector/$city': typeof PubliciteSectorCityRoute
   '/admin/': typeof AdminAdminIndexRoute
   '/app/': typeof AuthenticatedAppIndexRoute
+  '/api/mcp/': typeof ApiMcpIndexRoute
   '/admin/connections/$id': typeof AdminAdminConnectionsIdRoute
   '/admin/organizations/$id': typeof AdminAdminOrganizationsIdRoute
   '/admin/runs/$id': typeof AdminAdminRunsIdRoute
@@ -566,6 +601,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
   '/cookies': typeof CookiesRoute
+  '/docs': typeof DocsRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
   '/setup': typeof SetupRoute
@@ -615,14 +651,18 @@ export interface FileRoutesByTo {
   '/app/connections': typeof AuthenticatedAppConnectionsRoute
   '/app/creations': typeof AuthenticatedAppCreationsRoute
   '/app/leads': typeof AuthenticatedAppLeadsRoute
+  '/app/mcp': typeof AuthenticatedAppMcpRoute
   '/app/orkestria': typeof AuthenticatedAppOrkestriaRoute
   '/app/reports': typeof AuthenticatedAppReportsRoute
   '/app/runs': typeof AuthenticatedAppRunsRouteWithChildren
   '/app/settings': typeof AuthenticatedAppSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/mcp/call': typeof ApiMcpCallRoute
+  '/api/mcp/tools': typeof ApiMcpToolsRoute
   '/publicite/$sector/$city': typeof PubliciteSectorCityRoute
   '/admin': typeof AdminAdminIndexRoute
   '/app': typeof AuthenticatedAppIndexRoute
+  '/api/mcp': typeof ApiMcpIndexRoute
   '/admin/connections/$id': typeof AdminAdminConnectionsIdRoute
   '/admin/organizations/$id': typeof AdminAdminOrganizationsIdRoute
   '/admin/runs/$id': typeof AdminAdminRunsIdRoute
@@ -642,6 +682,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/contact': typeof ContactRoute
   '/cookies': typeof CookiesRoute
+  '/docs': typeof DocsRoute
   '/onboarding': typeof OnboardingRouteWithChildren
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -695,14 +736,18 @@ export interface FileRoutesById {
   '/_authenticated/app/connections': typeof AuthenticatedAppConnectionsRoute
   '/_authenticated/app/creations': typeof AuthenticatedAppCreationsRoute
   '/_authenticated/app/leads': typeof AuthenticatedAppLeadsRoute
+  '/_authenticated/app/mcp': typeof AuthenticatedAppMcpRoute
   '/_authenticated/app/orkestria': typeof AuthenticatedAppOrkestriaRoute
   '/_authenticated/app/reports': typeof AuthenticatedAppReportsRoute
   '/_authenticated/app/runs': typeof AuthenticatedAppRunsRouteWithChildren
   '/_authenticated/app/settings': typeof AuthenticatedAppSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/mcp/call': typeof ApiMcpCallRoute
+  '/api/mcp/tools': typeof ApiMcpToolsRoute
   '/publicite/$sector/$city': typeof PubliciteSectorCityRoute
   '/_admin/admin/': typeof AdminAdminIndexRoute
   '/_authenticated/app/': typeof AuthenticatedAppIndexRoute
+  '/api/mcp/': typeof ApiMcpIndexRoute
   '/_admin/admin/connections/$id': typeof AdminAdminConnectionsIdRoute
   '/_admin/admin/organizations/$id': typeof AdminAdminOrganizationsIdRoute
   '/_admin/admin/runs/$id': typeof AdminAdminRunsIdRoute
@@ -721,6 +766,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/contact'
     | '/cookies'
+    | '/docs'
     | '/onboarding'
     | '/privacy'
     | '/reset-password'
@@ -774,14 +820,18 @@ export interface FileRouteTypes {
     | '/app/connections'
     | '/app/creations'
     | '/app/leads'
+    | '/app/mcp'
     | '/app/orkestria'
     | '/app/reports'
     | '/app/runs'
     | '/app/settings'
     | '/api/auth/$'
+    | '/api/mcp/call'
+    | '/api/mcp/tools'
     | '/publicite/$sector/$city'
     | '/admin/'
     | '/app/'
+    | '/api/mcp/'
     | '/admin/connections/$id'
     | '/admin/organizations/$id'
     | '/admin/runs/$id'
@@ -798,6 +848,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/contact'
     | '/cookies'
+    | '/docs'
     | '/privacy'
     | '/reset-password'
     | '/setup'
@@ -847,14 +898,18 @@ export interface FileRouteTypes {
     | '/app/connections'
     | '/app/creations'
     | '/app/leads'
+    | '/app/mcp'
     | '/app/orkestria'
     | '/app/reports'
     | '/app/runs'
     | '/app/settings'
     | '/api/auth/$'
+    | '/api/mcp/call'
+    | '/api/mcp/tools'
     | '/publicite/$sector/$city'
     | '/admin'
     | '/app'
+    | '/api/mcp'
     | '/admin/connections/$id'
     | '/admin/organizations/$id'
     | '/admin/runs/$id'
@@ -873,6 +928,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/contact'
     | '/cookies'
+    | '/docs'
     | '/onboarding'
     | '/privacy'
     | '/reset-password'
@@ -926,14 +982,18 @@ export interface FileRouteTypes {
     | '/_authenticated/app/connections'
     | '/_authenticated/app/creations'
     | '/_authenticated/app/leads'
+    | '/_authenticated/app/mcp'
     | '/_authenticated/app/orkestria'
     | '/_authenticated/app/reports'
     | '/_authenticated/app/runs'
     | '/_authenticated/app/settings'
     | '/api/auth/$'
+    | '/api/mcp/call'
+    | '/api/mcp/tools'
     | '/publicite/$sector/$city'
     | '/_admin/admin/'
     | '/_authenticated/app/'
+    | '/api/mcp/'
     | '/_admin/admin/connections/$id'
     | '/_admin/admin/organizations/$id'
     | '/_admin/admin/runs/$id'
@@ -953,6 +1013,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ContactRoute: typeof ContactRoute
   CookiesRoute: typeof CookiesRoute
+  DocsRoute: typeof DocsRoute
   OnboardingRoute: typeof OnboardingRouteWithChildren
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -964,7 +1025,10 @@ export interface RootRouteChildren {
   PlateformesIndexRoute: typeof PlateformesIndexRoute
   SecteursIndexRoute: typeof SecteursIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiMcpCallRoute: typeof ApiMcpCallRoute
+  ApiMcpToolsRoute: typeof ApiMcpToolsRoute
   PubliciteSectorCityRoute: typeof PubliciteSectorCityRoute
+  ApiMcpIndexRoute: typeof ApiMcpIndexRoute
   ApiOauthConnectorAuthorizeRoute: typeof ApiOauthConnectorAuthorizeRoute
   ApiOauthConnectorCallbackRoute: typeof ApiOauthConnectorCallbackRoute
   ApiRunsIdStreamRoute: typeof ApiRunsIdStreamRoute
@@ -1012,6 +1076,13 @@ declare module '@tanstack/react-router' {
       path: '/cookies'
       fullPath: '/cookies'
       preLoaderRoute: typeof CookiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboarding': {
@@ -1399,6 +1470,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppLeadsRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
+    '/_authenticated/app/mcp': {
+      id: '/_authenticated/app/mcp'
+      path: '/mcp'
+      fullPath: '/app/mcp'
+      preLoaderRoute: typeof AuthenticatedAppMcpRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
     '/_authenticated/app/orkestria': {
       id: '/_authenticated/app/orkestria'
       path: '/orkestria'
@@ -1432,6 +1510,27 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mcp/': {
+      id: '/api/mcp/'
+      path: '/api/mcp'
+      fullPath: '/api/mcp/'
+      preLoaderRoute: typeof ApiMcpIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mcp/call': {
+      id: '/api/mcp/call'
+      path: '/api/mcp/call'
+      fullPath: '/api/mcp/call'
+      preLoaderRoute: typeof ApiMcpCallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mcp/tools': {
+      id: '/api/mcp/tools'
+      path: '/api/mcp/tools'
+      fullPath: '/api/mcp/tools'
+      preLoaderRoute: typeof ApiMcpToolsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/publicite/$sector/$city': {
@@ -1660,6 +1759,7 @@ interface AuthenticatedAppRouteChildren {
   AuthenticatedAppConnectionsRoute: typeof AuthenticatedAppConnectionsRoute
   AuthenticatedAppCreationsRoute: typeof AuthenticatedAppCreationsRoute
   AuthenticatedAppLeadsRoute: typeof AuthenticatedAppLeadsRoute
+  AuthenticatedAppMcpRoute: typeof AuthenticatedAppMcpRoute
   AuthenticatedAppOrkestriaRoute: typeof AuthenticatedAppOrkestriaRoute
   AuthenticatedAppReportsRoute: typeof AuthenticatedAppReportsRoute
   AuthenticatedAppRunsRoute: typeof AuthenticatedAppRunsRouteWithChildren
@@ -1675,6 +1775,7 @@ const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
   AuthenticatedAppConnectionsRoute: AuthenticatedAppConnectionsRoute,
   AuthenticatedAppCreationsRoute: AuthenticatedAppCreationsRoute,
   AuthenticatedAppLeadsRoute: AuthenticatedAppLeadsRoute,
+  AuthenticatedAppMcpRoute: AuthenticatedAppMcpRoute,
   AuthenticatedAppOrkestriaRoute: AuthenticatedAppOrkestriaRoute,
   AuthenticatedAppReportsRoute: AuthenticatedAppReportsRoute,
   AuthenticatedAppRunsRoute: AuthenticatedAppRunsRouteWithChildren,
@@ -1734,6 +1835,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ContactRoute: ContactRoute,
   CookiesRoute: CookiesRoute,
+  DocsRoute: DocsRoute,
   OnboardingRoute: OnboardingRouteWithChildren,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
@@ -1745,7 +1847,10 @@ const rootRouteChildren: RootRouteChildren = {
   PlateformesIndexRoute: PlateformesIndexRoute,
   SecteursIndexRoute: SecteursIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiMcpCallRoute: ApiMcpCallRoute,
+  ApiMcpToolsRoute: ApiMcpToolsRoute,
   PubliciteSectorCityRoute: PubliciteSectorCityRoute,
+  ApiMcpIndexRoute: ApiMcpIndexRoute,
   ApiOauthConnectorAuthorizeRoute: ApiOauthConnectorAuthorizeRoute,
   ApiOauthConnectorCallbackRoute: ApiOauthConnectorCallbackRoute,
   ApiRunsIdStreamRoute: ApiRunsIdStreamRoute,

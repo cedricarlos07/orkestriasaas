@@ -39,7 +39,14 @@ export const MCP_SERVER_ENV: Record<MCPServerId, string> = {
   google_ads_read: "MCP_GOOGLE_ADS_READ_URL",
   google_ads_write: "MCP_GOOGLE_ADS_WRITE_URL",
   meta_ads: "MCP_META_ADS_URL",
+  linkedin_ads: "MCP_LINKEDIN_ADS_URL",
   tiktok_ads: "MCP_TIKTOK_ADS_URL",
+  snapchat_ads: "MCP_SNAPCHAT_ADS_URL",
+  reddit_ads: "MCP_REDDIT_ADS_URL",
+  microsoft_ads: "MCP_MICROSOFT_ADS_URL",
+  x_ads: "MCP_X_ADS_URL",
+  amazon_ads: "MCP_AMAZON_ADS_URL",
+  pinterest_ads: "MCP_PINTEREST_ADS_URL",
   ga4: "MCP_GA4_URL",
 };
 

@@ -48,14 +48,19 @@ export function buildAuthorizeUrl(connector: ConnectorId, state: string): string
     client_id: clientId,
     redirect_uri: oauthCallbackUrl(connector),
     response_type: "code",
-    scope: cfg.oauth.scopes.join(" "),
+    scope: cfg.oauth.scopes.join(cfg.oauth.scopeSeparator ?? " "),
     state,
     ...cfg.oauth.extraParams,
   });
+  if (cfg.oauth.usePkce) {
+    // Plain PKCE with the state as verifier: no extra storage needed.
+    params.set("code_challenge", state);
+    params.set("code_challenge_method", "plain");
+  }
   return `${cfg.oauth.authorizeUrl}?${params.toString()}`;
 }
 
-async function exchangeCode(connector: ConnectorId, code: string): Promise<TokenPayload> {
+async function exchangeCode(connector: ConnectorId, code: string, state?: string): Promise<TokenPayload> {
   if (!hasOAuthCredentials(connector)) {
     throw new Error(`OAuth ${CONNECTORS[connector].label} non configuré`);
   }
@@ -91,13 +96,20 @@ async function exchangeCode(connector: ConnectorId, code: string): Promise<Token
     grant_type: "authorization_code",
     code,
     redirect_uri: oauthCallbackUrl(connector),
-    client_id: clientId,
-    client_secret: clientSecret,
   });
+  const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
+  if (cfg.oauth.tokenAuth === "basic") {
+    headers.Authorization = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
+    if (cfg.oauth.usePkce) body.set("client_id", clientId);
+  } else {
+    body.set("client_id", clientId);
+    body.set("client_secret", clientSecret);
+  }
+  if (cfg.oauth.usePkce && state) body.set("code_verifier", state);
 
   const res = await fetch(cfg.oauth.tokenUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers,
     body,
   });
   if (!res.ok) throw new Error(`Token exchange failed: ${await res.text()}`);
@@ -154,6 +166,12 @@ async function resolvePrimaryAccount(connector: ConnectorId, tokens: TokenPayloa
       if (!props.length) throw new Error("Aucune propriété GA4 accessible");
       return { accountId: props[0].id, accountName: props[0].name };
     }
+    default: {
+      const { getAdapter } = await import("@/lib/platforms/adapter");
+      const accounts = await getAdapter(connector).listAccounts(tokens);
+      if (!accounts.length) throw new Error(`Aucun compte ${CONNECTORS[connector].label} accessible`);
+      return { accountId: accounts[0].id, accountName: accounts[0].name };
+    }
   }
 }
 
@@ -201,7 +219,7 @@ export async function upsertConnection(
 export async function handleOAuthCallback(connector: ConnectorId, code: string, state: string) {
   const row = await consumeOAuthState(state);
   const orgId = row.organizationId;
-  const tokens = await exchangeCode(connector, code);
+  const tokens = await exchangeCode(connector, code, state);
   const account = await resolvePrimaryAccount(connector, tokens);
   tokens.accountId = account.accountId;
   tokens.accountName = account.accountName;

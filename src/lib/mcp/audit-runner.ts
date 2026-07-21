@@ -10,7 +10,7 @@ import {
 } from "@/lib/unified-ad-schema";
 import { uid } from "@/functions/utils";
 
-const CONNECTOR_TOOLS: Record<ConnectorId, { server: "google_ads_read" | "meta_ads" | "tiktok_ads" | "ga4"; tool: string }> = {
+const CONNECTOR_TOOLS: Partial<Record<ConnectorId, { server: "google_ads_read" | "meta_ads" | "tiktok_ads" | "ga4"; tool: string }>> = {
   google_ads: { server: "google_ads_read", tool: "account_diagnostics" },
   meta_ads: { server: "meta_ads", tool: "campaign_insights" },
   tiktok_ads: { server: "tiktok_ads", tool: "campaign_report" },

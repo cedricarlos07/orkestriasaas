@@ -36,11 +36,8 @@ export function requireMcpOrDirectApi(server: MCPServerId): void {
     requireEnv("GOOGLE_ADS_DEVELOPER_TOKEN");
     return;
   }
-  if (server === "meta_ads") return;
-  if (server === "tiktok_ads") return;
-  if (server === "ga4") return;
-
-  throw new PlatformConfigError(`Aucune route API pour le serveur MCP ${server}`);
+  // Every other platform talks to its API directly with the connection's OAuth tokens.
+  return;
 }
 
 export function isAdkitConfigured(): boolean {

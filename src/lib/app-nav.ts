@@ -12,6 +12,7 @@ import {
   Briefcase,
   Cable,
   SlidersHorizontal,
+  Plug,
 } from "lucide-react";
 
 export type NavItem = { label: string; to: string; icon: LucideIcon; desc: string; kbd?: string };
@@ -47,6 +48,7 @@ export const APP_NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Agence", to: "/app/agency", icon: Briefcase, desc: "Clients et approbations" },
       { label: "Connexions", to: "/app/connections", icon: Cable, desc: "Comptes publicitaires" },
+      { label: "Orkestria MCP", to: "/app/mcp", icon: Plug, desc: "Clés API, policies, audit agents" },
       { label: "Paramètres", to: "/app/settings", icon: SlidersHorizontal, desc: "Entreprise, équipe, facturation" },
     ],
   },

@@ -99,8 +99,13 @@ async function fetchPlatformSnapshot(
       return fetchTikTokAdsSnapshot(tokens.accessToken, accountId, period);
     case "ga4":
       return fetchGa4Snapshot(tokens.accessToken, accountId, period);
-    default:
-      throw new Error(`Serveur MCP inconnu : ${server}`);
+    default: {
+      const { connectorFromPlatform } = await import("@/lib/oauth/connectors");
+      const connector = connectorFromPlatform(server);
+      if (!connector) throw new Error(`Serveur MCP inconnu : ${server}`);
+      const { getAdapter } = await import("@/lib/platforms/adapter");
+      return getAdapter(connector).fetchSnapshot(tokens, accountId, period);
+    }
   }
 }
 
