@@ -1533,12 +1533,17 @@ function McpSection() {
     }
   }
 }`;
-  const snippet = mcpTab === "local" ? localSnippet : hostedSnippet;
+  const isLocal = mcpTab === "local";
+  const snippet = isLocal ? localSnippet : hostedSnippet;
 
   const copy = async () => {
-    await navigator.clipboard.writeText(snippet);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(snippet);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* ignore */
+    }
   };
 
   return (
@@ -1556,35 +1561,58 @@ function McpSection() {
 
       <div className="grid gap-8 lg:grid-cols-2">
         <div>
-          <div className="mb-3 inline-flex rounded-full border border-line/70 bg-white p-1">
-            {(["local", "hosted"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setMcpTab(t)}
-                className={`rounded-full px-4 py-1.5 text-[13px] font-medium transition ${
-                  mcpTab === t ? "bg-ink text-white" : "text-ink-soft hover:text-ink"
-                }`}
-              >
-                {t === "local" ? "Sur mon ordi" : "En un clic (lien)"}
-              </button>
-            ))}
+          <div
+            role="tablist"
+            aria-label="Mode de connexion"
+            className="relative z-10 mb-3 inline-flex rounded-full border border-line/70 bg-white p-1 shadow-sm"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isLocal}
+              onClick={() => setMcpTab("local")}
+              className={
+                "cursor-pointer rounded-full px-4 py-2 text-[13px] font-medium transition " +
+                (isLocal ? "bg-ink text-white shadow-sm" : "text-ink-soft hover:text-ink")
+              }
+            >
+              Sur mon ordi
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!isLocal}
+              onClick={() => setMcpTab("hosted")}
+              className={
+                "cursor-pointer rounded-full px-4 py-2 text-[13px] font-medium transition " +
+                (!isLocal ? "bg-ink text-white shadow-sm" : "text-ink-soft hover:text-ink")
+              }
+            >
+              En un clic (lien)
+            </button>
           </div>
-          <div className="relative overflow-hidden rounded-2xl bg-[#101014] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.5)]">
+          <p className="mb-3 text-[13px] text-ink-soft">
+            {isLocal
+              ? "Installe le connecteur sur votre machine (recommandé pour Cursor)."
+              : "Branche Cursor directement sur l’URL Orkestria — rien à installer."}
+          </p>
+          <div className="relative z-10 overflow-hidden rounded-2xl bg-[#101014] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.5)]">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
               <span className="text-[12px] text-white/50">
-                {mcpTab === "local" ? "Fichier à coller dans Cursor" : "Lien à coller dans Cursor"}
+                {isLocal ? "Fichier à coller dans Cursor · mcp.json" : "Lien hébergé · https://orkestria.top/api/mcp"}
               </span>
               <button
                 type="button"
                 onClick={() => void copy()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1 text-[12px] text-white/80 hover:bg-white/20"
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1 text-[12px] text-white/80 hover:bg-white/20"
               >
                 {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Paperclip className="h-3 w-3" />}
                 {copied ? "Copié" : "Copier"}
               </button>
             </div>
-            <pre className="overflow-x-auto p-5 text-[13px] leading-relaxed text-emerald-100">{snippet}</pre>
+            <pre key={mcpTab} className="overflow-x-auto p-5 text-[13px] leading-relaxed text-emerald-100">
+              {snippet}
+            </pre>
           </div>
           <p className="mt-3 text-[13px] text-ink-soft">
             1. Créez une clé dans votre espace Orkestria · 2. Collez la config · 3. Dites à votre agent{" "}
