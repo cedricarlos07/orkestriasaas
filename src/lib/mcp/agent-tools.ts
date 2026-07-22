@@ -377,7 +377,7 @@ const launchTools: AgentTool[] = [
   writeTool(
     "create_ad_set",
     "create_ad_set",
-    "Create a paused ad set under a campaign (Meta). dailyBudget in main currency units.",
+    "Create a paused ad set / ad group (Meta, TikTok) or DRAFT LinkedIn campaign under a parent.",
     "launch",
     {
       campaignId: { type: "string" },
@@ -402,12 +402,12 @@ const launchTools: AgentTool[] = [
   writeTool(
     "create_ad",
     "create_ad",
-    "Create a paused Meta ad (requires pageId, linkUrl, and imageUrl or imageHash).",
+    "Create a paused ad/creative (Meta needs pageId+linkUrl+image; TikTok needs imageUrl; LinkedIn DRAFT creative).",
     "launch",
     {
       adSetId: { type: "string" },
       name: { type: "string" },
-      pageId: { type: "string", description: "Facebook Page id" },
+      pageId: { type: "string", description: "Facebook Page id (Meta)" },
       linkUrl: { type: "string" },
       message: { type: "string" },
       headline: { type: "string" },
@@ -415,7 +415,7 @@ const launchTools: AgentTool[] = [
       imageHash: { type: "string" },
       accountId: { type: "string" },
     },
-    ["adSetId", "name", "pageId", "linkUrl"],
+    ["adSetId", "name"],
     (args) => ({
       accountId: str(args.accountId),
       params: {
@@ -433,7 +433,7 @@ const launchTools: AgentTool[] = [
   writeTool(
     "create_audience",
     "create_audience",
-    "Create a Meta custom or lookalike audience (subtype LOOKALIKE needs originAudienceId).",
+    "Create an audience (Meta custom/lookalike, Google Customer Match, LinkedIn matched).",
     "launch",
     {
       name: { type: "string" },
@@ -558,6 +558,30 @@ const optimizeTools: AgentTool[] = [
     { campaignId: { type: "string" }, accountId: { type: "string" } },
     ["campaignId"],
     (args) => ({ campaignId: str(args.campaignId), accountId: str(args.accountId), params: {} }),
+  ),
+  writeTool(
+    "pause_ad_set",
+    "pause_ad_set",
+    "Pause an ad set (Meta).",
+    "optimize",
+    { adSetId: { type: "string" }, accountId: { type: "string" } },
+    ["adSetId"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: { adSetId: str(args.adSetId) },
+    }),
+  ),
+  writeTool(
+    "enable_ad_set",
+    "enable_ad_set",
+    "Enable an ad set (Meta).",
+    "optimize",
+    { adSetId: { type: "string" }, accountId: { type: "string" } },
+    ["adSetId"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: { adSetId: str(args.adSetId) },
+    }),
   ),
   writeTool(
     "add_keywords",
@@ -769,15 +793,24 @@ const createTools: AgentTool[] = [
   },
   {
     name: "list_creatives",
-    description: "List campaigns and their creative-level status for a platform (creative detail depends on platform support).",
+    description: "List creative assets (Meta images, TikTok images, LinkedIn creatives) or fall back to campaigns.",
     family: "create",
     inputSchema: { type: "object", properties: { ...platformProp, accountId: { type: "string" } }, required: ["platform"] },
     handler: async (ctx, args) => {
-      const snapshot = await fetchSnapshot(ctx.organizationId, args.platform as ConnectorId, str(args.accountId));
+      const connector = args.platform as ConnectorId;
+      const { tokens, conn } = await getTokensFor(ctx.organizationId, connector);
+      const accountId = str(args.accountId) ?? tokens.accountId ?? "";
+      const adapter = getAdapter(connector);
+      if (adapter.listCreatives && accountId) {
+        const creatives = await adapter.listCreatives(tokens, accountId);
+        return { platform: adapter.label, creatives, count: creatives.length };
+      }
+      const snapshot = await fetchSnapshot(ctx.organizationId, connector, str(args.accountId));
       return {
         platform: snapshot.platform,
         campaigns: snapshot.campaigns.map((c) => ({ id: c.id, name: c.name, status: c.status })),
-        note: "Le détail par création (images/vidéos) sera lu depuis la plateforme au moment de la rotation.",
+        note: "Liste créatives native non dispo — retour campagnes.",
+        connectionId: conn.id,
       };
     },
   },
@@ -886,7 +919,7 @@ const measureTools: AgentTool[] = [
   },
   {
     name: "list_conversions",
-    description: "List conversion actions for a platform (Google Ads).",
+    description: "List conversion actions / pixels (Google Ads conversion actions, Meta pixels).",
     family: "measure",
     inputSchema: {
       type: "object",
@@ -905,7 +938,7 @@ const measureTools: AgentTool[] = [
   },
   {
     name: "diagnose_tracking",
-    description: "Diagnose conversion tracking setup (Google Ads).",
+    description: "Diagnose conversion tracking (Google Ads, Meta pixels, TikTok pixels).",
     family: "measure",
     inputSchema: {
       type: "object",

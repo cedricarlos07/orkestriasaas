@@ -165,3 +165,33 @@ export async function updateSnapchatCampaignBudget(
   });
   if (!res.ok) throw new Error(`Snapchat budget update: ${await res.text()}`);
 }
+
+export async function createSnapchatCampaignPaused(
+  accessToken: string,
+  adAccountId: string,
+  input: { name: string; dailyBudget: number },
+): Promise<{ campaignId: string; details: Record<string, unknown> }> {
+  const dailyBudgetMicro = Math.round(Math.max(1, input.dailyBudget) * 1_000_000);
+  const res = await fetch(`${API}/adaccounts/${adAccountId}/campaigns`, {
+    method: "POST",
+    headers: headers(accessToken),
+    body: JSON.stringify({
+      campaigns: [
+        {
+          name: input.name.slice(0, 375),
+          ad_account_id: adAccountId,
+          status: "PAUSED",
+          daily_budget_micro: dailyBudgetMicro,
+        },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`Snapchat create campaign: ${await res.text()}`);
+  const data = (await res.json()) as { campaigns?: { campaign?: { id?: string } }[] };
+  const campaignId = data.campaigns?.[0]?.campaign?.id;
+  if (!campaignId) throw new Error("Snapchat create campaign: id manquant");
+  return {
+    campaignId,
+    details: { status: "PAUSED", note: "Campagne Snapchat créée en PAUSED" },
+  };
+}

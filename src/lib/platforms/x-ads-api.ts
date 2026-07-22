@@ -161,3 +161,43 @@ export async function updateXCampaignBudget(
   });
   if (!res.ok) throw new Error(`X Ads budget update: ${await res.text()}`);
 }
+
+export async function createXCampaignPaused(
+  accessToken: string,
+  accountId: string,
+  input: { name: string; dailyBudget: number },
+): Promise<{ campaignId: string; details: Record<string, unknown> }> {
+  const dailyBudgetMicro = Math.round(Math.max(1, input.dailyBudget) * 1_000_000);
+  const body = new URLSearchParams({
+    name: input.name.slice(0, 255),
+    entity_status: "PAUSED",
+    daily_budget_amount_local_micro: String(dailyBudgetMicro),
+    funding_instrument_id: "", // filled below if available
+  });
+
+  const fiRes = await fetch(`${API}/accounts/${accountId}/funding_instruments`, {
+    headers: headers(accessToken),
+  });
+  if (fiRes.ok) {
+    const fiData = (await fiRes.json()) as { data?: { id?: string }[] };
+    const fiId = fiData.data?.[0]?.id;
+    if (fiId) body.set("funding_instrument_id", fiId);
+    else body.delete("funding_instrument_id");
+  } else {
+    body.delete("funding_instrument_id");
+  }
+
+  const res = await fetch(`${API}/accounts/${accountId}/campaigns`, {
+    method: "POST",
+    headers: { ...headers(accessToken), "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!res.ok) throw new Error(`X Ads create campaign: ${await res.text()}`);
+  const data = (await res.json()) as { data?: { id?: string } };
+  const campaignId = data.data?.id;
+  if (!campaignId) throw new Error("X Ads create campaign: id manquant");
+  return {
+    campaignId,
+    details: { status: "PAUSED", note: "Campagne X Ads créée en PAUSED" },
+  };
+}

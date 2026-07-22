@@ -154,3 +154,41 @@ export async function updateRedditCampaignBudget(
   });
   if (!res.ok) throw new Error(`Reddit budget update: ${await res.text()}`);
 }
+
+export async function createRedditCampaignPaused(
+  accessToken: string,
+  adAccountId: string,
+  input: { name: string; dailyBudget: number; objective?: string },
+): Promise<{ campaignId: string; details: Record<string, unknown> }> {
+  const fiRes = await fetch(`${API}/ad_accounts/${adAccountId}/funding_instruments`, {
+    headers: headers(accessToken),
+  });
+  if (!fiRes.ok) throw new Error(`Reddit funding instruments: ${await fiRes.text()}`);
+  const fiData = (await fiRes.json()) as { data?: { id: string }[] };
+  const fundingInstrumentId = fiData.data?.[0]?.id;
+  if (!fundingInstrumentId) throw new Error("Reddit: aucun funding instrument — impossible de créer");
+
+  const dailyBudgetMicro = Math.round(Math.max(1, input.dailyBudget) * 1_000_000);
+  const res = await fetch(`${API}/ad_accounts/${adAccountId}/campaigns`, {
+    method: "POST",
+    headers: headers(accessToken),
+    body: JSON.stringify({
+      data: {
+        name: input.name.slice(0, 150),
+        configured_status: "PAUSED",
+        objective: input.objective ?? "CLICKS",
+        funding_instrument_id: fundingInstrumentId,
+        goal_type: "DAILY_SPEND",
+        goal_value_micro: dailyBudgetMicro,
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`Reddit create campaign: ${await res.text()}`);
+  const data = (await res.json()) as { data?: { id?: string } };
+  const campaignId = data.data?.id;
+  if (!campaignId) throw new Error("Reddit create campaign: id manquant");
+  return {
+    campaignId,
+    details: { status: "PAUSED", fundingInstrumentId, note: "Campagne Reddit créée en PAUSED" },
+  };
+}

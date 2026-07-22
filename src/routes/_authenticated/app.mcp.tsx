@@ -20,8 +20,10 @@ import {
   listMcpActionRuns,
   listMcpApiKeys,
   listMcpApprovals,
+  listMcpSkills,
   rejectMcpAction,
   revokeMcpApiKey,
+  runMcpAutonomyTick,
   updateMcpPolicy,
 } from "@/functions/mcp-agent";
 
@@ -278,6 +280,10 @@ function PoliciesTab() {
     },
   });
 
+  const tick = useMutation({
+    mutationFn: () => runMcpAutonomyTick({ data: { forceDryRun: true } }),
+  });
+
   if (isLoading || !current) {
     return (
       <p className="flex items-center gap-2 text-[13px] text-ink-soft">
@@ -324,22 +330,56 @@ function PoliciesTab() {
           exécuter selon le mode) la pause de campagnes avec dépense sans conversion. Jamais de création
           automatique.
         </p>
-        <button
-          type="button"
-          onClick={() => set({ autonomyEnabled: !current.autonomyEnabled })}
-          className={`rounded-full px-4 py-2 text-[13px] font-medium ${
-            current.autonomyEnabled
-              ? "bg-[#ff6c02] text-white"
-              : "border border-line/70 text-ink-soft hover:text-ink"
-          }`}
-        >
-          {current.autonomyEnabled ? "Autonomie activée" : "Autonomie désactivée"}
-        </button>
-        <div className="mt-4 rounded-xl border border-line/60 bg-surface-2/50 p-3 text-[12px] text-ink-soft">
-          Skills MCP : <code>launch</code>, <code>optimize</code>, <code>audit</code> via{" "}
-          <code>list_skills</code> / <code>run_skill</code>.
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => set({ autonomyEnabled: !current.autonomyEnabled })}
+            className={`rounded-full px-4 py-2 text-[13px] font-medium ${
+              current.autonomyEnabled
+                ? "bg-[#ff6c02] text-white"
+                : "border border-line/70 text-ink-soft hover:text-ink"
+            }`}
+          >
+            {current.autonomyEnabled ? "Autonomie activée" : "Autonomie désactivée"}
+          </button>
+          <button
+            type="button"
+            disabled={tick.isPending}
+            onClick={() => tick.mutate()}
+            className="inline-flex items-center gap-2 rounded-full border border-line/70 px-4 py-2 text-[13px] font-medium text-ink hover:border-ink/40 disabled:opacity-50"
+          >
+            {tick.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            Lancer un tick (dry-run)
+          </button>
         </div>
+        {tick.data ? (
+          <div className="mt-4 rounded-xl border border-line/60 bg-surface-2/50 p-3 text-[12px] text-ink-soft">
+            {tick.data.enabled ? (
+              <>
+                {tick.data.proposals.length} proposition(s)
+                {tick.data.proposals.length > 0 ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-4">
+                    {tick.data.proposals.slice(0, 8).map((p) => (
+                      <li key={`${p.connector}-${p.campaignId}`}>
+                        [{p.connector}] {p.campaignName} — {p.reason}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1">Aucune campagne à pauser pour l’instant.</p>
+                )}
+              </>
+            ) : (
+              <p>Autonomie désactivée — activez le toggle puis relancez.</p>
+            )}
+          </div>
+        ) : null}
+        {tick.isError ? (
+          <p className="mt-3 text-[12px] text-red-600">{(tick.error as Error).message}</p>
+        ) : null}
       </section>
+
+      <SkillsPanel />
 
       <section className="card-soft rounded-2xl p-6">
         <p className="mb-4 font-display text-[16px] font-semibold text-ink">Garde-fous</p>
@@ -392,6 +432,44 @@ function PoliciesTab() {
         </button>
       </section>
     </div>
+  );
+}
+
+function SkillsPanel() {
+  const { data: skills, isLoading } = useQuery({ queryKey: ["mcp-skills"], queryFn: () => listMcpSkills() });
+
+  return (
+    <section className="card-soft rounded-2xl p-6">
+      <p className="mb-2 font-display text-[16px] font-semibold text-ink">Skills MCP</p>
+      <p className="mb-4 text-[13px] text-ink-soft">
+        SOPs appelables via <code className="rounded bg-surface-2 px-1">list_skills</code> /{" "}
+        <code className="rounded bg-surface-2 px-1">run_skill</code> — pas un Campaign IDE.
+      </p>
+      {isLoading ? (
+        <p className="flex items-center gap-2 text-[13px] text-ink-soft">
+          <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {(skills ?? []).map((s) => (
+            <li key={s.id} className="rounded-xl border border-line/60 bg-white p-4">
+              <p className="text-[14px] font-semibold text-ink">
+                {s.name}{" "}
+                <span className="font-mono text-[11px] font-normal text-ink-soft">({s.id})</span>
+              </p>
+              <p className="mt-1 text-[12px] text-ink-soft">{s.description}</p>
+              <ol className="mt-2 list-decimal space-y-0.5 pl-4 text-[12px] text-ink-soft">
+                {s.steps.map((step) => (
+                  <li key={step.tool}>
+                    <code>{step.tool}</code> — {step.hint}
+                  </li>
+                ))}
+              </ol>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

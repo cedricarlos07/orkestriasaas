@@ -401,3 +401,52 @@ export async function createMetaCustomAudience(
   if (!data.id) throw new Error("Meta custom audience: id manquant");
   return { audienceId: data.id };
 }
+
+export async function listMetaPixels(
+  accessToken: string,
+  adAccountId: string,
+): Promise<{ id: string; name: string; status?: string; category?: string }[]> {
+  const res = await fetch(
+    `${GRAPH}/${actId(adAccountId)}/adspixels?fields=id,name,is_unavailable&access_token=${encodeURIComponent(accessToken)}`,
+  );
+  if (!res.ok) throw new Error(`Meta list pixels: ${await res.text()}`);
+  const data = (await res.json()) as {
+    data?: { id: string; name: string; is_unavailable?: boolean }[];
+  };
+  return (data.data ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    status: p.is_unavailable ? "unavailable" : "active",
+    category: "pixel",
+  }));
+}
+
+export async function diagnoseMetaTracking(
+  accessToken: string,
+  adAccountId: string,
+): Promise<{ ok: boolean; conversions?: number; issues: string[] }> {
+  const issues: string[] = [];
+  const pixels = await listMetaPixels(accessToken, adAccountId);
+  if (!pixels.length) issues.push("Aucun pixel Meta sur ce compte publicitaire");
+  const unavailable = pixels.filter((p) => p.status === "unavailable");
+  if (unavailable.length) issues.push(`${unavailable.length} pixel(s) indisponible(s)`);
+  return { ok: issues.length === 0, conversions: pixels.length, issues };
+}
+
+export async function listMetaAdImages(
+  accessToken: string,
+  adAccountId: string,
+): Promise<{ id: string; name: string; status?: string }[]> {
+  const res = await fetch(
+    `${GRAPH}/${actId(adAccountId)}/adimages?fields=hash,name,status&limit=50&access_token=${encodeURIComponent(accessToken)}`,
+  );
+  if (!res.ok) throw new Error(`Meta list creatives: ${await res.text()}`);
+  const data = (await res.json()) as {
+    data?: { hash?: string; name?: string; status?: string }[];
+  };
+  return (data.data ?? []).map((i) => ({
+    id: i.hash ?? "",
+    name: i.name ?? i.hash ?? "",
+    status: i.status,
+  }));
+}

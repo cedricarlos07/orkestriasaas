@@ -239,3 +239,99 @@ export async function createLinkedInMatchedAudience(
   if (!id) throw new Error("LinkedIn audience: id manquant");
   return { audienceId: String(id) };
 }
+
+/** LinkedIn has no ad sets — creates a DRAFT child campaign under the same account. */
+export async function createLinkedInAdSetPaused(
+  accessToken: string,
+  accountId: string,
+  input: { campaignId: string; name: string; dailyBudget: number; countries?: string[] },
+): Promise<{ adSetId: string; details?: Record<string, unknown> }> {
+  const acct = accountId.replace(/\D/g, "");
+  // Resolve parent campaign's campaign group
+  const parentRes = await fetch(`${API}/adAccounts/${acct}/adCampaigns/${input.campaignId}`, {
+    headers: headers(accessToken),
+  });
+  if (!parentRes.ok) throw new Error(`LinkedIn parent campaign: ${await parentRes.text()}`);
+  const parent = (await parentRes.json()) as { campaignGroup?: string };
+  const currency = "USD";
+  const campRes = await fetch(`${API}/adAccounts/${acct}/adCampaigns`, {
+    method: "POST",
+    headers: headers(accessToken),
+    body: JSON.stringify({
+      account: `urn:li:sponsoredAccount:${acct}`,
+      campaignGroup: parent.campaignGroup,
+      name: input.name,
+      status: "DRAFT",
+      type: "SPONSORED_UPDATES",
+      costType: "CPC",
+      dailyBudget: { amount: String(input.dailyBudget), currencyCode: currency },
+      unitCost: { amount: "2", currencyCode: currency },
+      locale: { country: input.countries?.[0] ?? "US", language: "en" },
+      offsiteDeliveryEnabled: true,
+    }),
+  });
+  if (!campRes.ok) throw new Error(`LinkedIn create ad-set campaign: ${await campRes.text()}`);
+  const adSetId =
+    campRes.headers.get("x-restli-id") ??
+    String(((await campRes.json().catch(() => ({}))) as { id?: number }).id ?? "");
+  if (!adSetId) throw new Error("LinkedIn create ad set: id manquant");
+  return {
+    adSetId: String(adSetId),
+    details: {
+      status: "DRAFT",
+      note: "LinkedIn n'a pas d'ad sets — une campagne DRAFT a été créée sous le même groupe",
+    },
+  };
+}
+
+export async function createLinkedInCreativeDraft(
+  accessToken: string,
+  accountId: string,
+  input: {
+    adSetId: string;
+    name: string;
+    linkUrl?: string;
+    message?: string;
+    headline?: string;
+  },
+): Promise<{ adId: string; details?: Record<string, unknown> }> {
+  const acct = accountId.replace(/\D/g, "");
+  const res = await fetch(`${API}/adAccounts/${acct}/creatives`, {
+    method: "POST",
+    headers: headers(accessToken),
+    body: JSON.stringify({
+      campaign: `urn:li:sponsoredCampaign:${input.adSetId}`,
+      intendedStatus: "DRAFT",
+      name: input.name,
+      content: {
+        commentary: input.message ?? input.headline ?? input.name,
+        landingPage: input.linkUrl ?? "https://orkestria.top",
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`LinkedIn create creative: ${await res.text()}`);
+  const adId =
+    res.headers.get("x-restli-id") ??
+    String(((await res.json().catch(() => ({}))) as { id?: number | string }).id ?? "");
+  if (!adId) throw new Error("LinkedIn create creative: id manquant");
+  return { adId: String(adId), details: { status: "DRAFT" } };
+}
+
+export async function listLinkedInCreatives(
+  accessToken: string,
+  accountId: string,
+): Promise<{ id: string; name: string; status?: string }[]> {
+  const acct = accountId.replace(/\D/g, "");
+  const res = await fetch(`${API}/adAccounts/${acct}/creatives?q=search&count=50`, {
+    headers: headers(accessToken),
+  });
+  if (!res.ok) throw new Error(`LinkedIn list creatives: ${await res.text()}`);
+  const data = (await res.json()) as {
+    elements?: { id?: number; name?: string; intendedStatus?: string }[];
+  };
+  return (data.elements ?? []).map((c) => ({
+    id: String(c.id ?? ""),
+    name: c.name ?? String(c.id ?? ""),
+    status: c.intendedStatus,
+  }));
+}

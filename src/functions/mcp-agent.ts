@@ -147,3 +147,18 @@ export const listMcpActionRuns = createServerFn({ method: "GET" })
       createdAt: r.createdAt.toISOString(),
     }));
   });
+
+export const listMcpSkills = createServerFn({ method: "GET" }).handler(async () => {
+  await ensureSession();
+  const { listSkills } = await import("@/lib/mcp/skills");
+  return listSkills();
+});
+
+export const runMcpAutonomyTick = createServerFn({ method: "POST" })
+  .inputValidator((data: { forceDryRun?: boolean }) => data)
+  .handler(async ({ data }) => {
+    const session = await ensureSession();
+    const orgId = await getActiveOrgId(session);
+    const { runAutonomyTick } = await import("@/lib/mcp/autonomy");
+    return runAutonomyTick({ orgId, forceDryRun: data.forceDryRun !== false });
+  });

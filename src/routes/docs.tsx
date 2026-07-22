@@ -29,11 +29,11 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
   {
     family: "Launch",
     tools: [
-      { name: "create_campaign", desc: "Campagne Meta / Google / LinkedIn / TikTok (en pause)" },
+      { name: "create_campaign", desc: "Campagne 10 régies (en pause / draft)" },
       { name: "create_search_campaign", desc: "Google Search + ad group + keywords + RSA" },
       { name: "create_pmax_campaign", desc: "Google Performance Max minimal" },
-      { name: "create_ad_set", desc: "Crée un ad set / ad group (Meta)" },
-      { name: "create_ad", desc: "Crée une annonce liée à un ad set + créatif" },
+      { name: "create_ad_set", desc: "Ad set Meta/TikTok ou campagne DRAFT LinkedIn" },
+      { name: "create_ad", desc: "Annonce / créatif Meta, TikTok, LinkedIn" },
       { name: "create_audience", desc: "Audience Meta / Google / LinkedIn" },
       { name: "create_conversion", desc: "Conversion action Google Ads" },
       { name: "set_budget", desc: "Fixe le budget journalier d'une campagne (ou ad set Meta)" },
@@ -46,17 +46,19 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
       { name: "update_budget", desc: "Modifie le budget (plafonné par la policy)" },
       { name: "pause_campaign", desc: "Met une campagne en pause" },
       { name: "enable_campaign", desc: "Réactive une campagne" },
+      { name: "pause_ad_set", desc: "Pause un ad set Meta" },
+      { name: "enable_ad_set", desc: "Réactive un ad set Meta" },
       { name: "reallocate_budget", desc: "Déplace du budget entre deux campagnes" },
       { name: "add_keywords", desc: "Ajoute des mots-clés (Google, Microsoft, Amazon SP)" },
-      { name: "add_negative_keywords", desc: "Mots-clés négatifs (Google)" },
+      { name: "add_negative_keywords", desc: "Mots-clés négatifs (Google, Microsoft)" },
     ],
   },
   {
     family: "Create",
     tools: [
       { name: "generate_ad_copy", desc: "Variantes de textes publicitaires (headline, texte, CTA)" },
-      { name: "upload_creative", desc: "Upload une image et crée un créatif Meta" },
-      { name: "list_creatives", desc: "Campagnes et statut des créations" },
+      { name: "upload_creative", desc: "Upload image Meta / TikTok" },
+      { name: "list_creatives", desc: "Assets créatifs Meta / TikTok / LinkedIn" },
     ],
   },
   {
@@ -67,12 +69,11 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
       { name: "get_account_summary", desc: "Vue consolidée multi-plateformes" },
       { name: "compare_campaigns", desc: "Classement par métrique (spend, conv, ctr, cpa)" },
       { name: "get_spend", desc: "Dépense totale et par plateforme" },
-      { name: "list_conversions", desc: "Actions de conversion Google" },
-      { name: "diagnose_tracking", desc: "Diagnostic tracking conversions Google" },
+      { name: "list_conversions", desc: "Conversions Google / pixels Meta" },
+      { name: "diagnose_tracking", desc: "Diagnostic tracking Google / Meta / TikTok" },
       { name: "detect_anomalies", desc: "Dépense sans conversion, CTR faible, CPA aberrant" },
     ],
-  },
-  {
+  },  {
     family: "Govern",
     tools: [
       { name: "execute", desc: "Action universel : dry_run=true par défaut, puis dry_run=false pour confirmer" },

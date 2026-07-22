@@ -341,3 +341,68 @@ export async function addMicrosoftKeywords(
   });
   return { count: keywords.length };
 }
+
+export async function createMicrosoftCampaignPaused(
+  accessToken: string,
+  accountId: string,
+  input: { name: string; dailyBudget: number },
+): Promise<{ campaignId: string; details: Record<string, unknown> }> {
+  const safeName = input.name.replace(/[<>&]/g, "").slice(0, 128);
+  const xml = await soapCall({
+    action: "AddCampaigns",
+    accessToken,
+    accountId,
+    ns: "https://bingads.microsoft.com/CampaignManagement/v13",
+    body: `<AddCampaignsRequest xmlns="https://bingads.microsoft.com/CampaignManagement/v13">
+      <AccountId>${accountId}</AccountId>
+      <Campaigns>
+        <Campaign>
+          <Name>${safeName}</Name>
+          <BudgetType>DailyBudgetStandard</BudgetType>
+          <DailyBudget>${Math.max(1, input.dailyBudget)}</DailyBudget>
+          <TimeZone>GreenwichMeanTimeDublinEdinburghLisbonLondon</TimeZone>
+          <Status>Paused</Status>
+          <CampaignType>Search</CampaignType>
+        </Campaign>
+      </Campaigns>
+    </AddCampaignsRequest>`,
+  });
+  const campaignId = extractOne(xml, "Id") ?? extractAll(xml, "long")[0];
+  if (!campaignId) throw new Error("Microsoft Ads create campaign: id manquant");
+  return {
+    campaignId,
+    details: { status: "Paused", note: "Campagne Microsoft Ads créée en Paused" },
+  };
+}
+
+export async function addMicrosoftNegativeKeywords(
+  accessToken: string,
+  accountId: string,
+  campaignId: string,
+  keywords: { text: string; matchType?: string }[],
+): Promise<{ count: number }> {
+  const kwXml = keywords
+    .map(
+      (kw) => `<NegativeKeyword>
+      <Text>${kw.text.replace(/[<>&]/g, "")}</Text>
+      <MatchType>${kw.matchType ?? "Phrase"}</MatchType>
+    </NegativeKeyword>`,
+    )
+    .join("");
+  await soapCall({
+    action: "AddNegativeKeywordsToEntities",
+    accessToken,
+    accountId,
+    ns: "https://bingads.microsoft.com/CampaignManagement/v13",
+    body: `<AddNegativeKeywordsToEntitiesRequest xmlns="https://bingads.microsoft.com/CampaignManagement/v13">
+      <EntityNegativeKeywords>
+        <EntityNegativeKeyword>
+          <EntityId>${campaignId}</EntityId>
+          <EntityType>Campaign</EntityType>
+          <NegativeKeywords>${kwXml}</NegativeKeywords>
+        </EntityNegativeKeyword>
+      </EntityNegativeKeywords>
+    </AddNegativeKeywordsToEntitiesRequest>`,
+  });
+  return { count: keywords.length };
+}

@@ -101,6 +101,8 @@ export type WriteActionName =
   | "update_budget"
   | "pause_campaign"
   | "enable_campaign"
+  | "pause_ad_set"
+  | "enable_ad_set"
   | "create_ad_set"
   | "create_ad"
   | "upload_creative"
@@ -114,6 +116,8 @@ export const WRITE_ACTION_NAMES: WriteActionName[] = [
   "update_budget",
   "pause_campaign",
   "enable_campaign",
+  "pause_ad_set",
+  "enable_ad_set",
   "create_ad_set",
   "create_ad",
   "upload_creative",
@@ -249,6 +253,22 @@ function buildDiff(input: WriteActionInput): Record<string, unknown> {
       return { action: "pause_campaign", platform: input.connector, campaignId: input.campaignId, before: "ACTIVE", after: "PAUSED" };
     case "enable_campaign":
       return { action: "enable_campaign", platform: input.connector, campaignId: input.campaignId, before: "PAUSED", after: "ACTIVE" };
+    case "pause_ad_set":
+      return {
+        action: "pause_ad_set",
+        platform: input.connector,
+        adSetId: input.params.adSetId ?? input.campaignId,
+        before: "ACTIVE",
+        after: "PAUSED",
+      };
+    case "enable_ad_set":
+      return {
+        action: "enable_ad_set",
+        platform: input.connector,
+        adSetId: input.params.adSetId ?? input.campaignId,
+        before: "PAUSED",
+        after: "ACTIVE",
+      };
     case "create_ad_set":
       return {
         action: "create_ad_set",
@@ -545,6 +565,20 @@ async function executeWrite(
       if (!input.campaignId) throw new Error("campaignId requis");
       await adapter.enableCampaign(tokens, accountId, input.campaignId);
       return { campaignId: input.campaignId, status: "ACTIVE" };
+    }
+    case "pause_ad_set": {
+      if (!adapter.pauseAdSet) throw new Error(`pause_ad_set non supporté pour ${adapter.label}`);
+      const adSetId = input.params.adSetId ?? input.campaignId;
+      if (!adSetId) throw new Error("adSetId requis");
+      await adapter.pauseAdSet(tokens, accountId, adSetId);
+      return { adSetId, status: "PAUSED" };
+    }
+    case "enable_ad_set": {
+      if (!adapter.enableAdSet) throw new Error(`enable_ad_set non supporté pour ${adapter.label}`);
+      const adSetId = input.params.adSetId ?? input.campaignId;
+      if (!adSetId) throw new Error("adSetId requis");
+      await adapter.enableAdSet(tokens, accountId, adSetId);
+      return { adSetId, status: "ACTIVE" };
     }
     case "create_ad_set": {
       if (!adapter.createAdSet) throw new Error(`create_ad_set non supporté pour ${adapter.label}`);

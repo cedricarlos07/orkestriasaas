@@ -135,3 +135,32 @@ export async function updatePinterestCampaignBudget(
     daily_spend_cap: dailyBudgetMicro,
   });
 }
+
+export async function createPinterestCampaignPaused(
+  accessToken: string,
+  adAccountId: string,
+  input: { name: string; dailyBudget: number; objective?: string },
+): Promise<{ campaignId: string; details: Record<string, unknown> }> {
+  const dailySpendCap = Math.round(Math.max(1, input.dailyBudget) * 1_000_000);
+  const res = await fetch(`${API}/ad_accounts/${adAccountId}/campaigns`, {
+    method: "POST",
+    headers: headers(accessToken),
+    body: JSON.stringify([
+      {
+        ad_account_id: adAccountId,
+        name: input.name.slice(0, 180),
+        status: "PAUSED",
+        objective_type: input.objective ?? "TRAFFIC",
+        daily_spend_cap: dailySpendCap,
+      },
+    ]),
+  });
+  if (!res.ok) throw new Error(`Pinterest create campaign: ${await res.text()}`);
+  const data = (await res.json()) as { items?: { id?: string }[]; data?: { id?: string } };
+  const campaignId = data.items?.[0]?.id ?? data.data?.id;
+  if (!campaignId) throw new Error("Pinterest create campaign: id manquant");
+  return {
+    campaignId,
+    details: { status: "PAUSED", note: "Campagne Pinterest créée en PAUSED" },
+  };
+}

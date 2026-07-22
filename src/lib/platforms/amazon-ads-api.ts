@@ -276,3 +276,39 @@ export async function addAmazonKeywords(
   if (!res.ok) throw new Error(`Amazon add keywords: ${await res.text()}`);
   return { count: keywords.length };
 }
+
+export async function createAmazonSpCampaignPaused(
+  accessToken: string,
+  profileId: string,
+  input: { name: string; dailyBudget: number },
+): Promise<{ campaignId: string; details: Record<string, unknown> }> {
+  const res = await fetch(`${API}/sp/campaigns`, {
+    method: "POST",
+    headers: {
+      ...headers(accessToken, profileId),
+      "Content-Type": "application/vnd.spCampaign.v3+json",
+      Accept: "application/vnd.spCampaign.v3+json",
+    },
+    body: JSON.stringify({
+      campaigns: [
+        {
+          name: input.name.slice(0, 128),
+          targetingType: "MANUAL",
+          state: "PAUSED",
+          budget: { budgetType: "DAILY", budget: Math.max(1, input.dailyBudget) },
+          dynamicBidding: { strategy: "LEGACY_FOR_SALES" },
+        },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`Amazon create campaign: ${await res.text()}`);
+  const data = (await res.json()) as {
+    campaigns?: { campaignId?: string; campaignIdString?: string }[];
+  };
+  const campaignId = String(data.campaigns?.[0]?.campaignId ?? data.campaigns?.[0]?.campaignIdString ?? "");
+  if (!campaignId) throw new Error("Amazon create campaign: id manquant");
+  return {
+    campaignId,
+    details: { status: "PAUSED", note: "Campagne Amazon SP créée en PAUSED" },
+  };
+}

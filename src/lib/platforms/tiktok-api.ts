@@ -197,3 +197,125 @@ export async function setTikTokCampaignStatus(
     operation_status: operation,
   });
 }
+
+export async function createTikTokAdGroupPaused(
+  accessToken: string,
+  advertiserId: string,
+  input: { campaignId: string; name: string; dailyBudget: number; countries?: string[] },
+): Promise<{ adSetId: string; details?: Record<string, unknown> }> {
+  const ag = await tiktokJson(accessToken, "/adgroup/create/", {
+    advertiser_id: advertiserId,
+    campaign_id: input.campaignId,
+    adgroup_name: input.name,
+    promotion_type: "WEBSITE",
+    budget_mode: "BUDGET_MODE_DAY",
+    budget: Math.max(20, input.dailyBudget),
+    schedule_type: "SCHEDULE_FROM_NOW",
+    billing_event: "CPC",
+    bid_type: "BID_TYPE_NO_BID",
+    location_ids: [],
+    operation_status: "DISABLE",
+    pacing: "PACING_MODE_SMOOTH",
+  });
+  const adSetId = String(ag.adgroup_id ?? "");
+  if (!adSetId) throw new Error("TikTok create ad group: id manquant");
+  return { adSetId, details: { status: "DISABLE" } };
+}
+
+export async function createTikTokAdPaused(
+  accessToken: string,
+  advertiserId: string,
+  input: {
+    adSetId: string;
+    name: string;
+    linkUrl?: string;
+    message?: string;
+    headline?: string;
+    imageUrl?: string;
+  },
+): Promise<{ adId: string; details?: Record<string, unknown> }> {
+  if (!input.imageUrl) throw new Error("TikTok create ad: imageUrl requis (vidéo/image)");
+  const ad = await tiktokJson(accessToken, "/ad/create/", {
+    advertiser_id: advertiserId,
+    adgroup_id: input.adSetId,
+    creatives: [
+      {
+        ad_name: input.name,
+        ad_format: "SINGLE_IMAGE",
+        ad_text: input.message ?? input.headline ?? input.name,
+        call_to_action: "LEARN_MORE",
+        landing_page_url: input.linkUrl ?? "https://orkestria.top",
+        image_ids: [],
+        identity_type: "CUSTOMIZED_USER",
+        operation_status: "DISABLE",
+        // image_url used when image_ids empty — TikTok may reject; uploadCreative preferred
+        image_url: input.imageUrl,
+      },
+    ],
+  });
+  const adId = String(
+    (ad.ad_ids as string[] | undefined)?.[0] ?? (ad.ad_id as string | undefined) ?? "",
+  );
+  if (!adId) throw new Error("TikTok create ad: id manquant — uploadez d'abord via upload_creative");
+  return { adId, details: { status: "DISABLE" } };
+}
+
+export async function uploadTikTokImageCreative(
+  accessToken: string,
+  advertiserId: string,
+  input: { imageUrl: string; name?: string },
+): Promise<{ creativeId: string; details?: Record<string, unknown> }> {
+  const data = await tiktokJson(accessToken, "/file/image/ad/upload/", {
+    advertiser_id: advertiserId,
+    upload_type: "UPLOAD_BY_URL",
+    image_url: input.imageUrl,
+    file_name: input.name ?? "orkestria-upload",
+  });
+  const imageId = String(data.image_id ?? data.id ?? "");
+  if (!imageId) throw new Error("TikTok image upload: id manquant");
+  return { creativeId: imageId, details: { imageId } };
+}
+
+export async function listTikTokCreatives(
+  accessToken: string,
+  advertiserId: string,
+): Promise<{ id: string; name: string; status?: string }[]> {
+  const res = await fetch(
+    `${API}/file/image/ad/get/?advertiser_id=${encodeURIComponent(advertiserId)}&page_size=50`,
+    { headers: { "Access-Token": accessToken } },
+  );
+  const data = (await res.json()) as {
+    code?: number;
+    data?: { list?: { image_id?: string; file_name?: string; material_id?: string }[] };
+    message?: string;
+  };
+  if (!res.ok || (data.code !== undefined && data.code !== 0)) {
+    throw new Error(`TikTok list creatives: ${data.message ?? JSON.stringify(data)}`);
+  }
+  return (data.data?.list ?? []).map((i) => ({
+    id: String(i.image_id ?? i.material_id ?? ""),
+    name: i.file_name ?? String(i.image_id ?? ""),
+    status: "READY",
+  }));
+}
+
+export async function diagnoseTikTokTracking(
+  accessToken: string,
+  advertiserId: string,
+): Promise<{ ok: boolean; conversions?: number; issues: string[] }> {
+  const issues: string[] = [];
+  try {
+    const data = await tiktokJson(accessToken, "/pixel/list/", {
+      advertiser_id: advertiserId,
+      page_size: 20,
+    });
+    const list = (data.pixels as { pixel_id?: string; pixel_name?: string }[] | undefined)
+      ?? (data.list as { pixel_id?: string }[] | undefined)
+      ?? [];
+    if (!list.length) issues.push("Aucun pixel TikTok trouvé sur ce compte");
+    return { ok: issues.length === 0, conversions: list.length, issues };
+  } catch (e) {
+    issues.push(e instanceof Error ? e.message : "Impossible de lire les pixels TikTok");
+    return { ok: false, issues };
+  }
+}

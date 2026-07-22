@@ -97,6 +97,10 @@ export type PlatformAdapter = {
     tokens: TokenPayload,
     accountId: string,
   ) => Promise<{ ok: boolean; conversions?: number; issues: string[] }>;
+  listCreatives?: (
+    tokens: TokenPayload,
+    accountId: string,
+  ) => Promise<{ id: string; name: string; status?: string }[]>;
 };
 
 function micro(amount: number): number {
@@ -244,6 +248,18 @@ const metaAds: PlatformAdapter = {
     const res = await createMetaCustomAudience(t.accessToken, accountId, input);
     return { audienceId: res.audienceId };
   },
+  listConversions: async (t, accountId) => {
+    const { listMetaPixels } = await import("./meta-api");
+    return listMetaPixels(t.accessToken, accountId);
+  },
+  diagnoseTracking: async (t, accountId) => {
+    const { diagnoseMetaTracking } = await import("./meta-api");
+    return diagnoseMetaTracking(t.accessToken, accountId);
+  },
+  listCreatives: async (t, accountId) => {
+    const { listMetaAdImages } = await import("./meta-api");
+    return listMetaAdImages(t.accessToken, accountId);
+  },
 };
 
 const linkedinAds: PlatformAdapter = {
@@ -287,6 +303,24 @@ const linkedinAds: PlatformAdapter = {
     });
     return { audienceId: res.audienceId };
   },
+  createAdSet: async (t, accountId, input) => {
+    const { createLinkedInAdSetPaused } = await import("./linkedin-api");
+    return createLinkedInAdSetPaused(t.accessToken, accountId, input);
+  },
+  createAd: async (t, accountId, input) => {
+    const { createLinkedInCreativeDraft } = await import("./linkedin-api");
+    return createLinkedInCreativeDraft(t.accessToken, accountId, {
+      adSetId: input.adSetId,
+      name: input.name,
+      linkUrl: input.linkUrl,
+      message: input.message,
+      headline: input.headline,
+    });
+  },
+  listCreatives: async (t, accountId) => {
+    const { listLinkedInCreatives } = await import("./linkedin-api");
+    return listLinkedInCreatives(t.accessToken, accountId);
+  },
 };
 
 const tiktokAds: PlatformAdapter = {
@@ -323,6 +357,34 @@ const tiktokAds: PlatformAdapter = {
       countries: input.countries,
     });
   },
+  createAdSet: async (t, accountId, input) => {
+    const { createTikTokAdGroupPaused } = await import("./tiktok-api");
+    return createTikTokAdGroupPaused(t.accessToken, accountId, input);
+  },
+  createAd: async (t, accountId, input) => {
+    const { createTikTokAdPaused } = await import("./tiktok-api");
+    return createTikTokAdPaused(t.accessToken, accountId, {
+      adSetId: input.adSetId,
+      name: input.name,
+      linkUrl: input.linkUrl,
+      message: input.message,
+      headline: input.headline,
+      imageUrl: input.imageUrl,
+    });
+  },
+  uploadCreative: async (t, accountId, input) => {
+    const { uploadTikTokImageCreative } = await import("./tiktok-api");
+    const res = await uploadTikTokImageCreative(t.accessToken, accountId, input);
+    return { creativeId: res.creativeId, details: res.details };
+  },
+  listCreatives: async (t, accountId) => {
+    const { listTikTokCreatives } = await import("./tiktok-api");
+    return listTikTokCreatives(t.accessToken, accountId);
+  },
+  diagnoseTracking: async (t, accountId) => {
+    const { diagnoseTikTokTracking } = await import("./tiktok-api");
+    return diagnoseTikTokTracking(t.accessToken, accountId);
+  },
 };
 
 const snapchatAds: PlatformAdapter = {
@@ -348,6 +410,13 @@ const snapchatAds: PlatformAdapter = {
     const { updateSnapchatCampaignBudget } = await import("./snapchat-api");
     await updateSnapchatCampaignBudget(t.accessToken, campaignId, micro(dailyBudget));
   },
+  createCampaign: async (t, accountId, input) => {
+    const { createSnapchatCampaignPaused } = await import("./snapchat-api");
+    return createSnapchatCampaignPaused(t.accessToken, accountId, {
+      name: input.name,
+      dailyBudget: input.dailyBudget,
+    });
+  },
 };
 
 const redditAds: PlatformAdapter = {
@@ -372,6 +441,14 @@ const redditAds: PlatformAdapter = {
   updateBudget: async (t, _accountId, campaignId, dailyBudget) => {
     const { updateRedditCampaignBudget } = await import("./reddit-api");
     await updateRedditCampaignBudget(t.accessToken, campaignId, micro(dailyBudget));
+  },
+  createCampaign: async (t, accountId, input) => {
+    const { createRedditCampaignPaused } = await import("./reddit-api");
+    return createRedditCampaignPaused(t.accessToken, accountId, {
+      name: input.name,
+      dailyBudget: input.dailyBudget,
+      objective: input.objective,
+    });
   },
 };
 
@@ -402,6 +479,17 @@ const microsoftAds: PlatformAdapter = {
     const { addMicrosoftKeywords } = await import("./microsoft-ads-api");
     return addMicrosoftKeywords(t.accessToken, accountId, input.adGroupId, input.keywords);
   },
+  addNegativeKeywords: async (t, accountId, input) => {
+    const { addMicrosoftNegativeKeywords } = await import("./microsoft-ads-api");
+    return addMicrosoftNegativeKeywords(t.accessToken, accountId, input.campaignId, input.keywords);
+  },
+  createCampaign: async (t, accountId, input) => {
+    const { createMicrosoftCampaignPaused } = await import("./microsoft-ads-api");
+    return createMicrosoftCampaignPaused(t.accessToken, accountId, {
+      name: input.name,
+      dailyBudget: input.dailyBudget,
+    });
+  },
 };
 
 const xAds: PlatformAdapter = {
@@ -426,6 +514,13 @@ const xAds: PlatformAdapter = {
   updateBudget: async (t, accountId, campaignId, dailyBudget) => {
     const { updateXCampaignBudget } = await import("./x-ads-api");
     await updateXCampaignBudget(t.accessToken, accountId, campaignId, micro(dailyBudget));
+  },
+  createCampaign: async (t, accountId, input) => {
+    const { createXCampaignPaused } = await import("./x-ads-api");
+    return createXCampaignPaused(t.accessToken, accountId, {
+      name: input.name,
+      dailyBudget: input.dailyBudget,
+    });
   },
 };
 
@@ -456,6 +551,13 @@ const amazonAds: PlatformAdapter = {
     const { addAmazonKeywords } = await import("./amazon-ads-api");
     return addAmazonKeywords(t.accessToken, accountId, input.adGroupId, input.keywords);
   },
+  createCampaign: async (t, accountId, input) => {
+    const { createAmazonSpCampaignPaused } = await import("./amazon-ads-api");
+    return createAmazonSpCampaignPaused(t.accessToken, accountId, {
+      name: input.name,
+      dailyBudget: input.dailyBudget,
+    });
+  },
 };
 
 const pinterestAds: PlatformAdapter = {
@@ -480,6 +582,14 @@ const pinterestAds: PlatformAdapter = {
   updateBudget: async (t, accountId, campaignId, dailyBudget) => {
     const { updatePinterestCampaignBudget } = await import("./pinterest-api");
     await updatePinterestCampaignBudget(t.accessToken, accountId, campaignId, micro(dailyBudget));
+  },
+  createCampaign: async (t, accountId, input) => {
+    const { createPinterestCampaignPaused } = await import("./pinterest-api");
+    return createPinterestCampaignPaused(t.accessToken, accountId, {
+      name: input.name,
+      dailyBudget: input.dailyBudget,
+      objective: input.objective,
+    });
   },
 };
 
