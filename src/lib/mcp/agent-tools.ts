@@ -14,12 +14,8 @@ import {
   type ExecutionMode,
   type WriteActionName,
 } from "@/lib/mcp/policy-engine";
-import {
-  AD_CONNECTOR_IDS,
-  CONNECTORS,
-  hasOAuthCredentials,
-  type ConnectorId,
-} from "@/lib/oauth/connectors";
+import { listSkills, getSkill } from "@/lib/mcp/skills";
+import { runAutonomyTick } from "@/lib/mcp/autonomy";
 import { getAdapter } from "@/lib/platforms/adapter";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 import type { UnifiedAccountSnapshot } from "@/lib/unified-ad-schema";
@@ -235,13 +231,30 @@ const launchTools: AgentTool[] = [
   writeTool(
     "create_campaign",
     "create_campaign",
-    "Create a campaign (paused when the platform allows it). Goes through policy: dry_run by default.",
+    "Create a paused/draft campaign (Meta, Google Search/PMax, LinkedIn, TikTok). Policy-gated.",
     "launch",
     {
       name: { type: "string", description: "Campaign name" },
       dailyBudget: { type: "number", description: "Daily budget in the account's main currency unit" },
-      objective: { type: "string", description: "Platform objective (e.g. OUTCOME_TRAFFIC for Meta)" },
+      objective: { type: "string", description: "Platform objective (e.g. OUTCOME_TRAFFIC for Meta, TRAFFIC for TikTok)" },
       countries: { type: "array", items: { type: "string" }, description: "ISO country codes for geo targeting" },
+      campaignType: {
+        type: "string",
+        enum: ["search", "pmax", "traffic", "leads", "default"],
+        description: "Google: search|pmax. Others: default/traffic/leads.",
+      },
+      keywords: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { text: { type: "string" }, matchType: { type: "string" } },
+          required: ["text"],
+        },
+        description: "Keywords for Google Search create",
+      },
+      finalUrl: { type: "string" },
+      headlines: { type: "array", items: { type: "string" } },
+      descriptions: { type: "array", items: { type: "string" } },
       accountId: { type: "string", description: "Ad account id (defaults to the connected primary account)" },
     },
     ["name", "dailyBudget"],
@@ -252,9 +265,109 @@ const launchTools: AgentTool[] = [
         dailyBudget: num(args.dailyBudget),
         objective: str(args.objective),
         countries: Array.isArray(args.countries) ? (args.countries as string[]) : undefined,
+        campaignType: str(args.campaignType) as
+          | "search"
+          | "pmax"
+          | "traffic"
+          | "leads"
+          | "default"
+          | undefined,
+        keywords: Array.isArray(args.keywords)
+          ? (args.keywords as { text: string; matchType?: string }[])
+          : undefined,
+        finalUrl: str(args.finalUrl),
+        headlines: Array.isArray(args.headlines) ? (args.headlines as string[]) : undefined,
+        descriptions: Array.isArray(args.descriptions) ? (args.descriptions as string[]) : undefined,
       },
     }),
   ),
+  {
+    name: "create_search_campaign",
+    description: "Create a Google Search campaign (PAUSED) with ad group, keywords and RSA. Platform forced to google_ads.",
+    family: "launch",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...modeProp,
+        name: { type: "string" },
+        dailyBudget: { type: "number" },
+        keywords: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { text: { type: "string" }, matchType: { type: "string" } },
+            required: ["text"],
+          },
+        },
+        finalUrl: { type: "string" },
+        headlines: { type: "array", items: { type: "string" } },
+        descriptions: { type: "array", items: { type: "string" } },
+        accountId: { type: "string" },
+      },
+      required: ["name", "dailyBudget"],
+    },
+    handler: async (ctx, args) => {
+      const mode = str(args.mode) as ExecutionMode | undefined;
+      if (mode === "live") requireScope(ctx, "write");
+      return runWriteAction({
+        orgId: ctx.organizationId,
+        apiKeyId: ctx.keyId,
+        connector: "google_ads",
+        action: "create_campaign",
+        mode,
+        accountId: str(args.accountId),
+        params: {
+          name: str(args.name),
+          dailyBudget: num(args.dailyBudget),
+          campaignType: "search",
+          keywords: Array.isArray(args.keywords)
+            ? (args.keywords as { text: string; matchType?: string }[])
+            : undefined,
+          finalUrl: str(args.finalUrl),
+          headlines: Array.isArray(args.headlines) ? (args.headlines as string[]) : undefined,
+          descriptions: Array.isArray(args.descriptions) ? (args.descriptions as string[]) : undefined,
+        },
+      });
+    },
+  },
+  {
+    name: "create_pmax_campaign",
+    description: "Create a Google Performance Max campaign (PAUSED). Platform forced to google_ads.",
+    family: "launch",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...modeProp,
+        name: { type: "string" },
+        dailyBudget: { type: "number" },
+        finalUrl: { type: "string" },
+        headlines: { type: "array", items: { type: "string" } },
+        descriptions: { type: "array", items: { type: "string" } },
+        accountId: { type: "string" },
+      },
+      required: ["name", "dailyBudget"],
+    },
+    handler: async (ctx, args) => {
+      const mode = str(args.mode) as ExecutionMode | undefined;
+      if (mode === "live") requireScope(ctx, "write");
+      return runWriteAction({
+        orgId: ctx.organizationId,
+        apiKeyId: ctx.keyId,
+        connector: "google_ads",
+        action: "create_campaign",
+        mode,
+        accountId: str(args.accountId),
+        params: {
+          name: str(args.name),
+          dailyBudget: num(args.dailyBudget),
+          campaignType: "pmax",
+          finalUrl: str(args.finalUrl),
+          headlines: Array.isArray(args.headlines) ? (args.headlines as string[]) : undefined,
+          descriptions: Array.isArray(args.descriptions) ? (args.descriptions as string[]) : undefined,
+        },
+      });
+    },
+  },
   writeTool(
     "create_ad_set",
     "create_ad_set",
@@ -470,6 +583,50 @@ const optimizeTools: AgentTool[] = [
           ? (args.keywords as { text: string; matchType?: string; bid?: number }[])
           : undefined,
       },
+    }),
+  ),
+  writeTool(
+    "add_negative_keywords",
+    "add_negative_keywords",
+    "Add negative keywords to a campaign (Google Ads).",
+    "optimize",
+    {
+      campaignId: { type: "string" },
+      keywords: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { text: { type: "string" }, matchType: { type: "string" } },
+          required: ["text"],
+        },
+      },
+      accountId: { type: "string" },
+    },
+    ["campaignId", "keywords"],
+    (args) => ({
+      campaignId: str(args.campaignId),
+      accountId: str(args.accountId),
+      params: {
+        keywords: Array.isArray(args.keywords)
+          ? (args.keywords as { text: string; matchType?: string }[])
+          : undefined,
+      },
+    }),
+  ),
+  writeTool(
+    "create_conversion",
+    "create_conversion",
+    "Create a conversion action (Google Ads).",
+    "launch",
+    {
+      name: { type: "string" },
+      category: { type: "string", description: "e.g. PURCHASE, SIGNUP, PAGE_VIEW" },
+      accountId: { type: "string" },
+    },
+    ["name"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: { name: str(args.name), category: str(args.category) },
     }),
   ),
   {
@@ -722,6 +879,44 @@ const measureTools: AgentTool[] = [
     },
   },
   {
+    name: "list_conversions",
+    description: "List conversion actions for a platform (Google Ads).",
+    family: "measure",
+    inputSchema: {
+      type: "object",
+      properties: { ...platformProp, accountId: { type: "string" } },
+      required: ["platform"],
+    },
+    handler: async (ctx, args) => {
+      const connector = args.platform as ConnectorId;
+      const { tokens } = await getTokensFor(ctx.organizationId, connector);
+      const adapter = getAdapter(connector);
+      if (!adapter.listConversions) throw new Error(`list_conversions non supporté pour ${adapter.label}`);
+      const accountId = str(args.accountId) ?? tokens.accountId;
+      if (!accountId) throw new Error("accountId requis");
+      return adapter.listConversions(tokens, accountId);
+    },
+  },
+  {
+    name: "diagnose_tracking",
+    description: "Diagnose conversion tracking setup (Google Ads).",
+    family: "measure",
+    inputSchema: {
+      type: "object",
+      properties: { ...platformProp, accountId: { type: "string" } },
+      required: ["platform"],
+    },
+    handler: async (ctx, args) => {
+      const connector = args.platform as ConnectorId;
+      const { tokens } = await getTokensFor(ctx.organizationId, connector);
+      const adapter = getAdapter(connector);
+      if (!adapter.diagnoseTracking) throw new Error(`diagnose_tracking non supporté pour ${adapter.label}`);
+      const accountId = str(args.accountId) ?? tokens.accountId;
+      if (!accountId) throw new Error("accountId requis");
+      return adapter.diagnoseTracking(tokens, accountId);
+    },
+  },
+  {
     name: "detect_anomalies",
     description: "Detect anomalies across connected platforms: spend without conversions, very low CTR, outlier CPA.",
     family: "measure",
@@ -845,6 +1040,17 @@ const governTools: AgentTool[] = [
         keywords:
           (params.keywords as { text: string; matchType?: string; bid?: number }[]) ??
           (args.keywords as { text: string; matchType?: string; bid?: number }[] | undefined),
+        campaignType: (str(params.campaignType) ?? str(args.campaignType)) as
+          | "search"
+          | "pmax"
+          | "traffic"
+          | "leads"
+          | "default"
+          | undefined,
+        finalUrl: str(params.finalUrl) ?? str(args.finalUrl),
+        headlines: (params.headlines as string[]) ?? (args.headlines as string[] | undefined),
+        descriptions: (params.descriptions as string[]) ?? (args.descriptions as string[] | undefined),
+        category: str(params.category) ?? str(args.category),
       };
 
       return runWriteAction({
@@ -951,7 +1157,7 @@ const governTools: AgentTool[] = [
   },
   {
     name: "set_policy",
-    description: "Update the workspace policy. Requires the admin scope.",
+    description: "Update the workspace policy. Requires the admin scope. Can toggle autonomyEnabled.",
     family: "govern",
     inputSchema: {
       type: "object",
@@ -961,6 +1167,7 @@ const governTools: AgentTool[] = [
         monthlySpendCap: { type: ["number", "null"] },
         maxBudgetChangePct: { type: "number" },
         protectedCampaignIds: { type: "array", items: { type: "string" } },
+        autonomyEnabled: { type: "boolean", description: "Enable capped autonomy ticks (pause spend-with-zero-conversion)" },
       },
     },
     handler: async (ctx, args) => {
@@ -973,6 +1180,54 @@ const governTools: AgentTool[] = [
         protectedCampaignIds: Array.isArray(args.protectedCampaignIds)
           ? (args.protectedCampaignIds as string[])
           : undefined,
+        autonomyEnabled: typeof args.autonomyEnabled === "boolean" ? args.autonomyEnabled : undefined,
+      });
+    },
+  },
+  {
+    name: "list_skills",
+    description: "List built-in Orkestria MCP skills (launch, optimize, audit).",
+    family: "govern",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => listSkills(),
+  },
+  {
+    name: "run_skill",
+    description:
+      "Return the step plan for a skill. The agent should then call each tool (prefer execute dry_run for writes).",
+    family: "govern",
+    inputSchema: {
+      type: "object",
+      properties: { skillId: { type: "string", enum: ["launch", "optimize", "audit"] } },
+      required: ["skillId"],
+    },
+    handler: async (_ctx, args) => {
+      const skill = getSkill(str(args.skillId) ?? "");
+      if (!skill) throw new Error("Skill inconnu");
+      return {
+        skill,
+        instructions:
+          "Execute steps in order. For writes, call execute with dry_run=true first, then dry_run=false after review.",
+      };
+    },
+  },
+  {
+    name: "autonomy_tick",
+    description:
+      "Run one capped autonomy tick: propose/pause campaigns with spend and zero conversions. Respects autonomyEnabled and policy mode. Never creates campaigns.",
+    family: "govern",
+    inputSchema: {
+      type: "object",
+      properties: {
+        forceDryRun: { type: "boolean", description: "Force dry_run outcomes even if policy is live" },
+      },
+    },
+    handler: async (ctx, args) => {
+      requireScope(ctx, "write");
+      return runAutonomyTick({
+        orgId: ctx.organizationId,
+        apiKeyId: ctx.keyId,
+        forceDryRun: args.forceDryRun === true || args.forceDryRun === "true",
       });
     },
   },
@@ -1001,7 +1256,7 @@ export async function invokeAgentTool(
   if (!tool) throw new Error(`Tool inconnu : ${name}`);
   const isWrite =
     ["launch", "optimize"].includes(tool.family) ||
-    ["execute", "approve_action", "reject_action", "set_policy", "upload_creative"].includes(name);
+    ["execute", "approve_action", "reject_action", "set_policy", "upload_creative", "autonomy_tick"].includes(name);
   const start = Date.now();
   try {
     const result = await tool.handler(ctx, args ?? {});

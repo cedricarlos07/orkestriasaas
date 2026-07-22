@@ -177,7 +177,7 @@ function DocsPage() {
             />
           </div>
           <p className="mt-5 text-[15px] text-ink-soft">
-            Option B — hébergé (JSON-RPC HTTP, aucune installation). Endpoint stable :
+            Option B — hébergé (Streamable HTTP / SSE, fallback JSON-RPC). Endpoint stable :
           </p>
           <div className="mt-3">
             <CodeBlock
@@ -206,17 +206,19 @@ function DocsPage() {
               (requis pour <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">tools/call</code>).
             </li>
             <li>
-              Transport : <strong>JSON-RPC HTTP</strong> (<code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">POST</code>{" "}
-              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">application/json</code>) — pas de SSE Streamable HTTP.
+              Transport : <strong>Streamable HTTP</strong> (
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">Accept: text/event-stream</code>) avec
+              session <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">Mcp-Session-Id</code>. Fallback{" "}
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">application/json</code> JSON-RPC.
             </li>
             <li>
-              Santé / métadonnées : <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">GET /api/mcp</code>{" "}
-              (public). Catalogue tools : <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">GET /api/mcp/tools</code>.
+              Santé : <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">GET /api/mcp</code> — catalogue{" "}
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">GET /api/mcp/tools</code>.
             </li>
             <li>
-              Scopes : <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">read</code> /{" "}
-              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">write</code> /{" "}
-              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">admin</code>.
+              Skills : <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">list_skills</code> /{" "}
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">run_skill</code> — autonomie via{" "}
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">autonomy_tick</code>.
             </li>
           </ul>
         </section>

@@ -69,6 +69,7 @@ export const updateMcpPolicy = createServerFn({ method: "POST" })
       monthlySpendCap?: number | null;
       maxBudgetChangePct?: number;
       protectedCampaignIds?: string[];
+      autonomyEnabled?: boolean;
     }) => data,
   )
   .handler(async ({ data }) => {

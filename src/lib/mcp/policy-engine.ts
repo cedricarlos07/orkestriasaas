@@ -24,6 +24,7 @@ export type OrgPolicy = {
   maxBudgetChangePct: number;
   protectedCampaignIds: string[];
   platformCaps: Record<string, { daily?: number; monthly?: number }>;
+  autonomyEnabled: boolean;
 };
 
 const DEFAULT_POLICY: OrgPolicy = {
@@ -33,31 +34,45 @@ const DEFAULT_POLICY: OrgPolicy = {
   maxBudgetChangePct: 50,
   protectedCampaignIds: [],
   platformCaps: {},
+  autonomyEnabled: false,
 };
 
 export async function getOrgPolicy(orgId: string): Promise<OrgPolicy> {
   const rows = await db.select().from(orgPolicies).where(eq(orgPolicies.organizationId, orgId)).limit(1);
   const row = rows[0];
   if (!row) return DEFAULT_POLICY;
+  const rawCaps = (row.platformCaps ?? {}) as Record<string, unknown>;
+  const settings = rawCaps.__settings as { autonomyEnabled?: boolean } | undefined;
+  const cleanCaps = { ...rawCaps };
+  delete cleanCaps.__settings;
   return {
     defaultMode: (row.defaultMode as ExecutionMode) ?? "dry_run",
     dailySpendCap: row.dailySpendCap !== null ? Number(row.dailySpendCap) : null,
     monthlySpendCap: row.monthlySpendCap !== null ? Number(row.monthlySpendCap) : null,
     maxBudgetChangePct: row.maxBudgetChangePct ?? 50,
     protectedCampaignIds: (row.protectedCampaignIds as string[]) ?? [],
-    platformCaps: (row.platformCaps as OrgPolicy["platformCaps"]) ?? {},
+    platformCaps: cleanCaps as OrgPolicy["platformCaps"],
+    autonomyEnabled: Boolean(settings?.autonomyEnabled),
   };
 }
 
 export async function updateOrgPolicy(orgId: string, patch: Partial<OrgPolicy>): Promise<OrgPolicy> {
   const existing = await db.select().from(orgPolicies).where(eq(orgPolicies.organizationId, orgId)).limit(1);
+  const current = await getOrgPolicy(orgId);
+  let platformCaps = patch.platformCaps ?? current.platformCaps;
+  if (patch.autonomyEnabled !== undefined) {
+    platformCaps = {
+      ...platformCaps,
+      __settings: { autonomyEnabled: patch.autonomyEnabled },
+    } as OrgPolicy["platformCaps"];
+  }
   const values = {
     defaultMode: patch.defaultMode,
     dailySpendCap: patch.dailySpendCap !== undefined ? (patch.dailySpendCap === null ? null : String(patch.dailySpendCap)) : undefined,
     monthlySpendCap: patch.monthlySpendCap !== undefined ? (patch.monthlySpendCap === null ? null : String(patch.monthlySpendCap)) : undefined,
     maxBudgetChangePct: patch.maxBudgetChangePct,
     protectedCampaignIds: patch.protectedCampaignIds,
-    platformCaps: patch.platformCaps,
+    platformCaps: patch.platformCaps !== undefined || patch.autonomyEnabled !== undefined ? platformCaps : undefined,
     updatedAt: new Date(),
   };
   const clean = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined));
@@ -71,7 +86,7 @@ export async function updateOrgPolicy(orgId: string, patch: Partial<OrgPolicy>):
       monthlySpendCap: patch.monthlySpendCap != null ? String(patch.monthlySpendCap) : null,
       maxBudgetChangePct: patch.maxBudgetChangePct ?? 50,
       protectedCampaignIds: patch.protectedCampaignIds ?? [],
-      platformCaps: patch.platformCaps ?? {},
+      platformCaps: platformCaps ?? {},
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -90,7 +105,9 @@ export type WriteActionName =
   | "create_ad"
   | "upload_creative"
   | "create_audience"
-  | "add_keywords";
+  | "add_keywords"
+  | "add_negative_keywords"
+  | "create_conversion";
 
 export const WRITE_ACTION_NAMES: WriteActionName[] = [
   "create_campaign",
@@ -102,6 +119,8 @@ export const WRITE_ACTION_NAMES: WriteActionName[] = [
   "upload_creative",
   "create_audience",
   "add_keywords",
+  "add_negative_keywords",
+  "create_conversion",
 ];
 
 export type WriteActionInput = {
@@ -134,6 +153,11 @@ export type WriteActionInput = {
     country?: string;
     optimizationGoal?: string;
     keywords?: { text: string; matchType?: string; bid?: number }[];
+    campaignType?: "search" | "pmax" | "traffic" | "leads" | "default";
+    finalUrl?: string;
+    headlines?: string[];
+    descriptions?: string[];
+    category?: string;
   };
 };
 
@@ -207,7 +231,10 @@ function buildDiff(input: WriteActionInput): Record<string, unknown> {
         dailyBudget: input.params.dailyBudget,
         objective: input.params.objective ?? null,
         countries: input.params.countries ?? null,
-        note: "La campagne sera créée en PAUSE quand la plateforme le permet",
+        campaignType: input.params.campaignType ?? "default",
+        finalUrl: input.params.finalUrl ?? null,
+        keywords: input.params.keywords ?? null,
+        note: "La campagne sera créée en PAUSE / DRAFT quand la plateforme le permet",
       };
     case "update_budget":
       return {
@@ -263,6 +290,20 @@ function buildDiff(input: WriteActionInput): Record<string, unknown> {
         platform: input.connector,
         adGroupId: input.params.adGroupId,
         keywords: input.params.keywords,
+      };
+    case "add_negative_keywords":
+      return {
+        action: "add_negative_keywords",
+        platform: input.connector,
+        campaignId: input.campaignId,
+        keywords: input.params.keywords,
+      };
+    case "create_conversion":
+      return {
+        action: "create_conversion",
+        platform: input.connector,
+        name: input.params.name,
+        category: input.params.category ?? null,
       };
   }
 }
@@ -482,6 +523,11 @@ async function executeWrite(
         dailyBudget: input.params.dailyBudget,
         objective: input.params.objective,
         countries: input.params.countries,
+        type: input.params.campaignType,
+        keywords: input.params.keywords,
+        finalUrl: input.params.finalUrl,
+        headlines: input.params.headlines,
+        descriptions: input.params.descriptions,
       });
       return { campaignId: res.campaignId, ...res.details };
     }
@@ -562,6 +608,24 @@ async function executeWrite(
       });
       return { count: res.count, ...res.details };
     }
+    case "add_negative_keywords": {
+      if (!adapter.addNegativeKeywords) throw new Error(`add_negative_keywords non supporté pour ${adapter.label}`);
+      if (!input.campaignId || !input.params.keywords?.length) throw new Error("campaignId et keywords[] requis");
+      const res = await adapter.addNegativeKeywords(tokens, accountId, {
+        campaignId: input.campaignId,
+        keywords: input.params.keywords,
+      });
+      return { count: res.count, ...res.details };
+    }
+    case "create_conversion": {
+      if (!adapter.createConversion) throw new Error(`create_conversion non supporté pour ${adapter.label}`);
+      if (!input.params.name) throw new Error("name requis");
+      const res = await adapter.createConversion(tokens, accountId, {
+        name: input.params.name,
+        category: input.params.category,
+      });
+      return { conversionId: res.conversionId, ...res.details };
+    }
   }
 }
 
@@ -606,6 +670,11 @@ export async function approveAndExecute(orgId: string, approvalId: string): Prom
       country: (after.country as string) ?? undefined,
       optimizationGoal: (after.optimizationGoal as string) ?? undefined,
       keywords: (after.keywords as { text: string; matchType?: string; bid?: number }[]) ?? undefined,
+      campaignType: (after.campaignType as WriteActionInput["params"]["campaignType"]) ?? undefined,
+      finalUrl: (after.finalUrl as string) ?? undefined,
+      headlines: (after.headlines as string[]) ?? undefined,
+      descriptions: (after.descriptions as string[]) ?? undefined,
+      category: (after.category as string) ?? undefined,
     },
   };
 

@@ -6,6 +6,18 @@ export type AdAccountRef = { id: string; name: string; currency?: string };
 
 export type KeywordInput = { text: string; matchType?: "BROAD" | "PHRASE" | "EXACT" | string; bid?: number };
 
+export type CreateCampaignInput = {
+  name: string;
+  dailyBudget: number;
+  objective?: string;
+  countries?: string[];
+  type?: "search" | "pmax" | "traffic" | "leads" | "default";
+  keywords?: KeywordInput[];
+  finalUrl?: string;
+  headlines?: string[];
+  descriptions?: string[];
+};
+
 /**
  * Unified interface over every supported ad platform.
  * Optional methods reject with a clear error when unsupported.
@@ -22,7 +34,7 @@ export type PlatformAdapter = {
   createCampaign?: (
     tokens: TokenPayload,
     accountId: string,
-    input: { name: string; dailyBudget: number; objective?: string; countries?: string[] },
+    input: CreateCampaignInput,
   ) => Promise<{ campaignId: string; details?: Record<string, unknown> }>;
   createAdSet?: (
     tokens: TokenPayload,
@@ -67,6 +79,24 @@ export type PlatformAdapter = {
     accountId: string,
     input: { adGroupId: string; keywords: KeywordInput[] },
   ) => Promise<{ count: number; details?: Record<string, unknown> }>;
+  addNegativeKeywords?: (
+    tokens: TokenPayload,
+    accountId: string,
+    input: { campaignId: string; keywords: KeywordInput[] },
+  ) => Promise<{ count: number; details?: Record<string, unknown> }>;
+  createConversion?: (
+    tokens: TokenPayload,
+    accountId: string,
+    input: { name: string; category?: string },
+  ) => Promise<{ conversionId: string; details?: Record<string, unknown> }>;
+  listConversions?: (
+    tokens: TokenPayload,
+    accountId: string,
+  ) => Promise<{ id: string; name: string; status?: string; category?: string }[]>;
+  diagnoseTracking?: (
+    tokens: TokenPayload,
+    accountId: string,
+  ) => Promise<{ ok: boolean; conversions?: number; issues: string[] }>;
 };
 
 function micro(amount: number): number {
@@ -100,6 +130,44 @@ const googleAds: PlatformAdapter = {
     const { addGoogleKeywords } = await import("./google-ads-api");
     const res = await addGoogleKeywords(t.accessToken, accountId, input.adGroupId, input.keywords);
     return { count: res.resourceNames.length, details: { resourceNames: res.resourceNames } };
+  },
+  createCampaign: async (t, accountId, input) => {
+    const { createGoogleCampaignPaused } = await import("./google-ads-api");
+    return createGoogleCampaignPaused(t.accessToken, accountId, {
+      name: input.name,
+      dailyBudget: input.dailyBudget,
+      type: input.type === "pmax" ? "pmax" : "search",
+      keywords: input.keywords,
+      finalUrl: input.finalUrl,
+      headlines: input.headlines,
+      descriptions: input.descriptions,
+      countries: input.countries,
+    });
+  },
+  addNegativeKeywords: async (t, accountId, input) => {
+    const { addGoogleNegativeKeywords } = await import("./google-ads-api");
+    return addGoogleNegativeKeywords(t.accessToken, accountId, input.campaignId, input.keywords);
+  },
+  createAudience: async (t, accountId, input) => {
+    const { createGoogleUserList } = await import("./google-ads-api");
+    const res = await createGoogleUserList(t.accessToken, accountId, {
+      name: input.name,
+      description: input.description,
+    });
+    return { audienceId: res.audienceId };
+  },
+  createConversion: async (t, accountId, input) => {
+    const { createGoogleConversionAction } = await import("./google-ads-api");
+    const res = await createGoogleConversionAction(t.accessToken, accountId, input);
+    return { conversionId: res.conversionId };
+  },
+  listConversions: async (t, accountId) => {
+    const { listGoogleConversionActions } = await import("./google-ads-api");
+    return listGoogleConversionActions(t.accessToken, accountId);
+  },
+  diagnoseTracking: async (t, accountId) => {
+    const { diagnoseGoogleTracking } = await import("./google-ads-api");
+    return diagnoseGoogleTracking(t.accessToken, accountId);
   },
 };
 
@@ -201,6 +269,24 @@ const linkedinAds: PlatformAdapter = {
     const { updateLinkedInCampaignBudget } = await import("./linkedin-api");
     await updateLinkedInCampaignBudget(t.accessToken, accountId, campaignId, dailyBudget);
   },
+  createCampaign: async (t, accountId, input) => {
+    const { createLinkedInCampaignPaused } = await import("./linkedin-api");
+    return createLinkedInCampaignPaused(t.accessToken, accountId, {
+      name: input.name,
+      dailyBudget: input.dailyBudget,
+      countries: input.countries,
+      objective: input.objective,
+      finalUrl: input.finalUrl,
+    });
+  },
+  createAudience: async (t, accountId, input) => {
+    const { createLinkedInMatchedAudience } = await import("./linkedin-api");
+    const res = await createLinkedInMatchedAudience(t.accessToken, accountId, {
+      name: input.name,
+      description: input.description,
+    });
+    return { audienceId: res.audienceId };
+  },
 };
 
 const tiktokAds: PlatformAdapter = {
@@ -217,44 +303,27 @@ const tiktokAds: PlatformAdapter = {
     return fetchTikTokAdsSnapshot(t.accessToken, accountId, period);
   },
   pauseCampaign: async (t, accountId, campaignId) => {
-    await tiktokStatus(t.accessToken, accountId, campaignId, "DISABLE");
+    const { setTikTokCampaignStatus } = await import("./tiktok-api");
+    await setTikTokCampaignStatus(t.accessToken, accountId, campaignId, "DISABLE");
   },
   enableCampaign: async (t, accountId, campaignId) => {
-    await tiktokStatus(t.accessToken, accountId, campaignId, "ENABLE");
+    const { setTikTokCampaignStatus } = await import("./tiktok-api");
+    await setTikTokCampaignStatus(t.accessToken, accountId, campaignId, "ENABLE");
   },
   updateBudget: async (t, accountId, campaignId, dailyBudget) => {
-    const res = await fetch("https://business-api.tiktok.com/open_api/v1.3/campaign/update/", {
-      method: "POST",
-      headers: { "Access-Token": t.accessToken, "Content-Type": "application/json" },
-      body: JSON.stringify({ advertiser_id: accountId, campaign_id: campaignId, budget: dailyBudget }),
+    const { updateTikTokCampaignBudget } = await import("./tiktok-api");
+    await updateTikTokCampaignBudget(t.accessToken, accountId, campaignId, dailyBudget);
+  },
+  createCampaign: async (t, accountId, input) => {
+    const { createTikTokCampaignPaused } = await import("./tiktok-api");
+    return createTikTokCampaignPaused(t.accessToken, accountId, {
+      name: input.name,
+      dailyBudget: input.dailyBudget,
+      objective: input.objective,
+      countries: input.countries,
     });
-    const data = (await res.json()) as { code?: number; message?: string };
-    if (!res.ok || (data.code !== undefined && data.code !== 0)) {
-      throw new Error(`TikTok budget update: ${data.message ?? (await res.text())}`);
-    }
   },
 };
-
-async function tiktokStatus(
-  accessToken: string,
-  advertiserId: string,
-  campaignId: string,
-  operation: "ENABLE" | "DISABLE",
-): Promise<void> {
-  const res = await fetch("https://business-api.tiktok.com/open_api/v1.3/campaign/status/update/", {
-    method: "POST",
-    headers: { "Access-Token": accessToken, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      advertiser_id: advertiserId,
-      campaign_ids: [campaignId],
-      operation_status: operation,
-    }),
-  });
-  const data = (await res.json()) as { code?: number; message?: string };
-  if (!res.ok || (data.code !== undefined && data.code !== 0)) {
-    throw new Error(`TikTok status update: ${data.message ?? "erreur inconnue"}`);
-  }
-}
 
 const snapchatAds: PlatformAdapter = {
   connector: "snapchat_ads",

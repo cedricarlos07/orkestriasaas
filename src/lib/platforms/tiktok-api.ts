@@ -107,3 +107,93 @@ export async function fetchTikTokAdsSnapshot(
     opportunities,
   };
 }
+
+async function tiktokJson(
+  accessToken: string,
+  path: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const res = await fetch(`${API}${path}`, {
+    method: "POST",
+    headers: { "Access-Token": accessToken, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json()) as { code?: number; message?: string; data?: Record<string, unknown> };
+  if (!res.ok || (data.code !== undefined && data.code !== 0)) {
+    throw new Error(`TikTok ${path}: ${data.message ?? JSON.stringify(data)}`);
+  }
+  return data.data ?? {};
+}
+
+export async function createTikTokCampaignPaused(
+  accessToken: string,
+  advertiserId: string,
+  input: { name: string; dailyBudget: number; objective?: string; countries?: string[] },
+): Promise<{ campaignId: string; details: Record<string, unknown> }> {
+  const camp = await tiktokJson(accessToken, "/campaign/create/", {
+    advertiser_id: advertiserId,
+    campaign_name: input.name,
+    objective_type: input.objective ?? "TRAFFIC",
+    budget_mode: "BUDGET_MODE_DAY",
+    budget: Math.max(20, input.dailyBudget),
+    operation_status: "DISABLE",
+  });
+  const campaignId = String(camp.campaign_id ?? "");
+  if (!campaignId) throw new Error("TikTok create campaign: id manquant");
+
+  let adGroupId: string | undefined;
+  try {
+    const ag = await tiktokJson(accessToken, "/adgroup/create/", {
+      advertiser_id: advertiserId,
+      campaign_id: campaignId,
+      adgroup_name: `${input.name} — ad group`,
+      promotion_type: "WEBSITE",
+      budget_mode: "BUDGET_MODE_DAY",
+      budget: Math.max(20, input.dailyBudget),
+      schedule_type: "SCHEDULE_FROM_NOW",
+      billing_event: "CPC",
+      bid_type: "BID_TYPE_NO_BID",
+      location_ids: [],
+      operation_status: "DISABLE",
+      pacing: "PACING_MODE_SMOOTH",
+    });
+    adGroupId = String(ag.adgroup_id ?? "") || undefined;
+  } catch {
+    // Campaign alone is still useful
+  }
+
+  return {
+    campaignId,
+    details: {
+      status: "DISABLE",
+      adGroupId,
+      note: "Campagne TikTok créée désactivée (PAUSE équivalent)",
+    },
+  };
+}
+
+export async function updateTikTokCampaignBudget(
+  accessToken: string,
+  advertiserId: string,
+  campaignId: string,
+  dailyBudget: number,
+): Promise<void> {
+  await tiktokJson(accessToken, "/campaign/update/", {
+    advertiser_id: advertiserId,
+    campaign_id: campaignId,
+    budget: dailyBudget,
+  });
+}
+
+export async function setTikTokCampaignStatus(
+  accessToken: string,
+  advertiserId: string,
+  campaignId: string,
+  operation: "ENABLE" | "DISABLE",
+): Promise<void> {
+  await tiktokJson(accessToken, "/campaign/status/update/", {
+    advertiser_id: advertiserId,
+    campaign_ids: [campaignId],
+    operation_status: operation,
+  });
+}

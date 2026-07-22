@@ -1,14 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ApiAuthError, authenticateApiKey } from "@/lib/mcp/api-keys";
 import { AGENT_TOOLS, invokeAgentTool } from "@/lib/mcp/agent-tools";
+import { randomUUID } from "node:crypto";
 
-const PROTOCOL_VERSION = "2024-11-05";
-const SERVER_INFO = { name: "orkestria-mcp", version: "1.0.0" };
+const PROTOCOL_VERSION = "2025-03-26";
+const SERVER_INFO = { name: "orkestria-mcp", version: "1.1.0" };
 
-function json(body: unknown, status = 200): Response {
+type Session = { id: string; createdAt: number };
+const sessions = new Map<string, Session>();
+
+function json(body: unknown, status = 200, extraHeaders?: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...extraHeaders },
   });
 }
 
@@ -20,11 +24,19 @@ function rpcError(id: unknown, code: number, message: string) {
   return { jsonrpc: "2.0", id, error: { code, message } };
 }
 
+function wantsSse(request: Request): boolean {
+  const accept = request.headers.get("accept") ?? "";
+  return accept.includes("text/event-stream");
+}
+
+function sseEncode(data: unknown): string {
+  return `event: message\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
 async function handleRpc(request: Request, message: Record<string, unknown>): Promise<unknown | null> {
   const id = message.id;
   const method = message.method as string;
 
-  // Notifications have no id and expect no response.
   if (id === undefined && method?.startsWith("notifications/")) return null;
 
   switch (method) {
@@ -34,7 +46,7 @@ async function handleRpc(request: Request, message: Record<string, unknown>): Pr
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "Orkestria MCP — ad control for agents. Transport: JSON-RPC over HTTP (POST application/json). Auth: Authorization Bearer ork_…. Writes are policy-gated; use execute with dry_run=true then dry_run=false, or named tools with mode=live (write scope). Start with validate_setup.",
+          "Orkestria MCP — ad control for agents. Transport: Streamable HTTP (SSE) with JSON-RPC fallback. Auth: Authorization Bearer ork_…. Writes are policy-gated; use execute with dry_run=true then dry_run=false. Start with validate_setup.",
       });
     case "ping":
       return rpcResult(id, {});
@@ -68,20 +80,66 @@ async function handleRpc(request: Request, message: Record<string, unknown>): Pr
   }
 }
 
+function ensureSession(request: Request): { sessionId: string; isNew: boolean } {
+  const existing = request.headers.get("mcp-session-id");
+  if (existing && sessions.has(existing)) return { sessionId: existing, isNew: false };
+  const id = randomUUID();
+  sessions.set(id, { id, createdAt: Date.now() });
+  return { sessionId: id, isNew: true };
+}
+
 export const Route = createFileRoute("/api/mcp/")({
   server: {
     handlers: {
-      GET: async () =>
-        json({
+      GET: async ({ request }: { request: Request }) => {
+        // Streamable HTTP: GET opens SSE stream when Accept includes text/event-stream
+        if (wantsSse(request)) {
+          const { sessionId } = ensureSession(request);
+          const stream = new ReadableStream({
+            start(controller) {
+              const enc = new TextEncoder();
+              controller.enqueue(enc.encode(`: orkestria-mcp connected\n\n`));
+              const ping = setInterval(() => {
+                try {
+                  controller.enqueue(enc.encode(`: ping ${Date.now()}\n\n`));
+                } catch {
+                  clearInterval(ping);
+                }
+              }, 25000);
+              // Keep stream open; clients may POST on same session
+              (request.signal as AbortSignal | undefined)?.addEventListener?.("abort", () => {
+                clearInterval(ping);
+                try {
+                  controller.close();
+                } catch {
+                  /* ignore */
+                }
+              });
+            },
+          });
+          return new Response(stream, {
+            status: 200,
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              Connection: "keep-alive",
+              "Mcp-Session-Id": sessionId,
+            },
+          });
+        }
+
+        return json({
           ok: true,
           server: SERVER_INFO,
-          transport: "json-rpc-http",
+          transport: "streamable-http",
+          fallback: "json-rpc-http",
           protocolVersion: PROTOCOL_VERSION,
           endpoint: "https://orkestria.top/api/mcp",
           auth: "Authorization: Bearer ork_…",
           tools: AGENT_TOOLS.length,
           docs: "https://orkestria.top/docs",
-        }),
+        });
+      },
       POST: async ({ request }: { request: Request }) => {
         let body: unknown;
         try {
@@ -89,25 +147,61 @@ export const Route = createFileRoute("/api/mcp/")({
         } catch {
           return json(rpcError(null, -32700, "JSON invalide"), 400);
         }
+
+        const { sessionId } = ensureSession(request);
+        const sessionHeaders = { "Mcp-Session-Id": sessionId };
+
         try {
-          if (Array.isArray(body)) {
-            const responses = (
-              await Promise.all(body.map((m) => handleRpc(request, m as Record<string, unknown>)))
-            ).filter((r) => r !== null);
-            return json(responses);
+          const messages = Array.isArray(body) ? body : [body];
+          const responses: unknown[] = [];
+          for (const m of messages) {
+            const response = await handleRpc(request, m as Record<string, unknown>);
+            if (response !== null) responses.push(response);
           }
-          const response = await handleRpc(request, body as Record<string, unknown>);
-          if (response === null) return new Response(null, { status: 202 });
-          return json(response);
+
+          // Streamable HTTP: if client accepts SSE, return SSE-framed JSON-RPC responses
+          if (wantsSse(request)) {
+            const payload = responses.length === 1 ? responses[0] : responses;
+            const stream = new ReadableStream({
+              start(controller) {
+                const enc = new TextEncoder();
+                if (Array.isArray(payload)) {
+                  for (const item of payload) controller.enqueue(enc.encode(sseEncode(item)));
+                } else if (payload !== undefined) {
+                  controller.enqueue(enc.encode(sseEncode(payload)));
+                }
+                controller.close();
+              },
+            });
+            return new Response(stream, {
+              status: 200,
+              headers: {
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Mcp-Session-Id": sessionId,
+              },
+            });
+          }
+
+          // JSON-RPC HTTP fallback (application/json)
+          if (responses.length === 0) return new Response(null, { status: 202, headers: sessionHeaders });
+          if (Array.isArray(body)) return json(responses, 200, sessionHeaders);
+          return json(responses[0], 200, sessionHeaders);
         } catch (e) {
           if (e instanceof ApiAuthError) {
-            return json(rpcError((body as { id?: unknown })?.id ?? null, -32001, e.message), e.status);
+            return json(rpcError((body as { id?: unknown })?.id ?? null, -32001, e.message), e.status, sessionHeaders);
           }
           return json(
             rpcError((body as { id?: unknown })?.id ?? null, -32603, e instanceof Error ? e.message : "Erreur interne"),
             500,
+            sessionHeaders,
           );
         }
+      },
+      DELETE: async ({ request }: { request: Request }) => {
+        const id = request.headers.get("mcp-session-id");
+        if (id) sessions.delete(id);
+        return new Response(null, { status: 204 });
       },
     },
   },

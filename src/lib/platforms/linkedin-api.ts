@@ -159,3 +159,83 @@ export async function updateLinkedInCampaignBudget(
   });
   if (!res.ok) throw new Error(`LinkedIn budget update: ${await res.text()}`);
 }
+
+export async function createLinkedInCampaignPaused(
+  accessToken: string,
+  accountId: string,
+  input: { name: string; dailyBudget: number; countries?: string[]; objective?: string; finalUrl?: string },
+): Promise<{ campaignId: string; details: Record<string, unknown> }> {
+  const acct = accountId.replace(/\D/g, "");
+  const currency = "USD";
+
+  const groupRes = await fetch(`${API}/adAccounts/${acct}/adCampaignGroups`, {
+    method: "POST",
+    headers: headers(accessToken),
+    body: JSON.stringify({
+      account: `urn:li:sponsoredAccount:${acct}`,
+      name: `${input.name} — group`.slice(0, 100),
+      status: "DRAFT",
+    }),
+  });
+  if (!groupRes.ok) throw new Error(`LinkedIn campaign group: ${await groupRes.text()}`);
+  const groupId =
+    groupRes.headers.get("x-restli-id") ??
+    ((await groupRes.json().catch(() => ({}))) as { id?: number }).id;
+  if (!groupId) throw new Error("LinkedIn campaign group: id manquant");
+
+  const campRes = await fetch(`${API}/adAccounts/${acct}/adCampaigns`, {
+    method: "POST",
+    headers: headers(accessToken),
+    body: JSON.stringify({
+      account: `urn:li:sponsoredAccount:${acct}`,
+      campaignGroup: `urn:li:sponsoredCampaignGroup:${groupId}`,
+      name: input.name,
+      status: "DRAFT",
+      type: "SPONSORED_UPDATES",
+      costType: "CPC",
+      dailyBudget: { amount: String(input.dailyBudget), currencyCode: currency },
+      unitCost: { amount: "2", currencyCode: currency },
+      locale: { country: input.countries?.[0] ?? "US", language: "en" },
+      offsiteDeliveryEnabled: true,
+    }),
+  });
+  if (!campRes.ok) throw new Error(`LinkedIn create campaign: ${await campRes.text()}`);
+  const campaignId =
+    campRes.headers.get("x-restli-id") ??
+    String(((await campRes.json().catch(() => ({}))) as { id?: number }).id ?? "");
+  if (!campaignId) throw new Error("LinkedIn create campaign: id manquant");
+
+  return {
+    campaignId: String(campaignId),
+    details: {
+      status: "DRAFT",
+      campaignGroupId: String(groupId),
+      note: "Campagne LinkedIn créée en DRAFT — à activer après revue créative",
+    },
+  };
+}
+
+export async function createLinkedInMatchedAudience(
+  accessToken: string,
+  accountId: string,
+  input: { name: string; description?: string },
+): Promise<{ audienceId: string }> {
+  const acct = accountId.replace(/\D/g, "");
+  const res = await fetch(`${API}/dmpSegments`, {
+    method: "POST",
+    headers: headers(accessToken),
+    body: JSON.stringify({
+      account: `urn:li:sponsoredAccount:${acct}`,
+      name: input.name,
+      description: input.description ?? "",
+      type: "USER_LIST",
+      destinations: ["LINKEDIN"],
+    }),
+  });
+  if (!res.ok) throw new Error(`LinkedIn audience: ${await res.text()}`);
+  const id =
+    res.headers.get("x-restli-id") ??
+    String(((await res.json().catch(() => ({}))) as { id?: number }).id ?? "");
+  if (!id) throw new Error("LinkedIn audience: id manquant");
+  return { audienceId: String(id) };
+}

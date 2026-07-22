@@ -54,7 +54,7 @@ async function callTool(name, args) {
 const tools = await fetchTools();
 
 const server = new Server(
-  { name: "orkestria-mcp", version: "1.0.0" },
+  { name: "orkestria-mcp", version: "1.1.0" },
   { capabilities: { tools: {} } },
 );
 

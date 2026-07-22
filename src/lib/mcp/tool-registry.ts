@@ -75,11 +75,12 @@ export function toolsForSkill(skill: string): ToolDefinition[] {
 }
 
 export const MCP_CAPABILITIES = [
-  { platform: "Google Ads", read: true, create: false, modify: true, pause: true, budget: true, creatives: false, keywords: true },
+  { platform: "Google Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: false, keywords: true },
   { platform: "Meta Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: true, keywords: false },
-  { platform: "TikTok Ads", read: true, create: false, modify: true, pause: true, budget: true, creatives: false, keywords: false },
+  { platform: "LinkedIn Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: false, keywords: false },
+  { platform: "TikTok Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: false, keywords: false },
   { platform: "Microsoft Ads", read: true, create: false, modify: true, pause: true, budget: true, creatives: false, keywords: true },
   { platform: "Amazon Ads (SP)", read: true, create: false, modify: true, pause: true, budget: true, creatives: false, keywords: true },
-  { platform: "LinkedIn / Snap / Reddit / X / Pinterest", read: true, create: false, modify: true, pause: true, budget: true, creatives: false, keywords: false },
+  { platform: "Snap / Reddit / X / Pinterest", read: true, create: false, modify: true, pause: true, budget: true, creatives: false, keywords: false },
   { platform: "GA4", read: true, create: false, modify: false, pause: false, budget: false, creatives: false, keywords: false },
 ];

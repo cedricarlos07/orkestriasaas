@@ -243,6 +243,7 @@ function PoliciesTab() {
     monthlySpendCap: string;
     maxBudgetChangePct: string;
     protectedCampaignIds: string;
+    autonomyEnabled: boolean;
   } | null>(null);
 
   const current = draft ?? (policy
@@ -252,6 +253,7 @@ function PoliciesTab() {
         monthlySpendCap: policy.monthlySpendCap?.toString() ?? "",
         maxBudgetChangePct: String(policy.maxBudgetChangePct),
         protectedCampaignIds: policy.protectedCampaignIds.join(", "),
+        autonomyEnabled: Boolean(policy.autonomyEnabled),
       }
     : null);
 
@@ -267,6 +269,7 @@ function PoliciesTab() {
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean),
+          autonomyEnabled: current!.autonomyEnabled,
         },
       }),
     onSuccess: () => {
@@ -311,6 +314,30 @@ function PoliciesTab() {
               <p className="mt-1 text-[12px] text-ink-soft">{m.d}</p>
             </button>
           ))}
+        </div>
+      </section>
+
+      <section className="card-soft rounded-2xl p-6">
+        <p className="mb-2 font-display text-[16px] font-semibold text-ink">Autonomie plafonnée</p>
+        <p className="mb-4 text-[13px] text-ink-soft">
+          Quand activée, <code className="rounded bg-surface-2 px-1">autonomy_tick</code> peut proposer (ou
+          exécuter selon le mode) la pause de campagnes avec dépense sans conversion. Jamais de création
+          automatique.
+        </p>
+        <button
+          type="button"
+          onClick={() => set({ autonomyEnabled: !current.autonomyEnabled })}
+          className={`rounded-full px-4 py-2 text-[13px] font-medium ${
+            current.autonomyEnabled
+              ? "bg-[#ff6c02] text-white"
+              : "border border-line/70 text-ink-soft hover:text-ink"
+          }`}
+        >
+          {current.autonomyEnabled ? "Autonomie activée" : "Autonomie désactivée"}
+        </button>
+        <div className="mt-4 rounded-xl border border-line/60 bg-surface-2/50 p-3 text-[12px] text-ink-soft">
+          Skills MCP : <code>launch</code>, <code>optimize</code>, <code>audit</code> via{" "}
+          <code>list_skills</code> / <code>run_skill</code>.
         </div>
       </section>
 
