@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  disconnectConnectorPlatform,
   disconnectPlatform,
   getOAuthAuthorizeUrl,
   listConnectionCatalog,
@@ -8,6 +9,15 @@ import {
 } from "@/functions/connections";
 import { getOAuthAvailability } from "@/functions/platform-config";
 import type { ConnectorId } from "@/lib/oauth/connectors";
+
+function invalidateConnectionQueries(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ["connections"] });
+  void qc.invalidateQueries({ queryKey: ["connection-catalog"] });
+  void qc.invalidateQueries({ queryKey: ["meta-setup-status"] });
+  void qc.invalidateQueries({ queryKey: ["google-setup-status"] });
+  void qc.invalidateQueries({ queryKey: ["dashboard-kpis"] });
+  void qc.invalidateQueries({ queryKey: ["setup-status"] });
+}
 
 export function useConnections() {
   const qc = useQueryClient();
@@ -29,7 +39,6 @@ export function useConnections() {
     if (item && !item.configured) {
       throw new Error(`${item.label} n'est pas configuré sur le serveur (credentials manquantes).`);
     }
-    // Unified MCP links are provisioned server-side — never bounce users to an external dashboard.
     if (item?.connectMode === "unified") {
       throw new Error(
         "Ce compte se lie côté Orkestria. Actualisez la page Connexions ou contactez le support.",
@@ -40,11 +49,18 @@ export function useConnections() {
 
   const disconnectMut = useMutation({
     mutationFn: (connectionId: string) => disconnectPlatform({ data: { connectionId } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["connections"] }),
+    onSuccess: () => invalidateConnectionQueries(qc),
   });
 
-  const byConnector = (connector: ConnectorId): ConnectionView | undefined =>
-    connections.find((c) => c.connector === connector);
+  const disconnectConnectorMut = useMutation({
+    mutationFn: (connector: ConnectorId) => disconnectConnectorPlatform({ data: { connector } }),
+    onSuccess: () => invalidateConnectionQueries(qc),
+  });
+
+  const byConnector = (connector: ConnectorId): ConnectionView | undefined => {
+    const active = connections.find((c) => c.connector === connector && c.status === "connectée");
+    return active ?? connections.find((c) => c.connector === connector);
+  };
 
   return {
     connections,
@@ -53,6 +69,8 @@ export function useConnections() {
     isLoading,
     connect,
     disconnect: (id: string) => disconnectMut.mutate(id),
+    disconnectConnector: (connector: ConnectorId) => disconnectConnectorMut.mutateAsync(connector),
+    disconnecting: disconnectMut.isPending || disconnectConnectorMut.isPending,
     byConnector,
   };
 }

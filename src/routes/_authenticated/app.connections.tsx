@@ -25,7 +25,8 @@ const EXTRA = [
 ];
 
 function Connections() {
-  const { isLoading, byConnector, catalog, connect, disconnect } = useConnections();
+  const { isLoading, byConnector, catalog, connect, disconnect, disconnectConnector, disconnecting } =
+    useConnections();
   const qc = useQueryClient();
 
   const {
@@ -72,9 +73,17 @@ function Connections() {
   }, [qc, refetchMeta, refetchGoogle]);
 
   const metaConn = byConnector("meta_ads");
-  const metaLinked =
-    Boolean(metaSetup?.oauthConnected) ||
-    (metaConn?.status === "connectée" && metaConn?.via === "oauth");
+  const metaLinked = metaConn?.status === "connectée" && metaConn?.via === "oauth";
+
+  const handleDisconnectMeta = async () => {
+    try {
+      await disconnectConnector("meta_ads");
+      await refetchMeta();
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "Impossible de déconnecter Meta.");
+    }
+  };
 
   const groups = [
     { title: "Régies publicitaires", filter: "ads" as const },
@@ -137,11 +146,10 @@ function Connections() {
                   <button
                     type="button"
                     className="chip-ghost text-[12px]"
-                    onClick={() => {
-                      if (metaConn) disconnect(metaConn.id);
-                    }}
+                    disabled={disconnecting}
+                    onClick={() => void handleDisconnectMeta()}
                   >
-                    Déconnecter
+                    {disconnecting ? "Déconnexion…" : "Déconnecter"}
                   </button>
                 </>
               ) : metaSetup?.tokenError && !metaConn ? (
@@ -282,7 +290,7 @@ function Connections() {
                   const accountLabel = conn?.externalAccount ?? (connected ? "Compte lié" : null);
                   const isMeta = cfg.id === "meta_ads";
                   const isGoogle = cfg.id === "google_ads";
-                  const metaReallyConnected = isMeta && (metaSetup?.oauthConnected || connected);
+                  const metaReallyConnected = isMeta && (connected || Boolean(metaSetup?.oauthConnected));
                   const googleReady = isGoogle && (googleSetup?.googleReady || googleSetup?.oauthConnected);
                   const showConnected = (isMeta ? metaReallyConnected : isGoogle ? googleReady : connected);
 

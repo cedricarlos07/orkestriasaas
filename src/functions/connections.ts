@@ -62,6 +62,24 @@ export const disconnectPlatform = createServerFn({ method: "POST" })
     return listConnections();
   });
 
+export const disconnectConnectorPlatform = createServerFn({ method: "POST" })
+  .inputValidator((data: { connector: ConnectorId }) => data)
+  .handler(async ({ data }) => {
+    const session = await ensureSession();
+    const orgId = await getActiveOrgId(session);
+    const rows = await db.select().from(connections).where(eq(connections.organizationId, orgId));
+    const conn = rows.find((r) => r.connector === data.connector && r.status === "connectée");
+    if (!conn) {
+      throw new Error(`Aucune connexion ${CONNECTORS[data.connector]?.label ?? data.connector} active.`);
+    }
+    await disconnectConnection(orgId, conn.id);
+    if (data.connector === "meta_ads") {
+      const { setOrgMetaPageId } = await import("@/lib/mcp/meta-org");
+      await setOrgMetaPageId(orgId, null);
+    }
+    return listConnections();
+  });
+
 export const listConnectionCatalog = createServerFn({ method: "GET" }).handler(async () => {
   await ensureSession();
   return Object.values(CONNECTORS).map((c) => ({
