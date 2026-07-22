@@ -34,7 +34,8 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
       { name: "create_pmax_campaign", desc: "Google Performance Max minimal" },
       { name: "create_ad_set", desc: "Ad set Meta/TikTok ou campagne DRAFT LinkedIn" },
       { name: "create_ad", desc: "Annonce / créatif Meta, TikTok, LinkedIn" },
-      { name: "create_audience", desc: "Audience Meta / Google / LinkedIn" },
+      { name: "create_audience", desc: "Audience Meta / Google / LinkedIn / TikTok / Snap" },
+      { name: "attach_audience", desc: "Attache une audience (campagne Google/LI ou ad set Meta)" },
       { name: "create_conversion", desc: "Conversion action Google Ads" },
       { name: "set_budget", desc: "Fixe le budget journalier d'une campagne (ou ad set Meta)" },
       { name: "create_media_plan", desc: "Répartit un budget total entre les plateformes selon la perf 30 jours" },
@@ -48,6 +49,7 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
       { name: "enable_campaign", desc: "Réactive une campagne" },
       { name: "pause_ad_set", desc: "Pause un ad set Meta" },
       { name: "enable_ad_set", desc: "Réactive un ad set Meta" },
+      { name: "pause_ad", desc: "Pause une annonce Meta" },
       { name: "reallocate_budget", desc: "Déplace du budget entre deux campagnes" },
       { name: "add_keywords", desc: "Ajoute des mots-clés (Google, Microsoft, Amazon SP)" },
       { name: "add_negative_keywords", desc: "Mots-clés négatifs (Google, Microsoft)" },
@@ -58,7 +60,8 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
     tools: [
       { name: "generate_ad_copy", desc: "Variantes de textes publicitaires (headline, texte, CTA)" },
       { name: "upload_creative", desc: "Upload image Meta / TikTok" },
-      { name: "list_creatives", desc: "Assets créatifs Meta / TikTok / LinkedIn" },
+      { name: "list_creatives", desc: "Assets créatifs Google / Meta / TikTok / LinkedIn" },
+      { name: "suggest_creative_rotation", desc: "Propose des ads Meta à pauser (CTR faible)" },
     ],
   },
   {
@@ -73,11 +76,12 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
       { name: "diagnose_tracking", desc: "Diagnostic tracking Google / Meta / TikTok" },
       { name: "detect_anomalies", desc: "Dépense sans conversion, CTR faible, CPA aberrant" },
     ],
-  },  {
+  },
+  {
     family: "Govern",
     tools: [
       { name: "execute", desc: "Action universel : dry_run=true par défaut, puis dry_run=false pour confirmer" },
-      { name: "list_skills", desc: "Skills launch / optimize / audit" },
+      { name: "list_skills", desc: "Skills launch / optimize / audit / audience / creative_rotate" },
       { name: "run_skill", desc: "Plan d'étapes d'une skill" },
       { name: "autonomy_tick", desc: "Tick autonomie plafonnée (pause spend sans conv)" },
       { name: "list_pending_approvals", desc: "Écritures en attente d'approbation" },

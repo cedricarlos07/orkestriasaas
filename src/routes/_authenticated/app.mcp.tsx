@@ -282,6 +282,9 @@ function PoliciesTab() {
 
   const tick = useMutation({
     mutationFn: () => runMcpAutonomyTick({ data: { forceDryRun: true } }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["mcp-policy"] });
+    },
   });
 
   if (isLoading || !current) {
@@ -377,6 +380,18 @@ function PoliciesTab() {
         {tick.isError ? (
           <p className="mt-3 text-[12px] text-red-600">{(tick.error as Error).message}</p>
         ) : null}
+        {policy?.lastAutonomyAt ? (
+          <p className="mt-3 text-[12px] text-ink-soft">
+            Dernier tick : {new Date(policy.lastAutonomyAt).toLocaleString()} —{" "}
+            {policy.lastAutonomySummary ?? "—"}
+          </p>
+        ) : (
+          <p className="mt-3 text-[12px] text-ink-soft">Aucun tick enregistré pour l’instant.</p>
+        )}
+        <p className="mt-2 text-[11px] text-ink-soft">
+          Cron hébergé : <code className="rounded bg-surface-2 px-1">GET/POST /api/cron/autonomy</code>{" "}
+          avec <code className="rounded bg-surface-2 px-1">Authorization: Bearer $CRON_SECRET</code>
+        </p>
       </section>
 
       <SkillsPanel />

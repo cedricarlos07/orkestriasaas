@@ -319,3 +319,19 @@ export async function diagnoseTikTokTracking(
     return { ok: false, issues };
   }
 }
+
+export async function createTikTokCustomAudience(
+  accessToken: string,
+  advertiserId: string,
+  input: { name: string; description?: string },
+): Promise<{ audienceId: string }> {
+  const data = await tiktokJson(accessToken, "/dmp/custom_audience/create/", {
+    advertiser_id: advertiserId,
+    custom_audience_name: input.name,
+    audience_type: "CUSTOMER_FILE",
+    retention_days: 30,
+  });
+  const audienceId = String(data.custom_audience_id ?? data.audience_id ?? "");
+  if (!audienceId) throw new Error("TikTok create audience: id manquant");
+  return { audienceId };
+}

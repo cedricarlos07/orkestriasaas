@@ -101,6 +101,17 @@ export type PlatformAdapter = {
     tokens: TokenPayload,
     accountId: string,
   ) => Promise<{ id: string; name: string; status?: string }[]>;
+  attachAudience?: (
+    tokens: TokenPayload,
+    accountId: string,
+    input: { audienceId: string; campaignId?: string; adSetId?: string },
+  ) => Promise<{ ok: true; details?: Record<string, unknown> }>;
+  /** Low-CTR creative suggestions / pause helpers (Meta ads insights) */
+  listAdInsights?: (
+    tokens: TokenPayload,
+    accountId: string,
+  ) => Promise<{ id: string; name: string; spend: number; impressions: number; clicks: number; ctr: number }[]>;
+  pauseAd?: (tokens: TokenPayload, accountId: string, adId: string) => Promise<void>;
 };
 
 function micro(amount: number): number {
@@ -172,6 +183,19 @@ const googleAds: PlatformAdapter = {
   diagnoseTracking: async (t, accountId) => {
     const { diagnoseGoogleTracking } = await import("./google-ads-api");
     return diagnoseGoogleTracking(t.accessToken, accountId);
+  },
+  listCreatives: async (t, accountId) => {
+    const { listGoogleAssets } = await import("./google-ads-api");
+    return listGoogleAssets(t.accessToken, accountId);
+  },
+  attachAudience: async (t, accountId, input) => {
+    if (!input.campaignId) throw new Error("Google attach_audience requiert campaignId");
+    const { attachGoogleUserListToCampaign } = await import("./google-ads-api");
+    await attachGoogleUserListToCampaign(t.accessToken, accountId, {
+      campaignId: input.campaignId,
+      audienceId: input.audienceId,
+    });
+    return { ok: true as const };
   },
 };
 
@@ -260,6 +284,20 @@ const metaAds: PlatformAdapter = {
     const { listMetaAdImages } = await import("./meta-api");
     return listMetaAdImages(t.accessToken, accountId);
   },
+  attachAudience: async (t, _accountId, input) => {
+    if (!input.adSetId) throw new Error("Meta attach_audience requiert adSetId");
+    const { attachMetaAudienceToAdSet } = await import("./meta-api");
+    await attachMetaAudienceToAdSet(t.accessToken, input.adSetId, input.audienceId);
+    return { ok: true as const };
+  },
+  listAdInsights: async (t, accountId) => {
+    const { listMetaAdsInsights } = await import("./meta-api");
+    return listMetaAdsInsights(t.accessToken, accountId);
+  },
+  pauseAd: async (t, _accountId, adId) => {
+    const { setMetaAdStatus } = await import("./meta-api");
+    await setMetaAdStatus(t.accessToken, adId, "PAUSED");
+  },
 };
 
 const linkedinAds: PlatformAdapter = {
@@ -320,6 +358,14 @@ const linkedinAds: PlatformAdapter = {
   listCreatives: async (t, accountId) => {
     const { listLinkedInCreatives } = await import("./linkedin-api");
     return listLinkedInCreatives(t.accessToken, accountId);
+  },
+  attachAudience: async (t, accountId, input) => {
+    if (!input.campaignId) throw new Error("LinkedIn attach_audience requiert campaignId");
+    const { attachLinkedInAudienceToCampaign } = await import("./linkedin-api");
+    return attachLinkedInAudienceToCampaign(t.accessToken, accountId, {
+      campaignId: input.campaignId,
+      audienceId: input.audienceId,
+    });
   },
 };
 
@@ -385,6 +431,14 @@ const tiktokAds: PlatformAdapter = {
     const { diagnoseTikTokTracking } = await import("./tiktok-api");
     return diagnoseTikTokTracking(t.accessToken, accountId);
   },
+  createAudience: async (t, accountId, input) => {
+    const { createTikTokCustomAudience } = await import("./tiktok-api");
+    const res = await createTikTokCustomAudience(t.accessToken, accountId, {
+      name: input.name,
+      description: input.description,
+    });
+    return { audienceId: res.audienceId };
+  },
 };
 
 const snapchatAds: PlatformAdapter = {
@@ -416,6 +470,14 @@ const snapchatAds: PlatformAdapter = {
       name: input.name,
       dailyBudget: input.dailyBudget,
     });
+  },
+  createAudience: async (t, accountId, input) => {
+    const { createSnapchatAudience } = await import("./snapchat-api");
+    const res = await createSnapchatAudience(t.accessToken, accountId, {
+      name: input.name,
+      description: input.description,
+    });
+    return { audienceId: res.audienceId };
   },
 };
 

@@ -575,3 +575,49 @@ export async function diagnoseGoogleTracking(
   if (list.length && !enabled.length) issues.push("Des conversions existent mais aucune n'est ENABLED");
   return { ok: issues.length === 0, conversions: list.length, issues };
 }
+
+export async function attachGoogleUserListToCampaign(
+  accessToken: string,
+  customerId: string,
+  input: { campaignId: string; audienceId: string },
+): Promise<{ ok: true }> {
+  const cid = customerId.replace(/\D/g, "");
+  const res = await fetch(`${API}/customers/${cid}/campaignCriteria:mutate`, {
+    method: "POST",
+    headers: headers(accessToken),
+    body: JSON.stringify({
+      operations: [
+        {
+          create: {
+            campaign: `customers/${cid}/campaigns/${input.campaignId}`,
+            userList: {
+              userList: `customers/${cid}/userLists/${input.audienceId}`,
+            },
+          },
+        },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`Google attach audience: ${await res.text()}`);
+  return { ok: true };
+}
+
+export async function listGoogleAssets(
+  accessToken: string,
+  customerId: string,
+): Promise<{ id: string; name: string; status?: string }[]> {
+  const cid = customerId.replace(/\D/g, "");
+  const rows = await gaqlSearch(
+    cid,
+    accessToken,
+    `SELECT asset.id, asset.name, asset.type FROM asset LIMIT 50`,
+  );
+  return rows.map((row) => {
+    const a = row as { asset?: { id?: string; name?: string; type?: string } };
+    return {
+      id: String(a.asset?.id ?? ""),
+      name: a.asset?.name || `${a.asset?.type ?? "ASSET"} ${a.asset?.id ?? ""}`,
+      status: a.asset?.type,
+    };
+  });
+}

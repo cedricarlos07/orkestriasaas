@@ -25,6 +25,14 @@ export type OrgPolicy = {
   protectedCampaignIds: string[];
   platformCaps: Record<string, { daily?: number; monthly?: number }>;
   autonomyEnabled: boolean;
+  lastAutonomyAt: string | null;
+  lastAutonomySummary: string | null;
+};
+
+type OrgSettings = {
+  autonomyEnabled?: boolean;
+  lastAutonomyAt?: string;
+  lastAutonomySummary?: string;
 };
 
 const DEFAULT_POLICY: OrgPolicy = {
@@ -35,6 +43,8 @@ const DEFAULT_POLICY: OrgPolicy = {
   protectedCampaignIds: [],
   platformCaps: {},
   autonomyEnabled: false,
+  lastAutonomyAt: null,
+  lastAutonomySummary: null,
 };
 
 export async function getOrgPolicy(orgId: string): Promise<OrgPolicy> {
@@ -42,7 +52,7 @@ export async function getOrgPolicy(orgId: string): Promise<OrgPolicy> {
   const row = rows[0];
   if (!row) return DEFAULT_POLICY;
   const rawCaps = (row.platformCaps ?? {}) as Record<string, unknown>;
-  const settings = rawCaps.__settings as { autonomyEnabled?: boolean } | undefined;
+  const settings = rawCaps.__settings as OrgSettings | undefined;
   const cleanCaps = { ...rawCaps };
   delete cleanCaps.__settings;
   return {
@@ -53,6 +63,8 @@ export async function getOrgPolicy(orgId: string): Promise<OrgPolicy> {
     protectedCampaignIds: (row.protectedCampaignIds as string[]) ?? [],
     platformCaps: cleanCaps as OrgPolicy["platformCaps"],
     autonomyEnabled: Boolean(settings?.autonomyEnabled),
+    lastAutonomyAt: settings?.lastAutonomyAt ?? null,
+    lastAutonomySummary: settings?.lastAutonomySummary ?? null,
   };
 }
 
@@ -60,10 +72,18 @@ export async function updateOrgPolicy(orgId: string, patch: Partial<OrgPolicy>):
   const existing = await db.select().from(orgPolicies).where(eq(orgPolicies.organizationId, orgId)).limit(1);
   const current = await getOrgPolicy(orgId);
   let platformCaps = patch.platformCaps ?? current.platformCaps;
-  if (patch.autonomyEnabled !== undefined) {
+  const settingsTouched =
+    patch.autonomyEnabled !== undefined ||
+    patch.lastAutonomyAt !== undefined ||
+    patch.lastAutonomySummary !== undefined;
+  if (settingsTouched) {
     platformCaps = {
       ...platformCaps,
-      __settings: { autonomyEnabled: patch.autonomyEnabled },
+      __settings: {
+        autonomyEnabled: patch.autonomyEnabled ?? current.autonomyEnabled,
+        lastAutonomyAt: patch.lastAutonomyAt ?? current.lastAutonomyAt ?? undefined,
+        lastAutonomySummary: patch.lastAutonomySummary ?? current.lastAutonomySummary ?? undefined,
+      },
     } as OrgPolicy["platformCaps"];
   }
   const values = {
@@ -72,7 +92,7 @@ export async function updateOrgPolicy(orgId: string, patch: Partial<OrgPolicy>):
     monthlySpendCap: patch.monthlySpendCap !== undefined ? (patch.monthlySpendCap === null ? null : String(patch.monthlySpendCap)) : undefined,
     maxBudgetChangePct: patch.maxBudgetChangePct,
     protectedCampaignIds: patch.protectedCampaignIds,
-    platformCaps: patch.platformCaps !== undefined || patch.autonomyEnabled !== undefined ? platformCaps : undefined,
+    platformCaps: patch.platformCaps !== undefined || settingsTouched ? platformCaps : undefined,
     updatedAt: new Date(),
   };
   const clean = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined));
@@ -109,7 +129,9 @@ export type WriteActionName =
   | "create_audience"
   | "add_keywords"
   | "add_negative_keywords"
-  | "create_conversion";
+  | "create_conversion"
+  | "attach_audience"
+  | "pause_ad";
 
 export const WRITE_ACTION_NAMES: WriteActionName[] = [
   "create_campaign",
@@ -125,6 +147,8 @@ export const WRITE_ACTION_NAMES: WriteActionName[] = [
   "add_keywords",
   "add_negative_keywords",
   "create_conversion",
+  "attach_audience",
+  "pause_ad",
 ];
 
 export type WriteActionInput = {
@@ -162,6 +186,8 @@ export type WriteActionInput = {
     headlines?: string[];
     descriptions?: string[];
     category?: string;
+    audienceId?: string;
+    adId?: string;
   };
 };
 
@@ -324,6 +350,22 @@ function buildDiff(input: WriteActionInput): Record<string, unknown> {
         platform: input.connector,
         name: input.params.name,
         category: input.params.category ?? null,
+      };
+    case "attach_audience":
+      return {
+        action: "attach_audience",
+        platform: input.connector,
+        audienceId: input.params.audienceId,
+        campaignId: input.campaignId ?? null,
+        adSetId: input.params.adSetId ?? null,
+      };
+    case "pause_ad":
+      return {
+        action: "pause_ad",
+        platform: input.connector,
+        adId: input.params.adId,
+        before: "ACTIVE",
+        after: "PAUSED",
       };
   }
 }
@@ -659,6 +701,22 @@ async function executeWrite(
         category: input.params.category,
       });
       return { conversionId: res.conversionId, ...res.details };
+    }
+    case "attach_audience": {
+      if (!adapter.attachAudience) throw new Error(`attach_audience non supporté pour ${adapter.label}`);
+      if (!input.params.audienceId) throw new Error("audienceId requis");
+      const res = await adapter.attachAudience(tokens, accountId, {
+        audienceId: input.params.audienceId,
+        campaignId: input.campaignId,
+        adSetId: input.params.adSetId,
+      });
+      return { ok: true, ...res.details };
+    }
+    case "pause_ad": {
+      if (!adapter.pauseAd) throw new Error(`pause_ad non supporté pour ${adapter.label}`);
+      if (!input.params.adId) throw new Error("adId requis");
+      await adapter.pauseAd(tokens, accountId, input.params.adId);
+      return { adId: input.params.adId, status: "PAUSED" };
     }
   }
 }

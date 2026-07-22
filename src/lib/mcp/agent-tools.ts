@@ -433,7 +433,7 @@ const launchTools: AgentTool[] = [
   writeTool(
     "create_audience",
     "create_audience",
-    "Create an audience (Meta custom/lookalike, Google Customer Match, LinkedIn matched).",
+    "Create an audience (Meta, Google, LinkedIn, TikTok, Snapchat).",
     "launch",
     {
       name: { type: "string" },
@@ -454,6 +454,27 @@ const launchTools: AgentTool[] = [
         originAudienceId: str(args.originAudienceId),
         lookalikeRatio: num(args.lookalikeRatio),
         country: str(args.country),
+      },
+    }),
+  ),
+  writeTool(
+    "attach_audience",
+    "attach_audience",
+    "Attach an audience to a campaign (Google/LinkedIn) or ad set (Meta).",
+    "launch",
+    {
+      audienceId: { type: "string" },
+      campaignId: { type: "string", description: "Google / LinkedIn campaign id" },
+      adSetId: { type: "string", description: "Meta ad set id" },
+      accountId: { type: "string" },
+    },
+    ["audienceId"],
+    (args) => ({
+      campaignId: str(args.campaignId),
+      accountId: str(args.accountId),
+      params: {
+        audienceId: str(args.audienceId),
+        adSetId: str(args.adSetId),
       },
     }),
   ),
@@ -581,6 +602,18 @@ const optimizeTools: AgentTool[] = [
     (args) => ({
       accountId: str(args.accountId),
       params: { adSetId: str(args.adSetId) },
+    }),
+  ),
+  writeTool(
+    "pause_ad",
+    "pause_ad",
+    "Pause a single Meta ad (use after suggest_creative_rotation).",
+    "optimize",
+    { adId: { type: "string" }, accountId: { type: "string" } },
+    ["adId"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: { adId: str(args.adId) },
     }),
   ),
   writeTool(
@@ -793,7 +826,7 @@ const createTools: AgentTool[] = [
   },
   {
     name: "list_creatives",
-    description: "List creative assets (Meta images, TikTok images, LinkedIn creatives) or fall back to campaigns.",
+    description: "List creative assets (Google assets, Meta images, TikTok images, LinkedIn creatives).",
     family: "create",
     inputSchema: { type: "object", properties: { ...platformProp, accountId: { type: "string" } }, required: ["platform"] },
     handler: async (ctx, args) => {
@@ -812,6 +845,50 @@ const createTools: AgentTool[] = [
         note: "Liste créatives native non dispo — retour campagnes.",
         connectionId: conn.id,
       };
+    },
+  },
+  {
+    name: "suggest_creative_rotation",
+    description:
+      "Suggest Meta ads to pause (low CTR with meaningful spend). Read-only; confirm with pause_ad via execute.",
+    family: "create",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ...platformProp,
+        accountId: { type: "string" },
+        minSpend: { type: "number", description: "Default 20" },
+        maxCtr: { type: "number", description: "Default 0.5 (%)" },
+      },
+      required: ["platform"],
+    },
+    handler: async (ctx, args) => {
+      const connector = args.platform as ConnectorId;
+      if (connector !== "meta_ads") {
+        return {
+          suggestions: [],
+          note: "suggest_creative_rotation is Meta-first for now — use list_creatives + detect_anomalies elsewhere.",
+        };
+      }
+      const { tokens } = await getTokensFor(ctx.organizationId, connector);
+      const accountId = str(args.accountId) ?? tokens.accountId;
+      if (!accountId) throw new Error("accountId requis");
+      const adapter = getAdapter(connector);
+      if (!adapter.listAdInsights) throw new Error("Insights ads non supportés");
+      const minSpend = num(args.minSpend) ?? 20;
+      const maxCtr = num(args.maxCtr) ?? 0.5;
+      const ads = await adapter.listAdInsights(tokens, accountId);
+      const suggestions = ads
+        .filter((a) => a.spend >= minSpend && a.ctr > 0 && a.ctr < maxCtr)
+        .map((a) => ({
+          adId: a.id,
+          name: a.name,
+          spend: a.spend,
+          ctr: a.ctr,
+          action: "pause_ad" as const,
+          reason: `CTR ${a.ctr.toFixed(2)}% with ${Math.round(a.spend)} spend`,
+        }));
+      return { platform: "Meta Ads", suggestions, count: suggestions.length };
     },
   },
 ];

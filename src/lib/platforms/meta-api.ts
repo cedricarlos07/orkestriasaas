@@ -450,3 +450,73 @@ export async function listMetaAdImages(
     status: i.status,
   }));
 }
+
+export async function attachMetaAudienceToAdSet(
+  accessToken: string,
+  adSetId: string,
+  audienceId: string,
+): Promise<{ ok: true }> {
+  const getRes = await fetch(
+    `${GRAPH}/${adSetId}?fields=targeting&access_token=${encodeURIComponent(accessToken)}`,
+  );
+  if (!getRes.ok) throw new Error(`Meta get ad set targeting: ${await getRes.text()}`);
+  const current = (await getRes.json()) as {
+    targeting?: Record<string, unknown> & { custom_audiences?: { id: string }[] };
+  };
+  const targeting = { ...(current.targeting ?? {}) };
+  const existing = Array.isArray(targeting.custom_audiences) ? targeting.custom_audiences : [];
+  if (!existing.some((a) => a.id === audienceId)) {
+    targeting.custom_audiences = [...existing, { id: audienceId }];
+  }
+  const res = await fetch(`${GRAPH}/${adSetId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      targeting: JSON.stringify(targeting),
+      access_token: accessToken,
+    }),
+  });
+  if (!res.ok) throw new Error(`Meta attach audience: ${await res.text()}`);
+  return { ok: true };
+}
+
+export async function listMetaAdsInsights(
+  accessToken: string,
+  adAccountId: string,
+): Promise<{ id: string; name: string; spend: number; impressions: number; clicks: number; ctr: number }[]> {
+  const res = await fetch(
+    `${GRAPH}/${actId(adAccountId)}/insights?level=ad&fields=ad_id,ad_name,spend,impressions,clicks,ctr&date_preset=last_30d&limit=50&access_token=${encodeURIComponent(accessToken)}`,
+  );
+  if (!res.ok) throw new Error(`Meta ad insights: ${await res.text()}`);
+  const data = (await res.json()) as {
+    data?: {
+      ad_id?: string;
+      ad_name?: string;
+      spend?: string;
+      impressions?: string;
+      clicks?: string;
+      ctr?: string;
+    }[];
+  };
+  return (data.data ?? []).map((r) => ({
+    id: r.ad_id ?? "",
+    name: r.ad_name ?? "",
+    spend: Number(r.spend ?? 0),
+    impressions: Number(r.impressions ?? 0),
+    clicks: Number(r.clicks ?? 0),
+    ctr: Number(r.ctr ?? 0),
+  }));
+}
+
+export async function setMetaAdStatus(
+  accessToken: string,
+  adId: string,
+  status: "PAUSED" | "ACTIVE",
+): Promise<void> {
+  const res = await fetch(`${GRAPH}/${adId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ status, access_token: accessToken }),
+  });
+  if (!res.ok) throw new Error(`Meta ad status: ${await res.text()}`);
+}

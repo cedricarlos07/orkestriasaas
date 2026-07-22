@@ -34,9 +34,29 @@ export const MCP_SKILLS: SkillDefinition[] = [
     name: "Tracking audit",
     description: "Diagnose conversion tracking and list conversion actions.",
     steps: [
-      { tool: "diagnose_tracking", hint: "Check Google conversion setup" },
-      { tool: "list_conversions", hint: "List conversion actions" },
+      { tool: "diagnose_tracking", hint: "Check Google / Meta / TikTok conversion setup" },
+      { tool: "list_conversions", hint: "List conversion actions / pixels" },
       { tool: "get_account_summary", hint: "Consolidated multi-platform snapshot" },
+    ],
+  },
+  {
+    id: "audience",
+    name: "Audience launch",
+    description: "Create an audience then attach it to a campaign or ad set.",
+    steps: [
+      { tool: "create_audience", hint: "Create audience (dry_run then confirm)" },
+      { tool: "attach_audience", hint: "Attach to campaign (Google/LI) or ad set (Meta)" },
+      { tool: "list_campaigns", hint: "Verify targeting surface" },
+    ],
+  },
+  {
+    id: "creative_rotate",
+    name: "Creative rotation",
+    description: "Find low-CTR Meta ads and pause losers under policy.",
+    steps: [
+      { tool: "suggest_creative_rotation", hint: "List Meta ads with low CTR" },
+      { tool: "pause_ad", hint: "Pause suggested ads via execute dry_run then confirm" },
+      { tool: "list_creatives", hint: "Refresh creative inventory" },
     ],
   },
 ];

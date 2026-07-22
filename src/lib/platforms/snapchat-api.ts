@@ -195,3 +195,29 @@ export async function createSnapchatCampaignPaused(
     details: { status: "PAUSED", note: "Campagne Snapchat créée en PAUSED" },
   };
 }
+
+export async function createSnapchatAudience(
+  accessToken: string,
+  adAccountId: string,
+  input: { name: string; description?: string },
+): Promise<{ audienceId: string }> {
+  const res = await fetch(`${API}/adaccounts/${adAccountId}/segments`, {
+    method: "POST",
+    headers: headers(accessToken),
+    body: JSON.stringify({
+      segments: [
+        {
+          name: input.name.slice(0, 375),
+          description: input.description ?? "Orkestria audience",
+          source_type: "FIRST_PARTY",
+          ad_account_id: adAccountId,
+        },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`Snapchat create audience: ${await res.text()}`);
+  const data = (await res.json()) as { segments?: { segment?: { id?: string } }[] };
+  const audienceId = data.segments?.[0]?.segment?.id;
+  if (!audienceId) throw new Error("Snapchat create audience: id manquant");
+  return { audienceId };
+}

@@ -335,3 +335,37 @@ export async function listLinkedInCreatives(
     status: c.intendedStatus,
   }));
 }
+
+/** Best-effort: attach a DMP segment as a targeting facet on a campaign (DRAFT-safe). */
+export async function attachLinkedInAudienceToCampaign(
+  accessToken: string,
+  accountId: string,
+  input: { campaignId: string; audienceId: string },
+): Promise<{ ok: true; details?: Record<string, unknown> }> {
+  const acct = accountId.replace(/\D/g, "");
+  const res = await fetch(`${API}/adAccounts/${acct}/adCampaigns/${input.campaignId}`, {
+    method: "POST",
+    headers: { ...headers(accessToken), "X-RestLi-Method": "PARTIAL_UPDATE" },
+    body: JSON.stringify({
+      patch: {
+        $set: {
+          targetingCriteria: {
+            include: {
+              and: [
+                {
+                  or: {
+                    "urn:li:adTargetingFacet:audienceMatchingSegments": [
+                      `urn:li:dmpSegment:${input.audienceId}`,
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`LinkedIn attach audience: ${await res.text()}`);
+  return { ok: true, details: { note: "Ciblage audience Matching Segment appliqué (best-effort)" } };
+}

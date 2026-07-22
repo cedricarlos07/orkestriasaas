@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { connections } from "@/db/schema/index";
-import { getOrgPolicy, runWriteAction, type OrgPolicy } from "@/lib/mcp/policy-engine";
+import { connections, orgPolicies } from "@/db/schema/index";
+import { getOrgPolicy, runWriteAction, updateOrgPolicy, type OrgPolicy } from "@/lib/mcp/policy-engine";
 import { AD_CONNECTOR_IDS, type ConnectorId } from "@/lib/oauth/connectors";
 import { getAdapter } from "@/lib/platforms/adapter";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
@@ -85,7 +85,29 @@ export async function runAutonomyTick(opts: {
     );
   }
 
+  await updateOrgPolicy(opts.orgId, {
+    lastAutonomyAt: new Date().toISOString(),
+    lastAutonomySummary: `${proposals.length} proposal(s), mode=${mode}`,
+  });
+
   return { enabled: true, proposals, outcomes };
+}
+
+export async function runAutonomyTickForAllOrgs(opts?: {
+  forceDryRun?: boolean;
+}): Promise<{ orgs: number; ticks: { orgId: string; proposals: number }[] }> {
+  const rows = await db.select({ organizationId: orgPolicies.organizationId, platformCaps: orgPolicies.platformCaps }).from(orgPolicies);
+  const ticks: { orgId: string; proposals: number }[] = [];
+  for (const row of rows) {
+    const settings = (row.platformCaps as { __settings?: { autonomyEnabled?: boolean } } | null)?.__settings;
+    if (!settings?.autonomyEnabled) continue;
+    const result = await runAutonomyTick({
+      orgId: row.organizationId,
+      forceDryRun: opts?.forceDryRun,
+    });
+    ticks.push({ orgId: row.organizationId, proposals: result.proposals.length });
+  }
+  return { orgs: ticks.length, ticks };
 }
 
 export function withAutonomyFlag(
