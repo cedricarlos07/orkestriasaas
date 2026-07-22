@@ -2,6 +2,18 @@ import type { UnifiedAccountSnapshot, UnifiedCampaign } from "@/lib/unified-ad-s
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 
+export async function listMetaPages(accessToken: string): Promise<{ id: string; name: string }[]> {
+  const url = new URL(`${GRAPH}/me/accounts`);
+  url.searchParams.set("fields", "id,name");
+  url.searchParams.set("access_token", accessToken);
+  url.searchParams.set("limit", "50");
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Meta pages: ${await res.text()}`);
+  const data = (await res.json()) as { data?: { id: string; name: string }[] };
+  return (data.data ?? []).map((p) => ({ id: p.id, name: p.name }));
+}
+
 export async function listMetaAdAccounts(accessToken: string): Promise<{ id: string; name: string; currency: string }[]> {
   const url = new URL(`${GRAPH}/me/adaccounts`);
   url.searchParams.set("fields", "id,name,currency,timezone_name,account_status");

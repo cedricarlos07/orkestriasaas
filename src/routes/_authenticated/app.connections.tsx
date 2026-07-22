@@ -14,10 +14,8 @@ import {
 import { CONNECTORS } from "@/lib/oauth/connectors";
 import { useConnections } from "@/lib/connections-store";
 import { getGoogleSetupStatus } from "@/functions/adloop";
-import { getMetaSetupStatus, saveMetaPageId, clearMetaPageId } from "@/functions/meta-settings";
+import { getMetaSetupStatus } from "@/functions/meta-settings";
 import { getResearchStackStatus } from "@/functions/stack-status";
-import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/app/connections")({ component: Connections });
 
@@ -29,7 +27,6 @@ const EXTRA = [
 function Connections() {
   const { isLoading, byConnector, catalog, connect, disconnect } = useConnections();
   const qc = useQueryClient();
-  const [pageIdInput, setPageIdInput] = useState("");
 
   const {
     data: googleSetup,
@@ -59,19 +56,6 @@ function Connections() {
     queryFn: () => getResearchStackStatus(),
     staleTime: 60_000,
     retry: 1,
-  });
-
-  const savePageId = useMutation({
-    mutationFn: (pageId: string) => saveMetaPageId({ data: { pageId } }),
-    onSuccess: () => {
-      setPageIdInput("");
-      void refetchMeta();
-    },
-  });
-
-  const clearPageId = useMutation({
-    mutationFn: () => clearMetaPageId(),
-    onSuccess: () => void refetchMeta(),
   });
 
   useEffect(() => {
@@ -121,8 +105,8 @@ function Connections() {
             <div>
               <p className="text-[14px] font-medium text-ink">Meta Ads</p>
               <p className="text-[12px] text-ink-soft">
-                Connectez votre compte publicitaire Facebook / Instagram, puis indiquez la Page Facebook utilisée pour vos
-                publicités.
+                Un clic pour lier votre compte publicitaire Facebook / Instagram. Orkestria récupère automatiquement
+                votre Page Facebook pour les publicités.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -131,10 +115,12 @@ function Connections() {
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
                     <CheckCircle2 className="h-3.5 w-3.5" /> Connecté · {metaSetup.account ?? "compte lié"}
                   </span>
-                  {!metaSetup.automationHealth?.ok && metaSetup.automationHealth?.error && (
+                  {metaSetup.pageName ? (
+                    <span className="text-[12px] text-ink-soft">Page · {metaSetup.pageName}</span>
+                  ) : (
                     <span className="inline-flex items-center gap-1 text-[12px] text-amber-700">
                       <AlertCircle className="h-3.5 w-3.5" />
-                      {metaSetup.automationHealth.error}
+                      Aucune Page Facebook trouvée — créez-en une sur Facebook puis reconnectez
                     </span>
                   )}
                   <button
@@ -150,12 +136,8 @@ function Connections() {
                 </>
               ) : metaSetup?.tokenError ? (
                 <>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[12px] font-medium text-amber-800">
-                    <AlertCircle className="h-3.5 w-3.5" /> Reconnexion requise
-                  </span>
-                  <span className="text-[12px] text-amber-700">{metaSetup.tokenError}</span>
                   <button type="button" className="btn-primary text-[13px]" onClick={() => void connect("meta_ads")}>
-                    Reconnecter Meta
+                    Connecter Meta
                   </button>
                   <button
                     type="button"
@@ -165,47 +147,13 @@ function Connections() {
                       if (conn) disconnect(conn.id);
                     }}
                   >
-                    Supprimer l&apos;ancienne connexion
+                    Réinitialiser
                   </button>
                 </>
               ) : (
                 <button type="button" className="btn-primary text-[13px]" onClick={() => void connect("meta_ads")}>
                   Connecter Meta
                 </button>
-              )}
-            </div>
-            <div className="flex flex-wrap items-end gap-2 border-t border-line/50 pt-3">
-              <div>
-                <label className="text-[11px] uppercase tracking-wide text-ink-soft">Page Facebook ID</label>
-                {metaSetup?.pageId ? (
-                  <p className="text-[13px] font-medium text-ink">{metaSetup.pageId}</p>
-                ) : (
-                  <p className="text-[12px] text-amber-700">Requis pour lancer des campagnes Meta</p>
-                )}
-              </div>
-              {metaSetup?.pageId ? (
-                <button type="button" className="chip-ghost text-[12px]" onClick={() => clearPageId.mutate()}>
-                  Retirer
-                </button>
-              ) : (
-                <>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={pageIdInput}
-                    onChange={(e) => setPageIdInput(e.target.value)}
-                    placeholder="123456789…"
-                    className="min-w-[200px] rounded-xl border border-line/70 px-3 py-2 text-[13px]"
-                  />
-                  <button
-                    type="button"
-                    disabled={!pageIdInput.trim() || savePageId.isPending}
-                    className="rounded-xl bg-ink px-4 py-2 text-[13px] font-medium text-white disabled:opacity-50"
-                    onClick={() => savePageId.mutate(pageIdInput.trim())}
-                  >
-                    Enregistrer Page ID
-                  </button>
-                </>
               )}
             </div>
           </div>
@@ -338,9 +286,9 @@ function Connections() {
                           <p className="text-[14px] font-medium text-ink">{cfg.label}</p>
                           <p className="text-[12px] text-ink-soft">
                             {isMeta && metaReallyConnected
-                              ? `${accountLabel}${metaSetup?.pageId ? " · Page OK" : " · Page Facebook manquante"}`
+                              ? `${accountLabel}${metaSetup?.pageName ? ` · ${metaSetup.pageName}` : ""}`
                               : isMeta && metaSetup?.tokenError
-                                ? "Reconnexion requise"
+                                ? "Connexion à refaire"
                                 : isGoogle && googleSetup?.oauthConnected
                                   ? accountLabel
                                   : isGoogle && googleSetup?.googleReady

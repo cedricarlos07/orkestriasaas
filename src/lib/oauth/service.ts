@@ -224,6 +224,12 @@ export async function handleOAuthCallback(connector: ConnectorId, code: string, 
   tokens.accountId = account.accountId;
   tokens.accountName = account.accountName;
   await upsertConnection(orgId, connector, tokens, account.accountName);
+
+  if (connector === "meta_ads") {
+    const { syncOrgMetaPageFromToken } = await import("@/lib/mcp/meta-org");
+    await syncOrgMetaPageFromToken(orgId, tokens.accessToken).catch(() => null);
+  }
+
   return orgId;
 }
 

@@ -40,3 +40,17 @@ export async function resolveMetaPageId(orgId: string, pageId?: string | null): 
   if (pageId?.trim()) return pageId.trim();
   return getOrgMetaPageId(orgId);
 }
+
+/** Pick the first Facebook Page the user manages and store it for Meta creatives. */
+export async function syncOrgMetaPageFromToken(
+  orgId: string,
+  accessToken: string,
+): Promise<{ pageId: string; pageName: string } | null> {
+  const { listMetaPages } = await import("@/lib/platforms/meta-api");
+  const pages = await listMetaPages(accessToken);
+  if (!pages.length) return null;
+  const page = pages[0];
+  const pageId = page.id.replace(/\D/g, "") || page.id;
+  await setOrgMetaPageId(orgId, pageId);
+  return { pageId, pageName: page.name };
+}
