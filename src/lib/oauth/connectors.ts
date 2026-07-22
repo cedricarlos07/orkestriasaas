@@ -67,7 +67,14 @@ export const CONNECTORS: Record<ConnectorId, ConnectorConfig> = {
     oauth: {
       authorizeUrl: "https://www.facebook.com/v21.0/dialog/oauth",
       tokenUrl: "https://graph.facebook.com/v21.0/oauth/access_token",
-      scopes: ["ads_read", "ads_management", "business_management"],
+      scopes: [
+        "ads_read",
+        "ads_management",
+        "business_management",
+        "pages_show_list",
+        "pages_read_engagement",
+        "pages_manage_ads",
+      ],
       clientIdEnv: "META_APP_ID",
       clientSecretEnv: "META_APP_SECRET",
     },

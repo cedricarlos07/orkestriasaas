@@ -45,9 +45,10 @@ export async function resolveMetaPageId(orgId: string, pageId?: string | null): 
 export async function syncOrgMetaPageFromToken(
   orgId: string,
   accessToken: string,
+  adAccountId?: string,
 ): Promise<{ pageId: string; pageName: string } | null> {
   const { listMetaPages } = await import("@/lib/platforms/meta-api");
-  const pages = await listMetaPages(accessToken);
+  const pages = await listMetaPages(accessToken, adAccountId);
   if (!pages.length) return null;
   const page = pages[0];
   const pageId = page.id.replace(/\D/g, "") || page.id;

@@ -28,7 +28,11 @@ export const getMetaSetupStatus = createServerFn({ method: "GET" }).handler(asyn
       oauthConnected = true;
 
       if (!pageId) {
-        const synced = await syncOrgMetaPageFromToken(orgId, tokens.accessToken);
+        const synced = await syncOrgMetaPageFromToken(
+          orgId,
+          tokens.accessToken,
+          tokens.accountId ?? metaConn.externalAccount ?? undefined,
+        );
         if (synced) {
           pageId = synced.pageId;
           pageName = synced.pageName;
@@ -37,7 +41,10 @@ export const getMetaSetupStatus = createServerFn({ method: "GET" }).handler(asyn
 
       if (pageId && !pageName) {
         try {
-          const pages = await listMetaPages(tokens.accessToken);
+          const pages = await listMetaPages(
+            tokens.accessToken,
+            tokens.accountId ?? metaConn.externalAccount ?? undefined,
+          );
           pageName = pages.find((p) => p.id.replace(/\D/g, "") === pageId || p.id === pageId)?.name ?? null;
         } catch {
           /* non-blocking */

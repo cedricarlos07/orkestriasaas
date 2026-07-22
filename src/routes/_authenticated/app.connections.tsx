@@ -124,12 +124,14 @@ function Connections() {
                     <CheckCircle2 className="h-3.5 w-3.5" /> Connecté ·{" "}
                     {metaSetup?.account ?? metaConn?.externalAccount ?? "compte lié"}
                   </span>
-                  {metaSetup.pageName ? (
+                  {metaSetup?.pageName ? (
                     <span className="text-[12px] text-ink-soft">Page · {metaSetup.pageName}</span>
+                  ) : metaSetup === undefined ? (
+                    <span className="text-[12px] text-ink-soft">Vérification de la Page…</span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-[12px] text-amber-700">
                       <AlertCircle className="h-3.5 w-3.5" />
-                      Aucune Page Facebook trouvée — créez-en une sur Facebook puis reconnectez
+                      Aucune Page détectée — déconnectez puis reconnectez Meta pour autoriser l&apos;accès aux Pages
                     </span>
                   )}
                   <button

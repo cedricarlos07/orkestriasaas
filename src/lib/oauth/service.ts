@@ -227,7 +227,7 @@ export async function handleOAuthCallback(connector: ConnectorId, code: string, 
 
   if (connector === "meta_ads") {
     const { syncOrgMetaPageFromToken } = await import("@/lib/mcp/meta-org");
-    await syncOrgMetaPageFromToken(orgId, tokens.accessToken).catch(() => null);
+    await syncOrgMetaPageFromToken(orgId, tokens.accessToken, tokens.accountId).catch(() => null);
   }
 
   return orgId;

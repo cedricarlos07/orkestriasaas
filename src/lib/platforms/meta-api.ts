@@ -2,16 +2,60 @@ import type { UnifiedAccountSnapshot, UnifiedCampaign } from "@/lib/unified-ad-s
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 
-export async function listMetaPages(accessToken: string): Promise<{ id: string; name: string }[]> {
-  const url = new URL(`${GRAPH}/me/accounts`);
-  url.searchParams.set("fields", "id,name");
-  url.searchParams.set("access_token", accessToken);
-  url.searchParams.set("limit", "50");
-
+async function fetchGraphPages(url: URL): Promise<{ id: string; name: string }[]> {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Meta pages: ${await res.text()}`);
+  if (!res.ok) return [];
   const data = (await res.json()) as { data?: { id: string; name: string }[] };
   return (data.data ?? []).map((p) => ({ id: p.id, name: p.name }));
+}
+
+/** Pages the user can promote — tries /me/accounts, ad account promote_pages, then Business Manager. */
+export async function listMetaPages(
+  accessToken: string,
+  adAccountId?: string,
+): Promise<{ id: string; name: string }[]> {
+  const seen = new Set<string>();
+  const pages: { id: string; name: string }[] = [];
+  const add = (list: { id: string; name: string }[]) => {
+    for (const p of list) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      pages.push(p);
+    }
+  };
+
+  const meAccounts = new URL(`${GRAPH}/me/accounts`);
+  meAccounts.searchParams.set("fields", "id,name");
+  meAccounts.searchParams.set("access_token", accessToken);
+  meAccounts.searchParams.set("limit", "50");
+  add(await fetchGraphPages(meAccounts));
+
+  if (adAccountId) {
+    const actId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId.replace(/\D/g, "")}`;
+    const promote = new URL(`${GRAPH}/${actId}/promote_pages`);
+    promote.searchParams.set("fields", "id,name");
+    promote.searchParams.set("access_token", accessToken);
+    promote.searchParams.set("limit", "50");
+    add(await fetchGraphPages(promote));
+  }
+
+  const businesses = new URL(`${GRAPH}/me/businesses`);
+  businesses.searchParams.set("fields", "id,name");
+  businesses.searchParams.set("access_token", accessToken);
+  businesses.searchParams.set("limit", "25");
+  const bizRes = await fetch(businesses);
+  if (bizRes.ok) {
+    const bizData = (await bizRes.json()) as { data?: { id: string }[] };
+    for (const biz of bizData.data ?? []) {
+      const owned = new URL(`${GRAPH}/${biz.id}/owned_pages`);
+      owned.searchParams.set("fields", "id,name");
+      owned.searchParams.set("access_token", accessToken);
+      owned.searchParams.set("limit", "50");
+      add(await fetchGraphPages(owned));
+    }
+  }
+
+  return pages;
 }
 
 export async function listMetaAdAccounts(accessToken: string): Promise<{ id: string; name: string; currency: string }[]> {
