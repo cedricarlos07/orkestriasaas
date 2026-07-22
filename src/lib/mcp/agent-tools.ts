@@ -26,6 +26,7 @@ import {
 import { getAdapter } from "@/lib/platforms/adapter";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 import { routeReadSnapshot, routeResearch } from "@/lib/mcp/execution-router";
+import { ADLOOP_CONNECTION_ID, isAdloopHealthy, syntheticAdloopConnection } from "@/lib/mcp/adloop-org";
 import type { UnifiedAccountSnapshot } from "@/lib/unified-ad-schema";
 
 export type AgentToolContext = ApiKeyContext;
@@ -71,22 +72,30 @@ async function getConnectedRows(orgId: string) {
 async function getTokensFor(orgId: string, connector: ConnectorId) {
   const rows = await db.select().from(connections).where(eq(connections.organizationId, orgId));
   const conn = rows.find((c) => c.connector === connector && c.status === "connectée");
-  if (!conn) {
-    if (!hasOAuthCredentials(connector)) {
-      throw new Error(
-        `${CONNECTORS[connector].label} : connexion non configurée (identifiants OAuth ${CONNECTORS[connector].oauth.clientIdEnv} absents côté serveur).`,
-      );
-    }
-    throw new Error(`${CONNECTORS[connector].label} : aucun compte connecté dans ce workspace.`);
+  if (conn) {
+    const tokens = await ensureFreshTokens(conn.id, orgId, connector);
+    return { conn, tokens };
   }
-  const tokens = await ensureFreshTokens(conn.id, orgId, connector);
-  return { conn, tokens };
+  if (connector === "google_ads" && (await isAdloopHealthy())) {
+    return {
+      conn: syntheticAdloopConnection(orgId),
+      tokens: { accessToken: "", accountId: "" },
+    };
+  }
+  if (!hasOAuthCredentials(connector)) {
+    throw new Error(
+      `${CONNECTORS[connector].label} : connexion non configurée (identifiants OAuth ${CONNECTORS[connector].oauth.clientIdEnv} absents côté serveur).`,
+    );
+  }
+  throw new Error(`${CONNECTORS[connector].label} : aucun compte connecté dans ce workspace.`);
 }
 
 async function fetchSnapshot(orgId: string, connector: ConnectorId, accountId?: string, period?: string) {
   const { conn, tokens } = await getTokensFor(orgId, connector);
   const acct = accountId ?? tokens.accountId;
-  if (!acct) throw new Error(`${CONNECTORS[connector].label} : aucun compte publicitaire sélectionné.`);
+  if (!acct && conn.id !== ADLOOP_CONNECTION_ID) {
+    throw new Error(`${CONNECTORS[connector].label} : aucun compte publicitaire sélectionné.`);
+  }
   const { snapshot } = await routeReadSnapshot({
     orgId,
     connector,
@@ -118,6 +127,14 @@ async function fetchAllSnapshots(orgId: string, period?: string): Promise<Unifie
         issues: [e instanceof Error ? e.message : "Erreur de lecture"],
         opportunities: [],
       });
+    }
+  }
+  const hasGoogle = rows.some((r) => r.connector === "google_ads");
+  if (!hasGoogle && (await isAdloopHealthy())) {
+    try {
+      snapshots.push(await fetchSnapshot(orgId, "google_ads", undefined, period));
+    } catch {
+      /* AdLoop MCC default unavailable */
     }
   }
   return snapshots;

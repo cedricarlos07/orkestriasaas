@@ -46,7 +46,7 @@ const MATURITY: Record<ConnectorId, CapabilityMaturity> = {
 
 const NOTES: Partial<Record<ConnectorId, string>> = {
   google_ads:
-    "V1 : AdLoop Cloud quand alc_ lié (Search/PMax PAUSED + diagnostics GA4). Fallback API native OAuth.",
+    "V1 : AdLoop self-hosted (Search/PMax preview + diagnostics GA4). Fallback API native OAuth.",
   meta_ads:
     "Meta writes via adkit-mcp (github.com/jatinjain25/adkit): launch_brief PAUSED + activate_ad. Reads restent OAuth natif.",
   ga4: "Read-only analytics. Writes are rejected.",

@@ -1,57 +1,50 @@
 import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { organizationMetadata } from "@/db/schema/index";
+import { connections } from "@/db/schema/index";
 import { ensureSession } from "@/lib/auth.functions";
-import { getOrgAdloopApiKey, isAdloopLinked, setOrgAdloopApiKey } from "@/lib/mcp/adloop-org";
+import { getOrgGoogleCustomerId, isAdloopServerConfigured } from "@/lib/mcp/adloop-org";
 import { probeAdloopHealth } from "@/lib/mcp/clients/adloop";
+import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 import { getActiveOrgId } from "./context";
 
-export const getAdloopLinkStatus = createServerFn({ method: "GET" }).handler(async () => {
+export const getGoogleSetupStatus = createServerFn({ method: "GET" }).handler(async () => {
   const session = await ensureSession();
   const orgId = await getActiveOrgId(session);
-  const linked = await isAdloopLinked(orgId);
-  const key = await getOrgAdloopApiKey(orgId);
-  const masked = key ? `${key.slice(0, 7)}…${key.slice(-4)}` : null;
-  let health: { ok: boolean; error?: string } = { ok: false };
-  if (key) {
-    const probe = await probeAdloopHealth(key);
-    health = { ok: probe.ok, error: probe.error };
-  }
-  return { linked, maskedKey: masked, health };
-});
 
-export const saveAdloopApiKey = createServerFn({ method: "POST" })
-  .inputValidator((data: { apiKey: string }) => data)
-  .handler(async ({ data }) => {
-    const session = await ensureSession();
-    const orgId = await getActiveOrgId(session);
-    const key = data.apiKey.trim();
-    if (!key.startsWith("alc_") && key.length < 8) {
-      throw new Error("Clé AdLoop invalide — attendu alc_… (depuis getadloop.com)");
+  const rows = await db.select().from(connections).where(eq(connections.organizationId, orgId));
+  const googleConn = rows.find((r) => r.connector === "google_ads" && r.status === "connectée");
+
+  let oauthConnected = false;
+  let tokenError: string | undefined;
+  if (googleConn) {
+    try {
+      await ensureFreshTokens(googleConn.id, orgId, "google_ads");
+      oauthConnected = true;
+    } catch (e) {
+      tokenError = e instanceof Error ? e.message : "Token Google Ads invalide";
     }
-    await setOrgAdloopApiKey(orgId, key);
-    const probe = await probeAdloopHealth(key);
-    return { ok: true, health: probe };
-  });
+  }
 
-export const clearAdloopApiKey = createServerFn({ method: "POST" }).handler(async () => {
-  const session = await ensureSession();
-  const orgId = await getActiveOrgId(session);
-  await setOrgAdloopApiKey(orgId, null);
-  return { ok: true };
-});
+  const customerId = await getOrgGoogleCustomerId(orgId);
+  const adloopConfigured = isAdloopServerConfigured();
+  let adloopHealth: { ok: boolean; error?: string } = { ok: false, error: "AdLoop non configuré" };
+  if (adloopConfigured) {
+    const probe = await probeAdloopHealth();
+    adloopHealth = { ok: probe.ok, error: probe.error };
+  }
 
-export const getOrgAdloopStatus = createServerFn({ method: "GET" }).handler(async () => {
-  const session = await ensureSession();
-  const orgId = await getActiveOrgId(session);
-  const rows = await db
-    .select()
-    .from(organizationMetadata)
-    .where(eq(organizationMetadata.organizationId, orgId))
-    .limit(1);
   return {
-    hasKey: Boolean(rows[0]?.adloopApiKeyEncrypted),
-    linked: await isAdloopLinked(orgId),
+    oauthConnected,
+    tokenError,
+    account: googleConn?.externalAccount ?? null,
+    customerId,
+    adloopConfigured,
+    adloopHealth,
+    /** Google prêt si AdLoop self-hosted OK (OAuth optionnel pour cibler un compte client). */
+    googleReady: adloopHealth.ok,
   };
 });
+
+/** @deprecated use getGoogleSetupStatus */
+export const getAdloopLinkStatus = getGoogleSetupStatus;

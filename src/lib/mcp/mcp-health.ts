@@ -10,10 +10,10 @@ export async function probeMcpHealth(): Promise<void> {
   const services = [
     {
       serviceId: "adloop_mcp",
-      label: "AdLoop Cloud (Google + GA4)",
+      label: "AdLoop self-hosted (Google + GA4)",
       probe: () => probeAdloopHealth(),
-      mode: "adloop_cloud",
-      url: process.env.ADLOOP_MCP_URL ?? "https://mcp.getadloop.com/mcp",
+      mode: "adloop_stdio",
+      url: `${process.env.ADLOOP_MCP_COMMAND ?? "python3"} ${process.env.ADLOOP_MCP_ARGS ?? "-m adloop"}`,
     },
     {
       serviceId: "useproxy_mcp",

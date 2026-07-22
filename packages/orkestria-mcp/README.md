@@ -9,7 +9,7 @@ Every write goes through the Orkestria policy engine: **dry-run by default**, op
 | Layer | Backend |
 | --- | --- |
 | **Meta create A→Z** | [adkit](https://github.com/jatinjain25/adkit) via `adkit-mcp` (brief, PAUSED, activate) |
-| **Google Search/PMax** | [AdLoop Cloud](https://mcp.getadloop.com/mcp) when org has `alc_` key |
+| **Google Search/PMax** | [AdLoop self-hosted](https://docs.getadloop.com/quickstart/self-hosted) (`python -m adloop` on server) |
 | **Research** | [useproxy](https://mcp.useproxy.ai) Meta Ad Library (read-only) |
 | **Policy + audit** | Orkestria only — one gateway |
 
@@ -18,7 +18,7 @@ Call `list_capabilities` first. **Production** today: `google_ads`, `meta_ads`. 
 ## Setup
 
 1. Create an account on [orkestria.top](https://orkestria.top) and connect Meta via OAuth.
-2. Optional: link Google via AdLoop Cloud key (`alc_…`) in **Connexions**.
+2. Optional: connect Google Ads OAuth in **Connexions** to target a specific client account under your MCC.
 3. Generate an API key (`ork_...`) from **Dashboard → Clés API**.
 
 ### Cursor / Claude (optional — power users)
@@ -78,12 +78,13 @@ Operator charter: [`agents/ad-operator.md`](../../agents/ad-operator.md). Skills
 | Variable | Description |
 | --- | --- |
 | `ORKESTRIA_API_KEY` | Client package auth |
-| `USEPROXY_API_KEY` | Ad Library research |
-| `ADLOOP_API_KEY` | Dev fallback Google via AdLoop |
-| `ADLOOP_MCP_URL` | Default `https://mcp.getadloop.com/mcp` |
+| `USEPROXY_BEARER_TOKEN` | OAuth bearer after useproxy connect (Ad Library research) |
+| `ADLOOP_MCP_COMMAND` | Default `python3` |
+| `ADLOOP_MCP_ARGS` | Default `-m adloop` — requires `pip install adloop && adloop init` on the server |
+| `ADLOOP_CONFIG` | Path to `config.yaml` (default `~/.adloop/config.yaml`) |
 | `ADKIT_MCP_COMMAND` | Default `adkit-mcp` — requires `pipx install "meta-adkit[mcp]"` on the server |
 | `META_PAGE_ID` | Default Facebook Page for adkit briefs |
 | `GEMINI_API_KEY` | Optional — adkit AI creative generation |
 | `MCP_WRITE_ENABLED` | Global write gate |
 
-Per-org: `adloop_api_key_encrypted` (AdLoop `alc_…`).
+Per-org: Meta OAuth + optional Google OAuth (`customer_id` for AdLoop calls).

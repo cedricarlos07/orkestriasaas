@@ -34,8 +34,8 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
     tools: [
       { name: "launch_meta_brief", desc: "Meta funnel complet via adkit (PAUSED) — dry_run d'abord" },
       { name: "activate_meta_campaign", desc: "Activation adkit (ad + ad set + campaign) — spend gated" },
-      { name: "create_search_campaign", desc: "Google Search via AdLoop quand alc_ lié" },
-      { name: "create_pmax_campaign", desc: "Google PMax via AdLoop (alc_)" },
+      { name: "create_search_campaign", desc: "Google Search via AdLoop self-hosted (draft preview)" },
+      { name: "create_pmax_campaign", desc: "Google PMax via AdLoop self-hosted" },
       { name: "create_meta_campaign", desc: "Meta campagne + ad set PAUSED (legacy natif)" },
       { name: "create_linkedin_campaign", desc: "LinkedIn DRAFT (experimental)" },
       { name: "create_reddit_campaign", desc: "Reddit PAUSED (experimental)" },
@@ -186,7 +186,7 @@ function DocsPage() {
                 <tr>
                   <td className="px-4 py-3 font-medium text-emerald-700">production</td>
                   <td className="px-4 py-3 text-ink">Google Ads, Meta</td>
-                  <td className="px-4 py-3 text-ink-soft">Google via AdLoop (alc_) · Meta via adkit-mcp · Research useproxy.dev</td>
+                  <td className="px-4 py-3 text-ink-soft">Google via AdLoop self-hosted · Meta via adkit-mcp · Research useproxy.dev</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3 font-medium text-amber-700">experimental</td>

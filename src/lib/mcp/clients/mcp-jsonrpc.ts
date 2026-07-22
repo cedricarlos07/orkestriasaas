@@ -2,7 +2,7 @@ export type McpJsonRpcOptions = {
   url: string;
   tool: string;
   params?: Record<string, unknown>;
-  /** Server-side API key (AdLoop alc_, useproxy, etc.) */
+  /** Server-side bearer (useproxy, etc.) */
   bearer?: string;
   timeoutMs?: number;
 };

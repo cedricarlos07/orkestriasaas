@@ -32,14 +32,24 @@ const env = { ...process.env, ...loadEnvFile(resolve(root, ".env.local")), ...lo
 
 ok("META_APP_ID", Boolean(env.META_APP_ID?.trim()), env.META_APP_ID ? "set" : "missing");
 ok("USEPROXY_MCP_URL", (env.USEPROXY_MCP_URL ?? "https://mcp.useproxy.dev/mcp").includes("useproxy.dev"), env.USEPROXY_MCP_URL ?? "default useproxy.dev");
-ok("USEPROXY_API_KEY", Boolean(env.USEPROXY_API_KEY?.trim()), env.USEPROXY_API_KEY ? "set" : "missing — research disabled until key received");
+const useproxyBearer = env.USEPROXY_BEARER_TOKEN?.trim() || env.USEPROXY_API_KEY?.trim();
+ok("USEPROXY bearer (optional)", true, useproxyBearer ? "set" : "optional — research concurrents");
 ok("ADKIT_MCP_COMMAND", Boolean((env.ADKIT_MCP_COMMAND ?? "adkit-mcp").trim()), env.ADKIT_MCP_COMMAND ?? "adkit-mcp (default)");
-ok("Dockerfile has meta-adkit", readFileSync(resolve(root, "Dockerfile"), "utf8").includes("meta-adkit"), "pip install meta-adkit[mcp]");
+ok("ADLOOP_MCP_COMMAND", Boolean((env.ADLOOP_MCP_COMMAND ?? "python3").trim()), env.ADLOOP_MCP_COMMAND ?? "python3 (default)");
+ok("ADLOOP self-hosted (no Cloud URL)", !env.ADLOOP_MCP_URL?.trim(), env.ADLOOP_MCP_URL ? "remove ADLOOP_MCP_URL" : "ok");
+
+const dockerfile = readFileSync(resolve(root, "Dockerfile"), "utf8");
+ok("Dockerfile has meta-adkit", dockerfile.includes("meta-adkit"), "pip install meta-adkit[mcp]");
+ok("Dockerfile has adloop", dockerfile.includes("adloop"), "pip install adloop");
 
 const dockerOpenship = resolve(root, "Dockerfile.openship");
 if (existsSync(dockerOpenship)) {
-  ok("Dockerfile.openship has meta-adkit", readFileSync(dockerOpenship, "utf8").includes("meta-adkit"), "pip install meta-adkit[mcp]");
+  const content = readFileSync(dockerOpenship, "utf8");
+  ok("Dockerfile.openship has meta-adkit", content.includes("meta-adkit"), "pip install meta-adkit[mcp]");
+  ok("Dockerfile.openship has adloop", content.includes("adloop"), "pip install adloop");
 }
+
+ok("ensure-adloop-server.sh", existsSync(resolve(root, "scripts/ensure-adloop-server.sh")), "VPS install helper");
 
 const failed = checks.filter((c) => !c.pass);
 console.log("\n=== Orkestria V1 stack smoke ===\n");

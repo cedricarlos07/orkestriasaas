@@ -176,7 +176,7 @@ export const organizationMetadata = pgTable("organization_metadata", {
   health: text("health").default("ok"),
   autopilot: boolean("autopilot").default(false),
   writeBlocked: boolean("write_blocked").default(false),
-  /** Encrypted AdLoop Cloud API key (alc_...) for Google/GA4 execution. */
+  /** Legacy column — unused after AdLoop Cloud removal. */
   adloopApiKeyEncrypted: text("adloop_api_key_encrypted"),
   /** Facebook Page ID for Meta ad creatives (adkit). */
   metaPageId: text("meta_page_id"),

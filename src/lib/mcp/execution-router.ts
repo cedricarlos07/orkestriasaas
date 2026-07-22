@@ -1,8 +1,13 @@
 import type { TokenPayload } from "@/lib/crypto/tokens";
 import type { ConnectorId } from "@/lib/oauth/connectors";
-import { getOrgAdloopApiKey } from "@/lib/mcp/adloop-org";
 import {
-  adloopCreateSearchCampaign,
+  ADLOOP_CONNECTION_ID,
+  getOrgGoogleCustomerId,
+  isAdloopConnection,
+  isAdloopServerConfigured,
+} from "@/lib/mcp/adloop-org";
+import {
+  adloopCreateCampaign,
   adloopGetCampaignPerformance,
 } from "@/lib/mcp/clients/adloop";
 import {
@@ -30,29 +35,31 @@ export type WriteRouteContext = WriteActionInput & {
   connectionId: string;
 };
 
+async function resolveGoogleCustomerId(orgId: string, accountId?: string): Promise<string> {
+  return (accountId || (await getOrgGoogleCustomerId(orgId)) || "").replace(/\D/g, "");
+}
+
 export async function routeReadSnapshot(ctx: ReadRouteContext): Promise<{
   snapshot: UnifiedAccountSnapshot;
   upstream: "adloop" | "native";
 }> {
-  const tokens = await ensureFreshTokens(ctx.connectionId, ctx.orgId, ctx.connector);
-  const accountId = ctx.accountId ?? tokens.accountId ?? "";
   const period = ctx.period ?? "30 derniers jours";
 
-  if (ctx.connector === "google_ads") {
-    const adloopKey = await getOrgAdloopApiKey(ctx.orgId);
-    if (adloopKey) {
-      try {
-        const snapshot = await adloopGetCampaignPerformance(adloopKey, {
-          customer_id: accountId.replace(/\D/g, ""),
-          period,
-        });
-        return { snapshot, upstream: "adloop" };
-      } catch {
-        // fall through to native
-      }
+  if (ctx.connector === "google_ads" && isAdloopServerConfigured()) {
+    const customerId = await resolveGoogleCustomerId(ctx.orgId, ctx.accountId);
+    try {
+      const snapshot = await adloopGetCampaignPerformance({
+        customer_id: customerId || undefined,
+        period,
+      });
+      return { snapshot, upstream: "adloop" };
+    } catch (e) {
+      if (isAdloopConnection(ctx.connectionId)) throw e;
     }
   }
 
+  const tokens = await ensureFreshTokens(ctx.connectionId, ctx.orgId, ctx.connector);
+  const accountId = ctx.accountId ?? tokens.accountId ?? "";
   const adapter = getAdapter(ctx.connector);
   const snapshot = await adapter.fetchSnapshot(tokens, accountId, period);
   return { snapshot, upstream: "native" };
@@ -66,26 +73,26 @@ export async function routeResearch(
 }
 
 export async function routeWrite(ctx: WriteRouteContext): Promise<Record<string, unknown>> {
+  if (ctx.connector === "google_ads" && isAdloopServerConfigured() && ctx.action === "create_campaign") {
+    const p = ctx.params;
+    if (!p.name || !p.dailyBudget) throw new Error("name et dailyBudget requis");
+    const customerId = await resolveGoogleCustomerId(ctx.orgId, ctx.accountId);
+    const result = await adloopCreateCampaign({
+      name: p.name,
+      dailyBudget: p.dailyBudget,
+      campaignType: p.campaignType,
+      customerId: customerId || undefined,
+      finalUrl: p.finalUrl,
+      keywords: p.keywords,
+      headlines: p.headlines,
+      descriptions: p.descriptions,
+    });
+    return { ...result, upstream: "adloop" };
+  }
+
   const adapter = getAdapter(ctx.connector);
   const tokens = await ensureFreshTokens(ctx.connectionId, ctx.orgId, ctx.connector);
   const accountId = ctx.accountId ?? tokens.accountId ?? "";
-
-  if (ctx.connector === "google_ads") {
-    const adloopKey = await getOrgAdloopApiKey(ctx.orgId);
-    if (adloopKey && ctx.action === "create_campaign") {
-      const p = ctx.params;
-      if (!p.name || !p.dailyBudget) throw new Error("name et dailyBudget requis");
-      const result = await adloopCreateSearchCampaign(adloopKey, {
-        name: p.name,
-        dailyBudget: p.dailyBudget,
-        finalUrl: p.finalUrl,
-        keywords: p.keywords,
-        headlines: p.headlines,
-        descriptions: p.descriptions,
-      });
-      return { ...result, upstream: "adloop", status: "PAUSED" };
-    }
-  }
 
   if (ctx.connector === "meta_ads") {
     const pageId = await resolveMetaPageId(ctx.orgId, ctx.params.pageId as string | undefined);
@@ -276,3 +283,5 @@ async function executeAdapterWrite(
     }
   }
 }
+
+export { ADLOOP_CONNECTION_ID };

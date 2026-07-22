@@ -4,12 +4,15 @@ import { probeUseproxyHealth } from "@/lib/mcp/clients/useproxy";
 
 export const getResearchStackStatus = createServerFn({ method: "GET" }).handler(async () => {
   await ensureSession();
-  const configured = Boolean(process.env.USEPROXY_API_KEY?.trim());
+  const configured = Boolean((process.env.USEPROXY_BEARER_TOKEN ?? process.env.USEPROXY_API_KEY)?.trim());
   if (!configured) {
     return {
       configured: false,
       url: process.env.USEPROXY_MCP_URL ?? "https://mcp.useproxy.dev/mcp",
-      health: { ok: false, error: "USEPROXY_API_KEY non configurée côté serveur" },
+      health: {
+        ok: false,
+        error: "Pas de bearer OAuth useproxy — connectez useproxy une fois, puis token admin serveur",
+      },
     };
   }
   const health = await probeUseproxyHealth();

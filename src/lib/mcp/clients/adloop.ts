@@ -1,23 +1,50 @@
-import { callMcpTool, probeMcpEndpoint } from "@/lib/mcp/clients/mcp-jsonrpc";
 import type { UnifiedAccountSnapshot, UnifiedCampaign } from "@/lib/unified-ad-schema";
+import { adloopMcpCommand, adloopMcpArgs, callAdloopMcpTool, probeAdloopMcp } from "@/lib/mcp/clients/adloop-mcp";
 
-export function adloopMcpUrl(): string {
-  return (process.env.ADLOOP_MCP_URL?.trim() || "https://mcp.getadloop.com/mcp").replace(/\/$/, "");
+export { adloopMcpCommand, adloopMcpArgs };
+
+export function isAdloopEnabled(): boolean {
+  return process.env.ADLOOP_ENABLED !== "false";
 }
 
 export async function callAdloopTool(
-  apiKey: string,
   tool: string,
   params: Record<string, unknown> = {},
 ): Promise<{ ok: boolean; data?: unknown; error?: string; latencyMs: number }> {
-  return callMcpTool({ url: adloopMcpUrl(), tool, params, bearer: apiKey });
+  if (!isAdloopEnabled()) {
+    return { ok: false, latencyMs: 0, error: "AdLoop self-hosted désactivé (ADLOOP_ENABLED=false)" };
+  }
+  return callAdloopMcpTool(tool, params);
 }
 
-export async function probeAdloopHealth(apiKey?: string): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
-  const key = apiKey ?? process.env.ADLOOP_API_KEY?.trim();
-  if (!key) return { ok: false, latencyMs: 0, error: "ADLOOP_API_KEY unset" };
-  return probeMcpEndpoint(adloopMcpUrl(), key);
+export async function probeAdloopHealth(): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
+  return probeAdloopMcp();
 }
+
+/** Extract plan_id from AdLoop draft preview response. */
+export function extractAdloopPlanId(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const d = data as Record<string, unknown>;
+  const nested = (d.preview ?? d.result) as Record<string, unknown> | undefined;
+  const id = d.plan_id ?? d.planId ?? nested?.plan_id ?? nested?.planId;
+  return id != null && String(id).trim() ? String(id) : null;
+}
+
+function adloopCampaignType(type?: string): string {
+  if (type === "pmax" || type === "PERFORMANCE_MAX") return "PERFORMANCE_MAX";
+  return "SEARCH";
+}
+
+export type AdloopDraftCampaignInput = {
+  name: string;
+  dailyBudget: number;
+  campaignType?: string;
+  customerId?: string;
+  finalUrl?: string;
+  keywords?: { text: string; matchType?: string }[];
+  headlines?: string[];
+  descriptions?: string[];
+};
 
 /** Map AdLoop campaign performance → Orkestria snapshot (best-effort). */
 export function adloopDataToSnapshot(data: unknown, period = "30 derniers jours"): UnifiedAccountSnapshot | null {
@@ -66,56 +93,75 @@ export function adloopDataToSnapshot(data: unknown, period = "30 derniers jours"
     roas: null,
     campaigns,
     issues: [],
-    opportunities: ["Diagnostics Ads↔GA4 disponibles via AdLoop"],
+    opportunities: ["Diagnostics Ads↔GA4 disponibles via AdLoop self-hosted"],
   };
 }
 
 export async function adloopGetCampaignPerformance(
-  apiKey: string,
   params: Record<string, unknown> = {},
 ): Promise<UnifiedAccountSnapshot> {
-  const res = await callAdloopTool(apiKey, "get_campaign_performance", {
+  const res = await callAdloopTool("get_campaign_performance", {
     compact: true,
     ...params,
   });
   if (!res.ok) throw new Error(res.error ?? "AdLoop get_campaign_performance failed");
-  const snapshot = adloopDataToSnapshot(res.data);
+  const snapshot = adloopDataToSnapshot(res.data, String(params.period ?? "30 derniers jours"));
   if (!snapshot) throw new Error("Réponse AdLoop non normalisable");
   return snapshot;
 }
 
-export async function adloopCreateSearchCampaign(
-  apiKey: string,
-  input: {
-    name: string;
-    dailyBudget: number;
-    finalUrl?: string;
-    keywords?: { text: string; matchType?: string }[];
-    headlines?: string[];
-    descriptions?: string[];
-  },
-): Promise<Record<string, unknown>> {
-  const res = await callAdloopTool(apiKey, "create_search_campaign", {
+export async function adloopDraftCampaign(input: AdloopDraftCampaignInput): Promise<Record<string, unknown>> {
+  const res = await callAdloopTool("draft_campaign", {
+    campaign_type: adloopCampaignType(input.campaignType),
     name: input.name,
     daily_budget: input.dailyBudget,
+    customer_id: input.customerId?.replace(/\D/g, "") || undefined,
     final_url: input.finalUrl,
     keywords: input.keywords,
     headlines: input.headlines,
     descriptions: input.descriptions,
-    status: "PAUSED",
   });
-  if (!res.ok) throw new Error(res.error ?? "AdLoop create_search_campaign failed");
-  return (res.data as Record<string, unknown>) ?? { ok: true };
+  if (!res.ok) throw new Error(res.error ?? "AdLoop draft_campaign failed");
+  const planId = extractAdloopPlanId(res.data);
+  return { preview: res.data, planId, upstream: "adloop", status: "PREVIEW" };
 }
 
-export async function adloopRunGaql(apiKey: string, query: string, customerId?: string): Promise<unknown> {
-  const res = await callAdloopTool(apiKey, "run_gaql", { query, customer_id: customerId });
+export async function adloopConfirmAndApply(
+  planId: string,
+  dryRun = false,
+): Promise<Record<string, unknown>> {
+  const res = await callAdloopTool("confirm_and_apply", {
+    plan_id: planId,
+    dry_run: dryRun,
+  });
+  if (!res.ok) throw new Error(res.error ?? "AdLoop confirm_and_apply failed");
+  return { applied: res.data, planId, dryRun, upstream: "adloop" };
+}
+
+/** Draft then apply (live). Campaigns created PAUSED per AdLoop safety model. */
+export async function adloopCreateCampaign(input: AdloopDraftCampaignInput): Promise<Record<string, unknown>> {
+  const draft = await adloopDraftCampaign(input);
+  const planId = draft.planId as string | null;
+  if (!planId) {
+    throw new Error("AdLoop draft_campaign n'a pas retourné de plan_id — impossible d'appliquer");
+  }
+  const applied = await adloopConfirmAndApply(planId, false);
+  return { ...draft, ...applied, status: "PAUSED" };
+}
+
+/** @deprecated use adloopDraftCampaign */
+export async function adloopCreateSearchCampaign(input: AdloopDraftCampaignInput): Promise<Record<string, unknown>> {
+  return adloopDraftCampaign({ ...input, campaignType: input.campaignType ?? "search" });
+}
+
+export async function adloopRunGaql(query: string, customerId?: string): Promise<unknown> {
+  const res = await callAdloopTool("run_gaql", { query, customer_id: customerId?.replace(/\D/g, "") });
   if (!res.ok) throw new Error(res.error ?? "AdLoop run_gaql failed");
   return res.data;
 }
 
-export async function adloopAnalyzeConversions(apiKey: string, params: Record<string, unknown> = {}): Promise<unknown> {
-  const res = await callAdloopTool(apiKey, "analyze_campaign_conversions", params);
+export async function adloopAnalyzeConversions(params: Record<string, unknown> = {}): Promise<unknown> {
+  const res = await callAdloopTool("analyze_campaign_conversions", params);
   if (!res.ok) throw new Error(res.error ?? "AdLoop analyze_campaign_conversions failed");
   return res.data;
 }

@@ -209,17 +209,23 @@ export type WriteActionOutcome = {
 async function resolveConnection(orgId: string, connector: ConnectorId) {
   const rows = await db.select().from(connections).where(eq(connections.organizationId, orgId));
   const conn = rows.find((c) => c.connector === connector && c.status === "connectée");
-  if (!conn) {
-    if (!hasOAuthCredentials(connector)) {
-      throw new Error(
-        `Connexion ${CONNECTORS[connector].label} non configurée : les identifiants OAuth (${CONNECTORS[connector].oauth.clientIdEnv}) ne sont pas définis côté serveur.`,
-      );
+  if (conn) return conn;
+
+  if (connector === "google_ads") {
+    const { isAdloopHealthy, syntheticAdloopConnection } = await import("@/lib/mcp/adloop-org");
+    if (await isAdloopHealthy()) {
+      return syntheticAdloopConnection(orgId);
     }
+  }
+
+  if (!hasOAuthCredentials(connector)) {
     throw new Error(
-      `Aucun compte ${CONNECTORS[connector].label} connecté. Connectez-le depuis le dashboard Orkestria (Connexions).`,
+      `Connexion ${CONNECTORS[connector].label} non configurée : les identifiants OAuth (${CONNECTORS[connector].oauth.clientIdEnv}) ne sont pas définis côté serveur.`,
     );
   }
-  return conn;
+  throw new Error(
+    `Aucun compte ${CONNECTORS[connector].label} connecté. Connectez-le depuis le dashboard Orkestria (Connexions).`,
+  );
 }
 
 async function checkSpendCaps(orgId: string, connector: ConnectorId, policy: OrgPolicy): Promise<string | null> {
@@ -525,6 +531,7 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
 
   if (mode === "dry_run") {
     let adkitPreview: unknown;
+    let adloopPreview: unknown;
     if (input.action === "launch_meta_brief" && input.connector === "meta_ads") {
       const brief = input.params.brief as MetaBrief | undefined;
       if (brief?.campaign?.name && brief.adsets?.length) {
@@ -546,9 +553,27 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
       }
     }
 
+    if (input.action === "create_campaign" && input.connector === "google_ads") {
+      const { adloopDraftCampaign } = await import("@/lib/mcp/clients/adloop");
+      const { getOrgGoogleCustomerId } = await import("@/lib/mcp/adloop-org");
+      if (input.params.name && input.params.dailyBudget) {
+        const customerId = (accountId || (await getOrgGoogleCustomerId(input.orgId)) || "").replace(/\D/g, "");
+        adloopPreview = await adloopDraftCampaign({
+          name: input.params.name,
+          dailyBudget: input.params.dailyBudget,
+          campaignType: input.params.campaignType,
+          customerId: customerId || undefined,
+          finalUrl: input.params.finalUrl,
+          keywords: input.params.keywords,
+          headlines: input.params.headlines,
+          descriptions: input.params.descriptions,
+        });
+      }
+    }
+
     await logRun({
       orgId: input.orgId, apiKeyId: input.apiKeyId, connector: input.connector, tool: input.action,
-      mode: "dry_run", status: "ok", params: diff, result: { wouldExecute: true, adkitPreview }, latencyMs: Date.now() - start,
+      mode: "dry_run", status: "ok", params: diff, result: { wouldExecute: true, adkitPreview, adloopPreview }, latencyMs: Date.now() - start,
     });
     const { getCapability } = await import("@/lib/mcp/capability-matrix");
     const capability = getCapability(input.connector);
@@ -571,6 +596,7 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
           dry_run: false,
         },
         ...(adkitPreview ? { adkit: adkitPreview } : {}),
+        ...(adloopPreview ? { adloop: adloopPreview } : {}),
       },
     };
   }

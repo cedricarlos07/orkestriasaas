@@ -1,50 +1,53 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { organizationMetadata } from "@/db/schema/index";
-import { decryptTokens, encryptTokens } from "@/lib/crypto/tokens";
+import { connections } from "@/db/schema/index";
+import { isAdloopEnabled, probeAdloopHealth } from "@/lib/mcp/clients/adloop";
 
-/** Encrypted AdLoop Cloud API key (alc_...) per org. */
-export async function getOrgAdloopApiKey(orgId: string): Promise<string | null> {
-  const rows = await db
-    .select({ key: organizationMetadata.adloopApiKeyEncrypted })
-    .from(organizationMetadata)
-    .where(eq(organizationMetadata.organizationId, orgId))
-    .limit(1);
-  const blob = rows[0]?.key;
-  if (!blob?.trim()) return process.env.ADLOOP_API_KEY?.trim() || null;
-  try {
-    const payload = decryptTokens(blob);
-    return payload.accessToken || null;
-  } catch {
-    return null;
-  }
+/** Synthetic connection id when Google is served via AdLoop MCC (no per-org OAuth). */
+export const ADLOOP_CONNECTION_ID = "adloop";
+
+export function isAdloopConnection(connectionId: string): boolean {
+  return connectionId === ADLOOP_CONNECTION_ID;
 }
 
-export async function setOrgAdloopApiKey(orgId: string, apiKey: string | null): Promise<void> {
-  const encrypted = apiKey?.trim()
-    ? encryptTokens({ accessToken: apiKey.trim() })
-    : null;
-  const existing = await db
-    .select()
-    .from(organizationMetadata)
-    .where(eq(organizationMetadata.organizationId, orgId))
-    .limit(1);
-  if (existing[0]) {
-    await db
-      .update(organizationMetadata)
-      .set({ adloopApiKeyEncrypted: encrypted, updatedAt: new Date() })
-      .where(eq(organizationMetadata.organizationId, orgId));
-  } else {
-    await db.insert(organizationMetadata).values({
-      organizationId: orgId,
-      adloopApiKeyEncrypted: encrypted,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-  }
+/** Google Ads customer ID linked via OAuth (digits only). */
+export async function getOrgGoogleCustomerId(orgId: string): Promise<string | null> {
+  const rows = await db.select().from(connections).where(eq(connections.organizationId, orgId));
+  const conn = rows.find((r) => r.connector === "google_ads" && r.status === "connectée");
+  const raw = conn?.externalAccount?.trim();
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "");
+  return digits || null;
 }
 
-export async function isAdloopLinked(orgId: string): Promise<boolean> {
-  const key = await getOrgAdloopApiKey(orgId);
-  return Boolean(key?.startsWith("alc_") || key);
+export async function isGoogleAdsOAuthLinked(orgId: string): Promise<boolean> {
+  return Boolean(await getOrgGoogleCustomerId(orgId));
+}
+
+export function isAdloopServerConfigured(): boolean {
+  return isAdloopEnabled();
+}
+
+export async function isAdloopHealthy(): Promise<boolean> {
+  if (!isAdloopServerConfigured()) return false;
+  const probe = await probeAdloopHealth();
+  return probe.ok;
+}
+
+export function syntheticAdloopConnection(orgId: string) {
+  return {
+    id: ADLOOP_CONNECTION_ID,
+    organizationId: orgId,
+    connector: "google_ads",
+    status: "connectée",
+    lastSync: null,
+    calls24h: 0,
+    errorRate: "0",
+    scopes: [],
+    encryptedTokens: null,
+    externalAccount: null,
+    expiresAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
 }

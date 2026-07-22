@@ -126,7 +126,7 @@ function Today() {
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-[13px] text-emerald-900">
           <CheckCircle2 className="mr-1 inline h-4 w-4" />
           Stack V1 prête — Meta + adkit configurés.
-          {setup.google.adloopLinked && " Google via AdLoop."}
+          {setup.google.adloopHealth === "ok" && " Google via AdLoop self-hosted."}
           {setup.research.useproxyHealth === "ok" && " Research concurrents actif."}
         </div>
       )}

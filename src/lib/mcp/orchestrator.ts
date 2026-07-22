@@ -101,7 +101,7 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
       `**Meta OAuth :** ${stack.meta.oauthConnected ? "OK" : "manquant"}`,
       `**Page Facebook :** ${stack.meta.pageId ?? "manquante"}`,
       `**adkit :** ${stack.meta.adkitVerify}${stack.meta.adkitError ? ` (${stack.meta.adkitError})` : ""}`,
-      `**AdLoop Google :** ${stack.google.adloopLinked ? stack.google.adloopHealth : "non lié"}`,
+      `**AdLoop Google :** ${stack.google.adloopHealth}${stack.google.adloopError ? ` (${stack.google.adloopError})` : ""}${stack.google.oauthConnected ? " · OAuth lié" : ""}`,
       `**Research useproxy :** ${stack.research.useproxyConfigured ? stack.research.useproxyHealth : "clé serveur manquante"}`,
       "",
       stack.readyForCampaign

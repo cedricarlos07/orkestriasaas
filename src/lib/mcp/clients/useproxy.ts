@@ -4,23 +4,37 @@ export function useproxyMcpUrl(): string {
   return (process.env.USEPROXY_MCP_URL?.trim() || "https://mcp.useproxy.dev/mcp").replace(/\/$/, "");
 }
 
-function useproxyApiKey(): string | undefined {
-  return process.env.USEPROXY_API_KEY?.trim();
+/** OAuth bearer after connecting useproxy MCP (USEPROXY_BEARER_TOKEN or legacy USEPROXY_API_KEY). */
+function useproxyBearer(): string | undefined {
+  return (process.env.USEPROXY_BEARER_TOKEN ?? process.env.USEPROXY_API_KEY)?.trim();
 }
 
 export async function callUseproxyTool(
   tool: string,
   params: Record<string, unknown> = {},
 ): Promise<{ ok: boolean; data?: unknown; error?: string; latencyMs: number }> {
-  const key = useproxyApiKey();
-  if (!key) return { ok: false, error: "USEPROXY_API_KEY manquant", latencyMs: 0 };
-  return callMcpTool({ url: useproxyMcpUrl(), tool, params, bearer: key });
+  const bearer = useproxyBearer();
+  if (!bearer) {
+    return {
+      ok: false,
+      error:
+        "useproxy non authentifié côté serveur — connectez votre compte useproxy (OAuth) puis ajoutez le bearer en USEPROXY_BEARER_TOKEN",
+      latencyMs: 0,
+    };
+  }
+  return callMcpTool({ url: useproxyMcpUrl(), tool, params, bearer });
 }
 
 export async function probeUseproxyHealth(): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
-  const key = useproxyApiKey();
-  if (!key) return { ok: false, latencyMs: 0, error: "USEPROXY_API_KEY unset" };
-  const health = await probeMcpEndpoint(useproxyMcpUrl(), key);
+  const bearer = useproxyBearer();
+  if (!bearer) {
+    return {
+      ok: false,
+      latencyMs: 0,
+      error: "Pas de bearer useproxy (OAuth) — research désactivé jusqu'à connexion admin",
+    };
+  }
+  const health = await probeMcpEndpoint(useproxyMcpUrl(), bearer);
   if (health.ok) return health;
   const fallback = await callUseproxyTool("get_meta_platform_id", { brand_names: ["Nike"] });
   if (fallback.ok) return { ok: true, latencyMs: fallback.latencyMs };
