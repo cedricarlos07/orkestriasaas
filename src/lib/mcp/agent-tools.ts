@@ -16,6 +16,12 @@ import {
 } from "@/lib/mcp/policy-engine";
 import { listSkills, getSkill } from "@/lib/mcp/skills";
 import { runAutonomyTick } from "@/lib/mcp/autonomy";
+import {
+  AD_CONNECTOR_IDS,
+  CONNECTORS,
+  hasOAuthCredentials,
+  type ConnectorId,
+} from "@/lib/oauth/connectors";
 import { getAdapter } from "@/lib/platforms/adapter";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 import type { UnifiedAccountSnapshot } from "@/lib/unified-ad-schema";
