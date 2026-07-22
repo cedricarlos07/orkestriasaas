@@ -41,11 +41,31 @@ export const getDashboardKpis = createServerFn({ method: "GET" }).handler(async 
     return empty("Connectez Meta Ads pour voir vos performances réelles.");
   }
 
-  const snapshot = await fetchMetaAdsSnapshot(
-    meta.tokens.accessToken,
-    meta.tokens.accountId!,
-    "30 derniers jours",
-  );
+  let snapshot: Awaited<ReturnType<typeof fetchMetaAdsSnapshot>>;
+  try {
+    snapshot = await fetchMetaAdsSnapshot(
+      meta.tokens.accessToken,
+      meta.tokens.accountId!,
+      "30 derniers jours",
+    );
+  } catch {
+    return {
+      greeting,
+      company,
+      metaConnected: true,
+      kpis: [
+        {
+          key: "account",
+          label: "Compte Meta",
+          value: (meta.tokens.accountName ?? meta.conn.externalAccount ?? "Lié").slice(0, 18),
+          delta: "—",
+          trend: "flat",
+          deltaLabel: "OAuth OK",
+        },
+      ],
+      pendingApprovalsHint: "Les KPIs détaillés seront disponibles dès que Meta renverra les statistiques.",
+    };
+  }
 
   const spend = snapshot.spend;
   const conv = snapshot.conversions;

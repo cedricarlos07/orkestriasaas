@@ -62,11 +62,19 @@ function Connections() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("connected") || params.get("error")) {
       window.history.replaceState({}, "", "/app/connections");
+      void qc.invalidateQueries({ queryKey: ["connections"] });
+      void qc.invalidateQueries({ queryKey: ["connection-catalog"] });
+      void qc.invalidateQueries({ queryKey: ["dashboard-kpis"] });
+      void qc.invalidateQueries({ queryKey: ["setup-status"] });
       void refetchMeta();
       void refetchGoogle();
-      void qc.invalidateQueries({ queryKey: ["connections"] });
     }
   }, [qc, refetchMeta, refetchGoogle]);
+
+  const metaConn = byConnector("meta_ads");
+  const metaLinked =
+    Boolean(metaSetup?.oauthConnected) ||
+    (metaConn?.status === "connectée" && metaConn?.via === "oauth");
 
   const groups = [
     { title: "Régies publicitaires", filter: "ads" as const },
@@ -110,10 +118,11 @@ function Connections() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {metaSetup?.oauthConnected ? (
+              {metaLinked ? (
                 <>
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Connecté · {metaSetup.account ?? "compte lié"}
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Connecté ·{" "}
+                    {metaSetup?.account ?? metaConn?.externalAccount ?? "compte lié"}
                   </span>
                   {metaSetup.pageName ? (
                     <span className="text-[12px] text-ink-soft">Page · {metaSetup.pageName}</span>
@@ -127,14 +136,13 @@ function Connections() {
                     type="button"
                     className="chip-ghost text-[12px]"
                     onClick={() => {
-                      const conn = byConnector("meta_ads");
-                      if (conn) disconnect(conn.id);
+                      if (metaConn) disconnect(metaConn.id);
                     }}
                   >
                     Déconnecter
                   </button>
                 </>
-              ) : metaSetup?.tokenError ? (
+              ) : metaSetup?.tokenError && !metaConn ? (
                 <>
                   <button type="button" className="btn-primary text-[13px]" onClick={() => void connect("meta_ads")}>
                     Connecter Meta
@@ -272,7 +280,7 @@ function Connections() {
                   const accountLabel = conn?.externalAccount ?? (connected ? "Compte lié" : null);
                   const isMeta = cfg.id === "meta_ads";
                   const isGoogle = cfg.id === "google_ads";
-                  const metaReallyConnected = isMeta && (metaSetup?.oauthConnected ?? connected);
+                  const metaReallyConnected = isMeta && (metaSetup?.oauthConnected || connected);
                   const googleReady = isGoogle && (googleSetup?.googleReady || googleSetup?.oauthConnected);
                   const showConnected = (isMeta ? metaReallyConnected : isGoogle ? googleReady : connected);
 

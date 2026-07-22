@@ -22,7 +22,7 @@ export const getMetaSetupStatus = createServerFn({ method: "GET" }).handler(asyn
   let pageName: string | null = null;
   let automationHealth: { ok: boolean; error?: string } = { ok: false, error: "Meta non connecté" };
 
-  if (metaConn) {
+  if (metaConn?.encryptedTokens) {
     try {
       const tokens = await ensureFreshTokens(metaConn.id, orgId, "meta_ads");
       oauthConnected = true;
