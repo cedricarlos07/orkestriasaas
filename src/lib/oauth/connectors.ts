@@ -73,7 +73,6 @@ export const CONNECTORS: Record<ConnectorId, ConnectorConfig> = {
         "business_management",
         "pages_show_list",
         "pages_read_engagement",
-        "pages_manage_ads",
       ],
       clientIdEnv: "META_APP_ID",
       clientSecretEnv: "META_APP_SECRET",
