@@ -10,6 +10,7 @@ import {
   rejectPendingAction,
   runWriteAction,
   updateOrgPolicy,
+  WRITE_ACTION_NAMES,
   type ExecutionMode,
   type WriteActionName,
 } from "@/lib/mcp/policy-engine";
@@ -255,12 +256,95 @@ const launchTools: AgentTool[] = [
     }),
   ),
   writeTool(
-    "set_budget",
-    "update_budget",
-    "Set the daily budget of an existing campaign (alias of update_budget).",
+    "create_ad_set",
+    "create_ad_set",
+    "Create a paused ad set under a campaign (Meta). dailyBudget in main currency units.",
     "launch",
     {
       campaignId: { type: "string" },
+      name: { type: "string" },
+      dailyBudget: { type: "number" },
+      countries: { type: "array", items: { type: "string" } },
+      optimizationGoal: { type: "string" },
+      accountId: { type: "string" },
+    },
+    ["campaignId", "name", "dailyBudget"],
+    (args) => ({
+      campaignId: str(args.campaignId),
+      accountId: str(args.accountId),
+      params: {
+        name: str(args.name),
+        dailyBudget: num(args.dailyBudget),
+        countries: Array.isArray(args.countries) ? (args.countries as string[]) : undefined,
+        optimizationGoal: str(args.optimizationGoal),
+      },
+    }),
+  ),
+  writeTool(
+    "create_ad",
+    "create_ad",
+    "Create a paused Meta ad (requires pageId, linkUrl, and imageUrl or imageHash).",
+    "launch",
+    {
+      adSetId: { type: "string" },
+      name: { type: "string" },
+      pageId: { type: "string", description: "Facebook Page id" },
+      linkUrl: { type: "string" },
+      message: { type: "string" },
+      headline: { type: "string" },
+      imageUrl: { type: "string" },
+      imageHash: { type: "string" },
+      accountId: { type: "string" },
+    },
+    ["adSetId", "name", "pageId", "linkUrl"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: {
+        adSetId: str(args.adSetId),
+        name: str(args.name),
+        pageId: str(args.pageId),
+        linkUrl: str(args.linkUrl),
+        message: str(args.message),
+        headline: str(args.headline),
+        imageUrl: str(args.imageUrl),
+        imageHash: str(args.imageHash),
+      },
+    }),
+  ),
+  writeTool(
+    "create_audience",
+    "create_audience",
+    "Create a Meta custom or lookalike audience (subtype LOOKALIKE needs originAudienceId).",
+    "launch",
+    {
+      name: { type: "string" },
+      description: { type: "string" },
+      subtype: { type: "string", description: "CUSTOM or LOOKALIKE" },
+      originAudienceId: { type: "string" },
+      lookalikeRatio: { type: "number" },
+      country: { type: "string" },
+      accountId: { type: "string" },
+    },
+    ["name"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: {
+        name: str(args.name),
+        description: str(args.description),
+        subtype: str(args.subtype),
+        originAudienceId: str(args.originAudienceId),
+        lookalikeRatio: num(args.lookalikeRatio),
+        country: str(args.country),
+      },
+    }),
+  ),
+  writeTool(
+    "set_budget",
+    "update_budget",
+    "Set the daily budget of an existing campaign (Meta: pass the ad set id as campaignId).",
+    "launch",
+    {
+      campaignId: { type: "string", description: "Campaign id (Meta: ad set id)" },
       dailyBudget: { type: "number", description: "New daily budget (main currency unit)" },
       currentDailyBudget: { type: "number", description: "Current budget, used by the policy to validate the % change" },
       accountId: { type: "string" },
@@ -323,10 +407,10 @@ const optimizeTools: AgentTool[] = [
   writeTool(
     "update_budget",
     "update_budget",
-    "Change the daily budget of a campaign. Policy-gated (max % increase, spend caps).",
+    "Change the daily budget of a campaign (Meta: pass the ad set id as campaignId). Policy-gated.",
     "optimize",
     {
-      campaignId: { type: "string" },
+      campaignId: { type: "string", description: "Campaign id (Meta: ad set id)" },
       dailyBudget: { type: "number" },
       currentDailyBudget: { type: "number" },
       accountId: { type: "string" },
@@ -355,6 +439,38 @@ const optimizeTools: AgentTool[] = [
     { campaignId: { type: "string" }, accountId: { type: "string" } },
     ["campaignId"],
     (args) => ({ campaignId: str(args.campaignId), accountId: str(args.accountId), params: {} }),
+  ),
+  writeTool(
+    "add_keywords",
+    "add_keywords",
+    "Add keywords to an ad group (Google Ads, Microsoft Ads, Amazon Sponsored Products).",
+    "optimize",
+    {
+      adGroupId: { type: "string" },
+      keywords: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            text: { type: "string" },
+            matchType: { type: "string", description: "BROAD | PHRASE | EXACT (platform-dependent)" },
+            bid: { type: "number" },
+          },
+          required: ["text"],
+        },
+      },
+      accountId: { type: "string" },
+    },
+    ["adGroupId", "keywords"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: {
+        adGroupId: str(args.adGroupId),
+        keywords: Array.isArray(args.keywords)
+          ? (args.keywords as { text: string; matchType?: string; bid?: number }[])
+          : undefined,
+      },
+    }),
   ),
   {
     name: "reallocate_budget",
@@ -408,6 +524,22 @@ const optimizeTools: AgentTool[] = [
 // ─── Create ───────────────────────────────────────────────────────────────────
 
 const createTools: AgentTool[] = [
+  writeTool(
+    "upload_creative",
+    "upload_creative",
+    "Upload an image creative from URL (Meta returns imageHash for create_ad).",
+    "create",
+    {
+      imageUrl: { type: "string" },
+      name: { type: "string" },
+      accountId: { type: "string" },
+    },
+    ["imageUrl"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: { imageUrl: str(args.imageUrl), name: str(args.name) },
+    }),
+  ),
   {
     name: "generate_ad_copy",
     description:
@@ -630,6 +762,104 @@ const measureTools: AgentTool[] = [
 
 const governTools: AgentTool[] = [
   {
+    name: "execute",
+    description:
+      "Universal write tool (Synter-style). Defaults to dry_run=true: validates policy and returns the exact confirm payload. Re-call with dry_run=false to apply (respects org policy: dry_run / approval / live).",
+    family: "govern",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: WRITE_ACTION_NAMES,
+          description: "Write action name",
+        },
+        ...platformProp,
+        dry_run: {
+          type: "boolean",
+          description: "Default true. Set false only after reviewing the dry-run diff.",
+        },
+        mode: {
+          type: "string",
+          enum: ["dry_run", "approval", "live"],
+          description: "Override org policy when dry_run=false. Ignored when dry_run=true.",
+        },
+        campaignId: { type: "string" },
+        accountId: { type: "string" },
+        params: {
+          type: "object",
+          description: "Action-specific params (name, dailyBudget, keywords, adSetId, imageUrl, …)",
+        },
+      },
+      required: ["action", "platform"],
+    },
+    handler: async (ctx, args) => {
+      const action = str(args.action) as WriteActionName | undefined;
+      if (!action || !WRITE_ACTION_NAMES.includes(action)) {
+        throw new Error(`action invalide — attendu: ${WRITE_ACTION_NAMES.join(", ")}`);
+      }
+      const dryRun = args.dry_run !== false && args.dry_run !== "false";
+      const policy = await getOrgPolicy(ctx.organizationId);
+
+      let mode: ExecutionMode;
+      if (dryRun) {
+        mode = "dry_run";
+      } else {
+        // Explicit confirm: honor mode override, else approval if org requires it, else live
+        const requested = str(args.mode) as ExecutionMode | undefined;
+        if (requested === "dry_run") {
+          return {
+            status: "blocked",
+            message: "dry_run=false with mode=dry_run is a no-op. Use mode=live or mode=approval.",
+          };
+        }
+        mode = requested ?? (policy.defaultMode === "approval" ? "approval" : "live");
+        if (mode === "live") requireScope(ctx, "write");
+      }
+
+      const params = (typeof args.params === "object" && args.params !== null ? args.params : {}) as Record<
+        string,
+        unknown
+      >;
+      const merged = {
+        ...params,
+        name: str(params.name) ?? str(args.name),
+        dailyBudget: num(params.dailyBudget) ?? num(args.dailyBudget),
+        objective: str(params.objective) ?? str(args.objective),
+        countries: (params.countries as string[]) ?? (args.countries as string[] | undefined),
+        currentDailyBudget: num(params.currentDailyBudget) ?? num(args.currentDailyBudget),
+        adSetId: str(params.adSetId) ?? str(args.adSetId),
+        adGroupId: str(params.adGroupId) ?? str(args.adGroupId),
+        pageId: str(params.pageId) ?? str(args.pageId),
+        linkUrl: str(params.linkUrl) ?? str(args.linkUrl),
+        message: str(params.message) ?? str(args.message),
+        headline: str(params.headline) ?? str(args.headline),
+        imageUrl: str(params.imageUrl) ?? str(args.imageUrl),
+        imageHash: str(params.imageHash) ?? str(args.imageHash),
+        description: str(params.description) ?? str(args.description),
+        subtype: str(params.subtype) ?? str(args.subtype),
+        lookalikeRatio: num(params.lookalikeRatio) ?? num(args.lookalikeRatio),
+        originAudienceId: str(params.originAudienceId) ?? str(args.originAudienceId),
+        country: str(params.country) ?? str(args.country),
+        optimizationGoal: str(params.optimizationGoal) ?? str(args.optimizationGoal),
+        keywords:
+          (params.keywords as { text: string; matchType?: string; bid?: number }[]) ??
+          (args.keywords as { text: string; matchType?: string; bid?: number }[] | undefined),
+      };
+
+      return runWriteAction({
+        orgId: ctx.organizationId,
+        apiKeyId: ctx.keyId,
+        connector: args.platform as ConnectorId,
+        action,
+        mode,
+        campaignId: str(args.campaignId),
+        accountId: str(args.accountId),
+        params: merged,
+      });
+    },
+  },
+  {
     name: "list_pending_approvals",
     description: "List write actions waiting for a human approval in this workspace.",
     family: "govern",
@@ -769,7 +999,9 @@ export async function invokeAgentTool(
 ): Promise<unknown> {
   const tool = getAgentTool(name);
   if (!tool) throw new Error(`Tool inconnu : ${name}`);
-  const isWrite = ["launch", "optimize"].includes(tool.family) || ["approve_action", "reject_action", "set_policy"].includes(name);
+  const isWrite =
+    ["launch", "optimize"].includes(tool.family) ||
+    ["execute", "approve_action", "reject_action", "set_policy", "upload_creative"].includes(name);
   const start = Date.now();
   try {
     const result = await tool.handler(ctx, args ?? {});

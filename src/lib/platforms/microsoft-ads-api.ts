@@ -7,6 +7,7 @@ import type { UnifiedAccountSnapshot, UnifiedCampaign } from "@/lib/unified-ad-s
  */
 const CUSTOMER_MGMT = "https://clientcenter.api.bingads.microsoft.com/Api/CustomerManagement/v13/CustomerManagementService.svc";
 const CAMPAIGN_MGMT = "https://campaign.api.bingads.microsoft.com/Api/Advertiser/CampaignManagement/v13/CampaignManagementService.svc";
+const REPORTING = "https://reporting.api.bingads.microsoft.com/Api/Advertiser/Reporting/v13/ReportingService.svc";
 
 function soapEnvelope(opts: {
   action: string;
@@ -15,6 +16,7 @@ function soapEnvelope(opts: {
   accountId?: string;
   body: string;
   ns: string;
+  service?: "customer" | "campaign" | "reporting";
 }): { url: string; headers: Record<string, string>; xml: string } {
   const devToken = requireEnv("MICROSOFT_ADS_DEVELOPER_TOKEN");
   const xml = `<?xml version="1.0" encoding="utf-8"?>
@@ -30,8 +32,10 @@ function soapEnvelope(opts: {
     ${opts.body}
   </s:Body>
 </s:Envelope>`;
+  const service = opts.service ?? (opts.action.includes("Account") || opts.action.includes("User") ? "customer" : "campaign");
+  const url = service === "reporting" ? REPORTING : service === "customer" ? CUSTOMER_MGMT : CAMPAIGN_MGMT;
   return {
-    url: opts.action.includes("Account") || opts.action.includes("User") ? CUSTOMER_MGMT : CAMPAIGN_MGMT,
+    url,
     headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: opts.action },
     xml,
   };
@@ -57,6 +61,110 @@ async function soapCall(opts: Parameters<typeof soapEnvelope>[0]): Promise<strin
     throw new Error(`Microsoft Ads SOAP (${opts.action}): ${text.slice(0, 500)}`);
   }
   return text;
+}
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function periodToDates(period?: string): { start: string; end: string } {
+  const end = new Date();
+  let days = 30;
+  if (period?.includes("7")) days = 7;
+  else if (period?.includes("14")) days = 14;
+  else if (period?.includes("90")) days = 90;
+  const start = new Date(end.getTime() - days * 86400_000);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return { start: fmt(start), end: fmt(end) };
+}
+
+async function fetchCampaignPerformanceReport(
+  accessToken: string,
+  accountId: string,
+  customerId: string | undefined,
+  period?: string,
+): Promise<Map<string, { spend: number; impressions: number; clicks: number; conversions: number }>> {
+  const { start, end } = periodToDates(period);
+  const submitXml = await soapCall({
+    action: "SubmitGenerateReport",
+    accessToken,
+    accountId,
+    customerId,
+    service: "reporting",
+    ns: "https://bingads.microsoft.com/Reporting/v13",
+    body: `<SubmitGenerateReportRequest xmlns="https://bingads.microsoft.com/Reporting/v13">
+      <ReportRequest i:type="CampaignPerformanceReportRequest" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+        <ExcludeColumnHeaders>false</ExcludeColumnHeaders>
+        <ExcludeReportFooter>true</ExcludeReportFooter>
+        <ExcludeReportHeader>true</ExcludeReportHeader>
+        <Format>Tsv</Format>
+        <ReportName>OrkestriaCampaignPerf</ReportName>
+        <ReturnOnlyCompleteData>false</ReturnOnlyCompleteData>
+        <Aggregation>Summary</Aggregation>
+        <Columns>
+          <CampaignPerformanceReportColumn>CampaignId</CampaignPerformanceReportColumn>
+          <CampaignPerformanceReportColumn>Spend</CampaignPerformanceReportColumn>
+          <CampaignPerformanceReportColumn>Impressions</CampaignPerformanceReportColumn>
+          <CampaignPerformanceReportColumn>Clicks</CampaignPerformanceReportColumn>
+          <CampaignPerformanceReportColumn>Conversions</CampaignPerformanceReportColumn>
+        </Columns>
+        <Scope>
+          <AccountIds xmlns:a1="http://schemas.microsoft.com/2003/10/Serialization/Arrays">
+            <a1:long>${accountId}</a1:long>
+          </AccountIds>
+        </Scope>
+        <Time>
+          <CustomDateRangeStart><Day>${Number(start.slice(8, 10))}</Day><Month>${Number(start.slice(5, 7))}</Month><Year>${Number(start.slice(0, 4))}</Year></CustomDateRangeStart>
+          <CustomDateRangeEnd><Day>${Number(end.slice(8, 10))}</Day><Month>${Number(end.slice(5, 7))}</Month><Year>${Number(end.slice(0, 4))}</Year></CustomDateRangeEnd>
+        </Time>
+      </ReportRequest>
+    </SubmitGenerateReportRequest>`,
+  });
+
+  const reportRequestId = extractOne(submitXml, "ReportRequestId");
+  if (!reportRequestId) throw new Error("Microsoft Ads reporting: ReportRequestId manquant");
+
+  let downloadUrl: string | null = null;
+  for (let i = 0; i < 20; i++) {
+    await sleep(1500);
+    const pollXml = await soapCall({
+      action: "PollGenerateReport",
+      accessToken,
+      accountId,
+      customerId,
+      service: "reporting",
+      ns: "https://bingads.microsoft.com/Reporting/v13",
+      body: `<PollGenerateReportRequest xmlns="https://bingads.microsoft.com/Reporting/v13">
+        <ReportRequestId>${reportRequestId}</ReportRequestId>
+      </PollGenerateReportRequest>`,
+    });
+    const status = extractOne(pollXml, "Status");
+    if (status === "Error") throw new Error(`Microsoft Ads reporting error: ${pollXml.slice(0, 400)}`);
+    if (status === "Success") {
+      downloadUrl = extractOne(pollXml, "ReportDownloadUrl");
+      break;
+    }
+  }
+  if (!downloadUrl) throw new Error("Microsoft Ads reporting: timeout en attendant le rapport");
+
+  const tsvRes = await fetch(downloadUrl);
+  if (!tsvRes.ok) throw new Error(`Microsoft Ads report download: ${tsvRes.status}`);
+  const tsv = await tsvRes.text();
+  const metrics = new Map<string, { spend: number; impressions: number; clicks: number; conversions: number }>();
+  for (const line of tsv.split(/\r?\n/)) {
+    if (!line.trim() || line.startsWith("CampaignId") || line.startsWith('"CampaignId"')) continue;
+    const cols = line.split("\t").map((c) => c.replace(/^"|"$/g, ""));
+    if (cols.length < 5) continue;
+    const [campaignId, spend, impressions, clicks, conversions] = cols;
+    if (!campaignId || !/^\d+$/.test(campaignId)) continue;
+    metrics.set(campaignId, {
+      spend: Number(spend) || 0,
+      impressions: Number(impressions) || 0,
+      clicks: Number(clicks) || 0,
+      conversions: Number(conversions) || 0,
+    });
+  }
+  return metrics;
 }
 
 export async function listMicrosoftAdAccounts(
@@ -97,10 +205,15 @@ export async function fetchMicrosoftSnapshot(
   accountId: string,
   period = "30 derniers jours",
 ): Promise<UnifiedAccountSnapshot> {
+  const accounts = await listMicrosoftAdAccounts(accessToken).catch(() => [] as { id: string; customerId: string; name: string }[]);
+  const match = accounts.find((a) => a.id === accountId);
+  const customerId = match?.customerId || undefined;
+
   const xml = await soapCall({
     action: "GetCampaignsByAccountId",
     accessToken,
     accountId,
+    customerId,
     ns: "https://bingads.microsoft.com/CampaignManagement/v13",
     body: `<GetCampaignsByAccountIdRequest xmlns="https://bingads.microsoft.com/CampaignManagement/v13">
       <AccountId>${accountId}</AccountId>
@@ -109,35 +222,56 @@ export async function fetchMicrosoftSnapshot(
   });
 
   const blocks = xml.split(/<(?:[a-zA-Z0-9]+:)?Campaign>/).slice(1);
-  const campaigns: UnifiedCampaign[] = blocks.map((b) => ({
-    platform: "Microsoft Ads",
+  const baseCampaigns = blocks.map((b) => ({
     id: extractOne(b, "Id") ?? "",
     name: extractOne(b, "Name") ?? "Campagne",
     status: extractOne(b, "Status") ?? "UNKNOWN",
-    spend: 0,
-    currency: "USD",
-    impressions: 0,
-    clicks: 0,
-    conversions: 0,
-    ctr: 0,
-    cpa: null,
-    roas: null,
   }));
+
+  const issues: string[] = [];
+  let metrics = new Map<string, { spend: number; impressions: number; clicks: number; conversions: number }>();
+  try {
+    metrics = await fetchCampaignPerformanceReport(accessToken, accountId, customerId, period);
+  } catch (e) {
+    issues.push(e instanceof Error ? e.message : "Reporting Microsoft indisponible");
+  }
+
+  let spend = 0;
+  let conversions = 0;
+  const campaigns: UnifiedCampaign[] = baseCampaigns.map((c) => {
+    const m = metrics.get(c.id) ?? { spend: 0, impressions: 0, clicks: 0, conversions: 0 };
+    spend += m.spend;
+    conversions += m.conversions;
+    return {
+      platform: "Microsoft Ads",
+      id: c.id,
+      name: c.name,
+      status: c.status,
+      spend: m.spend,
+      currency: "USD",
+      impressions: m.impressions,
+      clicks: m.clicks,
+      conversions: m.conversions,
+      ctr: m.impressions > 0 ? (m.clicks / m.impressions) * 100 : 0,
+      cpa: m.conversions > 0 ? m.spend / m.conversions : null,
+      roas: null,
+    };
+  });
+
+  if (!campaigns.length) issues.push("Aucune campagne Microsoft Ads trouvée sur ce compte");
 
   return {
     platform: "Microsoft Ads",
     accountId,
-    accountName: `Microsoft Ads ${accountId}`,
+    accountName: match?.name ?? `Microsoft Ads ${accountId}`,
     period,
-    spend: 0,
+    spend,
     currency: "USD",
-    conversions: 0,
-    cpa: null,
+    conversions,
+    cpa: conversions > 0 ? spend / conversions : null,
     roas: null,
     campaigns,
-    issues: campaigns.length
-      ? ["Les métriques de performance Microsoft nécessitent l'API Reporting (asynchrone) — lecture structure seulement"]
-      : ["Aucune campagne Microsoft Ads trouvée sur ce compte"],
+    issues,
     opportunities: ["Importez vos campagnes Google Ads dans Microsoft Ads pour toucher l'audience Bing à moindre CPC"],
   };
 }
@@ -177,4 +311,33 @@ export async function updateMicrosoftCampaignBudget(
   dailyBudget: number,
 ): Promise<void> {
   await updateMicrosoftCampaign(accessToken, accountId, campaignId, `<DailyBudget>${dailyBudget}</DailyBudget>`);
+}
+
+export async function addMicrosoftKeywords(
+  accessToken: string,
+  accountId: string,
+  adGroupId: string,
+  keywords: { text: string; matchType?: string }[],
+): Promise<{ count: number }> {
+  const kwXml = keywords
+    .map(
+      (kw) => `<Keyword>
+      <AdGroupId>${adGroupId}</AdGroupId>
+      <Text>${kw.text.replace(/[<>&]/g, "")}</Text>
+      <MatchType>${kw.matchType ?? "Broad"}</MatchType>
+      <Status>Active</Status>
+    </Keyword>`,
+    )
+    .join("");
+  await soapCall({
+    action: "AddKeywords",
+    accessToken,
+    accountId,
+    ns: "https://bingads.microsoft.com/CampaignManagement/v13",
+    body: `<AddKeywordsRequest xmlns="https://bingads.microsoft.com/CampaignManagement/v13">
+      <AdGroupId>${adGroupId}</AdGroupId>
+      <Keywords>${kwXml}</Keywords>
+    </AddKeywordsRequest>`,
+  });
+  return { count: keywords.length };
 }

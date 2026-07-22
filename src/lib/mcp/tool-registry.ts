@@ -10,29 +10,31 @@ export type ToolDefinition = {
 
 export const MCP_TOOL_REGISTRY: ToolDefinition[] = [
   { name: "list_campaigns", server: "google_ads_read", mode: "read", label: "Lister campagnes Google", risk: "none" },
-  { name: "gaql_query", server: "google_ads_read", mode: "read", label: "Requête GAQL", risk: "none" },
-  { name: "account_diagnostics", server: "google_ads_read", mode: "read", label: "Diagnostic compte Google", risk: "none" },
+  { name: "update_budget", server: "google_ads_write", mode: "write", label: "Modifier budget Google", risk: "medium" },
+  { name: "pause_campaign", server: "google_ads_write", mode: "write", label: "Pause campagne Google", risk: "low" },
+  { name: "enable_campaign", server: "google_ads_write", mode: "write", label: "Activer campagne Google", risk: "medium" },
+  { name: "add_keywords", server: "google_ads_write", mode: "write", label: "Mots-clés Google", risk: "medium" },
   { name: "list_ad_accounts", server: "meta_ads", mode: "read", label: "Comptes Meta", risk: "none" },
   { name: "campaign_insights", server: "meta_ads", mode: "read", label: "Insights campagnes Meta", risk: "none" },
-  { name: "creative_status", server: "meta_ads", mode: "read", label: "Statut créations Meta", risk: "none" },
-  { name: "campaign_report", server: "tiktok_ads", mode: "read", label: "Rapport TikTok", risk: "none" },
-  { name: "audience_overview", server: "tiktok_ads", mode: "read", label: "Audiences TikTok", risk: "none" },
-  { name: "conversion_report", server: "ga4", mode: "read", label: "Conversions GA4", risk: "none" },
-  { name: "funnel_report", server: "ga4", mode: "read", label: "Entonnoir GA4", risk: "none" },
-  { name: "realtime_users", server: "ga4", mode: "read", label: "Utilisateurs temps réel GA4", risk: "none" },
-  { name: "create_campaign", server: "google_ads_write", mode: "write", label: "Créer campagne Google", risk: "high" },
-  { name: "update_budget", server: "google_ads_write", mode: "write", label: "Modifier budget Google", risk: "medium" },
-  { name: "pause_campaign", server: "meta_ads", mode: "write", label: "Pause campagne Meta", risk: "low" },
   { name: "create_campaign", server: "meta_ads", mode: "write", label: "Créer campagne Meta", risk: "high" },
-  { name: "resume_campaign", server: "meta_ads", mode: "write", label: "Activer campagne Meta", risk: "medium" },
+  { name: "create_ad_set", server: "meta_ads", mode: "write", label: "Créer ad set Meta", risk: "high" },
+  { name: "create_ad", server: "meta_ads", mode: "write", label: "Créer annonce Meta", risk: "high" },
+  { name: "upload_creative", server: "meta_ads", mode: "write", label: "Upload créatif Meta", risk: "medium" },
+  { name: "create_audience", server: "meta_ads", mode: "write", label: "Audience Meta", risk: "medium" },
+  { name: "pause_campaign", server: "meta_ads", mode: "write", label: "Pause campagne Meta", risk: "low" },
+  { name: "update_budget", server: "meta_ads", mode: "write", label: "Budget ad set Meta", risk: "medium" },
+  { name: "campaign_report", server: "tiktok_ads", mode: "read", label: "Rapport TikTok", risk: "none" },
+  { name: "conversion_report", server: "ga4", mode: "read", label: "Conversions GA4", risk: "none" },
+  { name: "add_keywords", server: "microsoft_ads", mode: "write", label: "Mots-clés Microsoft", risk: "medium" },
+  { name: "add_keywords", server: "amazon_ads", mode: "write", label: "Mots-clés Amazon SP", risk: "medium" },
 ];
 
 export const SKILL_TOOL_MAP: Record<string, string[]> = {
-  analysis: ["list_campaigns", "gaql_query", "campaign_insights", "campaign_report", "conversion_report", "funnel_report"],
+  analysis: ["list_campaigns", "campaign_insights", "campaign_report", "conversion_report"],
   strategy: ["list_campaigns", "campaign_insights", "campaign_report", "conversion_report"],
-  budget: ["account_diagnostics", "campaign_insights", "conversion_report"],
-  protection: ["account_diagnostics", "realtime_users"],
-  creation: ["creative_status", "create_campaign"],
+  budget: ["campaign_insights", "conversion_report", "update_budget"],
+  protection: ["pause_campaign"],
+  creation: ["create_campaign", "create_ad_set", "create_ad", "upload_creative"],
 };
 
 export const MCP_SERVER_ENV: Record<MCPServerId, string> = {
@@ -73,9 +75,11 @@ export function toolsForSkill(skill: string): ToolDefinition[] {
 }
 
 export const MCP_CAPABILITIES = [
-  { platform: "AdKit (Meta / Google / TikTok / Reddit)", read: true, create: true, modify: true, pause: true, budget: true, creatives: true },
-  { platform: "Google Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: true },
-  { platform: "Meta Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: true },
-  { platform: "TikTok Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: true },
-  { platform: "GA4", read: true, create: false, modify: false, pause: false, budget: false, creatives: false },
+  { platform: "Google Ads", read: true, create: false, modify: true, pause: true, budget: true, creatives: false, keywords: true },
+  { platform: "Meta Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: true, keywords: false },
+  { platform: "TikTok Ads", read: true, create: false, modify: true, pause: true, budget: true, creatives: false, keywords: false },
+  { platform: "Microsoft Ads", read: true, create: false, modify: true, pause: true, budget: true, creatives: false, keywords: true },
+  { platform: "Amazon Ads (SP)", read: true, create: false, modify: true, pause: true, budget: true, creatives: false, keywords: true },
+  { platform: "LinkedIn / Snap / Reddit / X / Pinterest", read: true, create: false, modify: true, pause: true, budget: true, creatives: false, keywords: false },
+  { platform: "GA4", read: true, create: false, modify: false, pause: false, budget: false, creatives: false, keywords: false },
 ];

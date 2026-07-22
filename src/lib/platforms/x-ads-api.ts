@@ -1,9 +1,20 @@
 import type { UnifiedAccountSnapshot, UnifiedCampaign } from "@/lib/unified-ad-schema";
 
 const API = "https://ads-api.twitter.com/12";
+const STATS_BATCH = 20;
 
 function headers(accessToken: string): Record<string, string> {
   return { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" };
+}
+
+function periodToDates(period?: string): { start: Date; end: Date } {
+  const end = new Date();
+  let days = 30;
+  if (period?.includes("7")) days = 7;
+  else if (period?.includes("14")) days = 14;
+  else if (period?.includes("90")) days = 90;
+  const start = new Date(end.getTime() - days * 86400_000);
+  return { start, end };
 }
 
 export async function listXAdAccounts(
@@ -31,44 +42,47 @@ export async function fetchXSnapshot(
   };
   const camps = campData.data ?? [];
   const currency = camps[0]?.currency ?? "USD";
-
-  const end = new Date();
-  const start = new Date(end.getTime() - 30 * 86400_000);
+  const { start, end } = periodToDates(period);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
 
   const metricsByCampaign = new Map<
     string,
     { spend: number; impressions: number; clicks: number; conversions: number }
   >();
-  if (camps.length) {
-    const ids = camps.slice(0, 20).map((c) => c.id).join(",");
+  const issues: string[] = [];
+
+  for (let i = 0; i < camps.length; i += STATS_BATCH) {
+    const batch = camps.slice(i, i + STATS_BATCH);
+    const ids = batch.map((c) => c.id).join(",");
     const statsRes = await fetch(
       `${API}/stats/accounts/${accountId}?entity=CAMPAIGN&entity_ids=${ids}&start_time=${iso(start)}&end_time=${iso(end)}&granularity=TOTAL&metric_groups=ENGAGEMENT,BILLING,WEB_CONVERSION&placement=ALL_ON_TWITTER`,
       { headers: headers(accessToken) },
     );
-    if (statsRes.ok) {
-      const stats = (await statsRes.json()) as {
-        data?: {
-          id: string;
-          id_data?: {
-            metrics?: {
-              billed_charge_local_micro?: number[];
-              impressions?: number[];
-              clicks?: number[];
-              conversion_purchases?: { metric?: number[] };
-            };
-          }[];
+    if (!statsRes.ok) {
+      issues.push(`X Ads stats batch ${Math.floor(i / STATS_BATCH) + 1}: HTTP ${statsRes.status} — ${await statsRes.text().then((t) => t.slice(0, 200))}`);
+      continue;
+    }
+    const stats = (await statsRes.json()) as {
+      data?: {
+        id: string;
+        id_data?: {
+          metrics?: {
+            billed_charge_local_micro?: number[];
+            impressions?: number[];
+            clicks?: number[];
+            conversion_purchases?: { metric?: number[] };
+          };
         }[];
-      };
-      for (const row of stats.data ?? []) {
-        const m = row.id_data?.[0]?.metrics;
-        metricsByCampaign.set(row.id, {
-          spend: Number(m?.billed_charge_local_micro?.[0] ?? 0) / 1_000_000,
-          impressions: Number(m?.impressions?.[0] ?? 0),
-          clicks: Number(m?.clicks?.[0] ?? 0),
-          conversions: Number(m?.conversion_purchases?.metric?.[0] ?? 0),
-        });
-      }
+      }[];
+    };
+    for (const row of stats.data ?? []) {
+      const m = row.id_data?.[0]?.metrics;
+      metricsByCampaign.set(row.id, {
+        spend: Number(m?.billed_charge_local_micro?.[0] ?? 0) / 1_000_000,
+        impressions: Number(m?.impressions?.[0] ?? 0),
+        clicks: Number(m?.clicks?.[0] ?? 0),
+        conversions: Number(m?.conversion_purchases?.metric?.[0] ?? 0),
+      });
     }
   }
 
@@ -94,6 +108,8 @@ export async function fetchXSnapshot(
     };
   });
 
+  if (!conversions) issues.push("Aucune conversion X sur la période — vérifiez le X Pixel");
+
   return {
     platform: "X Ads",
     accountId,
@@ -105,7 +121,7 @@ export async function fetchXSnapshot(
     cpa: conversions > 0 ? spend / conversions : null,
     roas: null,
     campaigns,
-    issues: conversions ? [] : ["Aucune conversion X sur 30 jours — vérifiez le X Pixel"],
+    issues,
     opportunities: ["Les Keyword Ads X sont sous-exploitées — CPC souvent inférieur aux autres régies"],
   };
 }

@@ -113,12 +113,21 @@ function KeysTab() {
     setTimeout(() => setCopied(false), 1500);
   };
 
+  const keyPlaceholder = newKey ?? "ork_...";
   const snippet = `{
   "mcpServers": {
     "orkestria": {
       "command": "npx",
       "args": ["-y", "orkestria-mcp"],
-      "env": { "ORKESTRIA_API_KEY": "${newKey ?? "ork_..."}" }
+      "env": { "ORKESTRIA_API_KEY": "${keyPlaceholder}" }
+    }
+  }
+}`;
+  const hostedSnippet = `{
+  "mcpServers": {
+    "orkestria": {
+      "url": "https://orkestria.top/api/mcp",
+      "headers": { "Authorization": "Bearer ${keyPlaceholder}" }
     }
   }
 }`;
@@ -172,8 +181,10 @@ function KeysTab() {
                 {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
               </button>
             </div>
-            <p className="mt-3 text-[12px] font-medium text-emerald-800">Config Cursor / Claude Desktop :</p>
+            <p className="mt-3 text-[12px] font-medium text-emerald-800">Local (npx / stdio) :</p>
             <pre className="mt-1 overflow-x-auto rounded-lg bg-[#101014] p-3 text-[11px] leading-relaxed text-emerald-100">{snippet}</pre>
+            <p className="mt-3 text-[12px] font-medium text-emerald-800">Hébergé (JSON-RPC HTTP) :</p>
+            <pre className="mt-1 overflow-x-auto rounded-lg bg-[#101014] p-3 text-[11px] leading-relaxed text-emerald-100">{hostedSnippet}</pre>
           </div>
         )}
       </section>

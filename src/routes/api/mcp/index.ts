@@ -34,7 +34,7 @@ async function handleRpc(request: Request, message: Record<string, unknown>): Pr
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "Orkestria MCP — ad control for agents. Writes are policy-gated: dry_run by default, use mode=live with a write-scoped key. Start with validate_setup.",
+          "Orkestria MCP — ad control for agents. Transport: JSON-RPC over HTTP (POST application/json). Auth: Authorization Bearer ork_…. Writes are policy-gated; use execute with dry_run=true then dry_run=false, or named tools with mode=live (write scope). Start with validate_setup.",
       });
     case "ping":
       return rpcResult(id, {});
@@ -75,9 +75,12 @@ export const Route = createFileRoute("/api/mcp/")({
         json({
           ok: true,
           server: SERVER_INFO,
-          transport: "streamable-http",
+          transport: "json-rpc-http",
+          protocolVersion: PROTOCOL_VERSION,
+          endpoint: "https://orkestria.top/api/mcp",
+          auth: "Authorization: Bearer ork_…",
           tools: AGENT_TOOLS.length,
-          docs: "/docs",
+          docs: "https://orkestria.top/docs",
         }),
       POST: async ({ request }: { request: Request }) => {
         let body: unknown;

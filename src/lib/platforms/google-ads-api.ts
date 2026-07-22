@@ -175,3 +175,64 @@ export async function updateGoogleCampaignBudget(
   });
   if (!res.ok) throw new Error(`Google Ads budget update: ${await res.text()}`);
 }
+
+async function mutateCampaignStatus(
+  accessToken: string,
+  customerId: string,
+  campaignId: string,
+  status: "PAUSED" | "ENABLED",
+): Promise<void> {
+  const cid = customerId.replace(/\D/g, "");
+  const res = await fetch(`${API}/customers/${cid}/campaigns:mutate`, {
+    method: "POST",
+    headers: headers(accessToken),
+    body: JSON.stringify({
+      operations: [
+        {
+          update: {
+            resourceName: `customers/${cid}/campaigns/${campaignId}`,
+            status,
+          },
+          updateMask: "status",
+        },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`Google Ads status update: ${await res.text()}`);
+}
+
+export async function pauseGoogleCampaign(accessToken: string, customerId: string, campaignId: string) {
+  await mutateCampaignStatus(accessToken, customerId, campaignId, "PAUSED");
+}
+
+export async function enableGoogleCampaign(accessToken: string, customerId: string, campaignId: string) {
+  await mutateCampaignStatus(accessToken, customerId, campaignId, "ENABLED");
+}
+
+export async function addGoogleKeywords(
+  accessToken: string,
+  customerId: string,
+  adGroupId: string,
+  keywords: { text: string; matchType?: "BROAD" | "PHRASE" | "EXACT" }[],
+): Promise<{ resourceNames: string[] }> {
+  const cid = customerId.replace(/\D/g, "");
+  const res = await fetch(`${API}/customers/${cid}/adGroupCriteria:mutate`, {
+    method: "POST",
+    headers: headers(accessToken),
+    body: JSON.stringify({
+      operations: keywords.map((kw) => ({
+        create: {
+          adGroup: `customers/${cid}/adGroups/${adGroupId}`,
+          status: "ENABLED",
+          keyword: {
+            text: kw.text,
+            matchType: kw.matchType ?? "BROAD",
+          },
+        },
+      })),
+    }),
+  });
+  if (!res.ok) throw new Error(`Google Ads add keywords: ${await res.text()}`);
+  const data = (await res.json()) as { results?: { resourceName?: string }[] };
+  return { resourceNames: (data.results ?? []).map((r) => r.resourceName ?? "").filter(Boolean) };
+}

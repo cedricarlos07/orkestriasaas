@@ -30,7 +30,10 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
     family: "Launch",
     tools: [
       { name: "create_campaign", desc: "Crée une campagne (en pause quand la plateforme le permet)" },
-      { name: "set_budget", desc: "Fixe le budget journalier d'une campagne" },
+      { name: "create_ad_set", desc: "Crée un ad set / ad group (Meta en priorité)" },
+      { name: "create_ad", desc: "Crée une annonce liée à un ad set + créatif" },
+      { name: "create_audience", desc: "Audience custom / lookalike Meta" },
+      { name: "set_budget", desc: "Fixe le budget journalier d'une campagne (ou ad set Meta)" },
       { name: "create_media_plan", desc: "Répartit un budget total entre les plateformes selon la perf 30 jours" },
     ],
   },
@@ -41,12 +44,14 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
       { name: "pause_campaign", desc: "Met une campagne en pause" },
       { name: "enable_campaign", desc: "Réactive une campagne" },
       { name: "reallocate_budget", desc: "Déplace du budget entre deux campagnes" },
+      { name: "add_keywords", desc: "Ajoute des mots-clés (Google, Microsoft, Amazon SP)" },
     ],
   },
   {
     family: "Create",
     tools: [
       { name: "generate_ad_copy", desc: "Variantes de textes publicitaires (headline, texte, CTA)" },
+      { name: "upload_creative", desc: "Upload une image et crée un créatif Meta" },
       { name: "list_creatives", desc: "Campagnes et statut des créations" },
     ],
   },
@@ -64,6 +69,7 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
   {
     family: "Govern",
     tools: [
+      { name: "execute", desc: "Action universel : dry_run=true par défaut, puis dry_run=false pour confirmer" },
       { name: "list_pending_approvals", desc: "Écritures en attente d'approbation" },
       { name: "approve_action", desc: "Approuve et exécute (scope write)" },
       { name: "reject_action", desc: "Rejette une action en attente" },
@@ -170,20 +176,49 @@ function DocsPage() {
 }`}
             />
           </div>
-          <p className="mt-5 text-[15px] text-ink-soft">Option B — hébergé (HTTP streamable, aucune installation) :</p>
+          <p className="mt-5 text-[15px] text-ink-soft">
+            Option B — hébergé (JSON-RPC HTTP, aucune installation). Endpoint stable :
+          </p>
           <div className="mt-3">
             <CodeBlock
               title="mcp.json — hosted"
               code={`{
   "mcpServers": {
     "orkestria": {
-      "url": "https://orkestria.one/api/mcp",
+      "url": "https://orkestria.top/api/mcp",
       "headers": { "Authorization": "Bearer ork_..." }
     }
   }
 }`}
             />
           </div>
+        </section>
+
+        {/* Endpoint stable */}
+        <section className="mt-12">
+          <h2 className="font-display text-[24px] font-semibold text-ink">Endpoint hébergé stable</h2>
+          <ul className="mt-3 space-y-2 text-[14px] text-ink">
+            <li>
+              URL : <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">https://orkestria.top/api/mcp</code>
+            </li>
+            <li>
+              Auth : header <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">Authorization: Bearer ork_…</code>{" "}
+              (requis pour <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">tools/call</code>).
+            </li>
+            <li>
+              Transport : <strong>JSON-RPC HTTP</strong> (<code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">POST</code>{" "}
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">application/json</code>) — pas de SSE Streamable HTTP.
+            </li>
+            <li>
+              Santé / métadonnées : <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">GET /api/mcp</code>{" "}
+              (public). Catalogue tools : <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">GET /api/mcp/tools</code>.
+            </li>
+            <li>
+              Scopes : <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">read</code> /{" "}
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">write</code> /{" "}
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">admin</code>.
+            </li>
+          </ul>
         </section>
 
         {/* Étape 3 */}
@@ -197,8 +232,17 @@ function DocsPage() {
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-[15px] text-ink">
             <li>Demandez : <em>« Valide mon setup Orkestria »</em> → l&apos;agent appelle <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">validate_setup</code>.</li>
             <li><em>« Liste mes campagnes »</em> → <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">list_campaigns</code>, lecture multi-plateformes.</li>
-            <li><em>« Monte le budget de la campagne X à 50 € »</em> → <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">update_budget</code> en <strong>dry-run</strong> : vous voyez le diff, rien n&apos;est modifié.</li>
-            <li>Passez en mode <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">approval</code> ou <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">live</code> quand vous êtes prêt.</li>
+            <li>
+              <em>« Monte le budget de la campagne X à 50 € »</em> →{" "}
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">execute</code> avec{" "}
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">dry_run: true</code> : vous voyez le diff, rien n&apos;est modifié.
+            </li>
+            <li>
+              Relancez <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">execute</code> avec{" "}
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">dry_run: false</code> (ou mode{" "}
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">approval</code> /{" "}
+              <code className="rounded bg-surface-2 px-1.5 py-0.5 text-[13px]">live</code> sur les tools nommés).
+            </li>
           </ol>
         </section>
 

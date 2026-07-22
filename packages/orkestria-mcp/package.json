@@ -7,7 +7,8 @@
     "orkestria-mcp": "bin/orkestria-mcp.mjs"
   },
   "files": [
-    "bin"
+    "bin",
+    "README.md"
   ],
   "engines": {
     "node": ">=18"
@@ -20,9 +21,21 @@
     "meta-ads",
     "advertising",
     "ai-agent",
-    "orkestria"
+    "orkestria",
+    "cursor",
+    "claude"
   ],
   "license": "MIT",
+  "author": "Orkestria",
+  "homepage": "https://orkestria.top/docs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cedricarlos07/orkestriasaas.git",
+    "directory": "packages/orkestria-mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/cedricarlos07/orkestriasaas/issues"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0"
   }

@@ -172,7 +172,7 @@ export async function createMetaCampaignPaused(
     body: new URLSearchParams({
       name: `${input.name} — ensemble`,
       campaign_id: campaign.id,
-      daily_budget: String(Math.max(1000, Math.round(input.dailyBudget))),
+      daily_budget: String(Math.max(100, Math.round(input.dailyBudget * 100))),
       billing_event: "IMPRESSIONS",
       optimization_goal: "LINK_CLICKS",
       bid_strategy: "LOWEST_COST_WITHOUT_CAP",
@@ -186,4 +186,218 @@ export async function createMetaCampaignPaused(
   if (!adSet.id) throw new Error("Meta create ad set: id manquant");
 
   return { campaignId: campaign.id, adSetId: adSet.id };
+}
+
+function actId(adAccountId: string): string {
+  return adAccountId.startsWith("act_")
+    ? adAccountId
+    : `act_${adAccountId.replace(/\D/g, "")}`;
+}
+
+/** Meta budgets live on ad sets — `entityId` is the ad set id. */
+export async function updateMetaAdSetBudget(
+  accessToken: string,
+  adSetId: string,
+  dailyBudget: number,
+): Promise<void> {
+  const res = await fetch(`${GRAPH}/${adSetId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      daily_budget: String(Math.max(100, Math.round(dailyBudget * 100))),
+      access_token: accessToken,
+    }),
+  });
+  if (!res.ok) throw new Error(`Meta ad set budget: ${await res.text()}`);
+}
+
+export async function createMetaAdSet(
+  accessToken: string,
+  adAccountId: string,
+  input: {
+    campaignId: string;
+    name: string;
+    dailyBudget: number;
+    countries?: string[];
+    optimizationGoal?: string;
+  },
+): Promise<{ adSetId: string }> {
+  const targeting = JSON.stringify({
+    geo_locations: { countries: input.countries?.length ? input.countries : ["CI"] },
+  });
+  const res = await fetch(`${GRAPH}/${actId(adAccountId)}/adsets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      name: input.name,
+      campaign_id: input.campaignId,
+      daily_budget: String(Math.max(100, Math.round(input.dailyBudget * 100))),
+      billing_event: "IMPRESSIONS",
+      optimization_goal: input.optimizationGoal ?? "LINK_CLICKS",
+      bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+      targeting,
+      status: "PAUSED",
+      access_token: accessToken,
+    }),
+  });
+  if (!res.ok) throw new Error(`Meta create ad set: ${await res.text()}`);
+  const data = (await res.json()) as { id?: string };
+  if (!data.id) throw new Error("Meta create ad set: id manquant");
+  return { adSetId: data.id };
+}
+
+export async function setMetaAdSetStatus(
+  accessToken: string,
+  adSetId: string,
+  status: "PAUSED" | "ACTIVE",
+): Promise<void> {
+  const res = await fetch(`${GRAPH}/${adSetId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ status, access_token: accessToken }),
+  });
+  if (!res.ok) throw new Error(`Meta ad set status: ${await res.text()}`);
+}
+
+/** Upload image from URL and create a PAUSED link ad. */
+export async function createMetaAd(
+  accessToken: string,
+  adAccountId: string,
+  input: {
+    adSetId: string;
+    name: string;
+    pageId: string;
+    linkUrl: string;
+    message?: string;
+    headline?: string;
+    imageUrl?: string;
+    imageHash?: string;
+  },
+): Promise<{ adId: string; creativeId?: string; imageHash?: string }> {
+  const account = actId(adAccountId);
+  let imageHash = input.imageHash;
+
+  if (!imageHash && input.imageUrl) {
+    const imgRes = await fetch(`${GRAPH}/${account}/adimages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        url: input.imageUrl,
+        access_token: accessToken,
+      }),
+    });
+    if (!imgRes.ok) throw new Error(`Meta ad image upload: ${await imgRes.text()}`);
+    const imgData = (await imgRes.json()) as {
+      images?: Record<string, { hash?: string }>;
+    };
+    imageHash = Object.values(imgData.images ?? {})[0]?.hash;
+    if (!imageHash) throw new Error("Meta ad image: hash manquant");
+  }
+
+  if (!imageHash) throw new Error("imageUrl ou imageHash requis pour créer une annonce Meta");
+
+  const objectStorySpec = JSON.stringify({
+    page_id: input.pageId,
+    link_data: {
+      image_hash: imageHash,
+      link: input.linkUrl,
+      message: input.message ?? "",
+      name: input.headline ?? input.name,
+    },
+  });
+
+  const creativeRes = await fetch(`${GRAPH}/${account}/adcreatives`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      name: `${input.name} — creative`,
+      object_story_spec: objectStorySpec,
+      access_token: accessToken,
+    }),
+  });
+  if (!creativeRes.ok) throw new Error(`Meta ad creative: ${await creativeRes.text()}`);
+  const creative = (await creativeRes.json()) as { id?: string };
+  if (!creative.id) throw new Error("Meta ad creative: id manquant");
+
+  const adRes = await fetch(`${GRAPH}/${account}/ads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      name: input.name,
+      adset_id: input.adSetId,
+      creative: JSON.stringify({ creative_id: creative.id }),
+      status: "PAUSED",
+      access_token: accessToken,
+    }),
+  });
+  if (!adRes.ok) throw new Error(`Meta create ad: ${await adRes.text()}`);
+  const ad = (await adRes.json()) as { id?: string };
+  if (!ad.id) throw new Error("Meta create ad: id manquant");
+  return { adId: ad.id, creativeId: creative.id, imageHash };
+}
+
+export async function uploadMetaCreative(
+  accessToken: string,
+  adAccountId: string,
+  input: { imageUrl: string; name?: string },
+): Promise<{ imageHash: string }> {
+  const res = await fetch(`${GRAPH}/${actId(adAccountId)}/adimages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      url: input.imageUrl,
+      name: input.name ?? "orkestria-upload",
+      access_token: accessToken,
+    }),
+  });
+  if (!res.ok) throw new Error(`Meta creative upload: ${await res.text()}`);
+  const data = (await res.json()) as { images?: Record<string, { hash?: string }> };
+  const hash = Object.values(data.images ?? {})[0]?.hash;
+  if (!hash) throw new Error("Meta creative upload: hash manquant");
+  return { imageHash: hash };
+}
+
+export async function createMetaCustomAudience(
+  accessToken: string,
+  adAccountId: string,
+  input: { name: string; description?: string; subtype?: string; lookalikeRatio?: number; originAudienceId?: string; country?: string },
+): Promise<{ audienceId: string }> {
+  const account = actId(adAccountId);
+  if (input.subtype === "LOOKALIKE" && input.originAudienceId) {
+    const res = await fetch(`${GRAPH}/${account}/customaudiences`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        name: input.name,
+        subtype: "LOOKALIKE",
+        origin_audience_id: input.originAudienceId,
+        lookalike_spec: JSON.stringify({
+          type: "similarity",
+          ratio: input.lookalikeRatio ?? 0.01,
+          country: input.country ?? "CI",
+        }),
+        access_token: accessToken,
+      }),
+    });
+    if (!res.ok) throw new Error(`Meta lookalike audience: ${await res.text()}`);
+    const data = (await res.json()) as { id?: string };
+    if (!data.id) throw new Error("Meta lookalike: id manquant");
+    return { audienceId: data.id };
+  }
+
+  const res = await fetch(`${GRAPH}/${account}/customaudiences`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      name: input.name,
+      description: input.description ?? "",
+      subtype: input.subtype ?? "CUSTOM",
+      customer_file_source: "USER_PROVIDED_ONLY",
+      access_token: accessToken,
+    }),
+  });
+  if (!res.ok) throw new Error(`Meta custom audience: ${await res.text()}`);
+  const data = (await res.json()) as { id?: string };
+  if (!data.id) throw new Error("Meta custom audience: id manquant");
+  return { audienceId: data.id };
 }

@@ -4,9 +4,11 @@ import type { UnifiedAccountSnapshot } from "@/lib/unified-ad-schema";
 
 export type AdAccountRef = { id: string; name: string; currency?: string };
 
+export type KeywordInput = { text: string; matchType?: "BROAD" | "PHRASE" | "EXACT" | string; bid?: number };
+
 /**
  * Unified interface over every supported ad platform.
- * `createCampaign` is optional: platforms without it reject the tool with a clear error.
+ * Optional methods reject with a clear error when unsupported.
  */
 export type PlatformAdapter = {
   connector: ConnectorId;
@@ -22,6 +24,49 @@ export type PlatformAdapter = {
     accountId: string,
     input: { name: string; dailyBudget: number; objective?: string; countries?: string[] },
   ) => Promise<{ campaignId: string; details?: Record<string, unknown> }>;
+  createAdSet?: (
+    tokens: TokenPayload,
+    accountId: string,
+    input: { campaignId: string; name: string; dailyBudget: number; countries?: string[]; optimizationGoal?: string },
+  ) => Promise<{ adSetId: string; details?: Record<string, unknown> }>;
+  pauseAdSet?: (tokens: TokenPayload, accountId: string, adSetId: string) => Promise<void>;
+  enableAdSet?: (tokens: TokenPayload, accountId: string, adSetId: string) => Promise<void>;
+  createAd?: (
+    tokens: TokenPayload,
+    accountId: string,
+    input: {
+      adSetId: string;
+      name: string;
+      pageId?: string;
+      linkUrl?: string;
+      message?: string;
+      headline?: string;
+      imageUrl?: string;
+      imageHash?: string;
+    },
+  ) => Promise<{ adId: string; details?: Record<string, unknown> }>;
+  uploadCreative?: (
+    tokens: TokenPayload,
+    accountId: string,
+    input: { imageUrl: string; name?: string },
+  ) => Promise<{ imageHash?: string; creativeId?: string; details?: Record<string, unknown> }>;
+  createAudience?: (
+    tokens: TokenPayload,
+    accountId: string,
+    input: {
+      name: string;
+      description?: string;
+      subtype?: string;
+      lookalikeRatio?: number;
+      originAudienceId?: string;
+      country?: string;
+    },
+  ) => Promise<{ audienceId: string; details?: Record<string, unknown> }>;
+  addKeywords?: (
+    tokens: TokenPayload,
+    accountId: string,
+    input: { adGroupId: string; keywords: KeywordInput[] },
+  ) => Promise<{ count: number; details?: Record<string, unknown> }>;
 };
 
 function micro(amount: number): number {
@@ -39,15 +84,22 @@ const googleAds: PlatformAdapter = {
     const { fetchGoogleAdsSnapshot } = await import("./google-ads-api");
     return fetchGoogleAdsSnapshot(t.accessToken, accountId, period);
   },
-  pauseCampaign: async () => {
-    throw new Error("Pause Google Ads non supportée pour l'instant — utilisez update_budget ou la console Google");
+  pauseCampaign: async (t, accountId, campaignId) => {
+    const { pauseGoogleCampaign } = await import("./google-ads-api");
+    await pauseGoogleCampaign(t.accessToken, accountId, campaignId);
   },
-  enableCampaign: async () => {
-    throw new Error("Activation Google Ads non supportée pour l'instant");
+  enableCampaign: async (t, accountId, campaignId) => {
+    const { enableGoogleCampaign } = await import("./google-ads-api");
+    await enableGoogleCampaign(t.accessToken, accountId, campaignId);
   },
   updateBudget: async (t, accountId, campaignId, dailyBudget) => {
     const { updateGoogleCampaignBudget } = await import("./google-ads-api");
     await updateGoogleCampaignBudget(t.accessToken, accountId, campaignId, micro(dailyBudget));
+  },
+  addKeywords: async (t, accountId, input) => {
+    const { addGoogleKeywords } = await import("./google-ads-api");
+    const res = await addGoogleKeywords(t.accessToken, accountId, input.adGroupId, input.keywords);
+    return { count: res.resourceNames.length, details: { resourceNames: res.resourceNames } };
   },
 };
 
@@ -70,8 +122,9 @@ const metaAds: PlatformAdapter = {
     const { resumeMetaCampaign } = await import("./meta-api");
     await resumeMetaCampaign(t.accessToken, campaignId);
   },
-  updateBudget: async () => {
-    throw new Error("Budget Meta géré au niveau ad set — utilisez pause/enable ou la création de campagne");
+  updateBudget: async (t, _accountId, entityId, dailyBudget) => {
+    const { updateMetaAdSetBudget } = await import("./meta-api");
+    await updateMetaAdSetBudget(t.accessToken, entityId, dailyBudget);
   },
   createCampaign: async (t, accountId, input) => {
     const { createMetaCampaignPaused } = await import("./meta-api");
@@ -84,6 +137,44 @@ const metaAds: PlatformAdapter = {
       countries: input.countries,
     });
     return { campaignId: result.campaignId, details: { adSetId: result.adSetId, status: "PAUSED" } };
+  },
+  createAdSet: async (t, accountId, input) => {
+    const { createMetaAdSet } = await import("./meta-api");
+    const res = await createMetaAdSet(t.accessToken, accountId, input);
+    return { adSetId: res.adSetId, details: { status: "PAUSED" } };
+  },
+  pauseAdSet: async (t, _accountId, adSetId) => {
+    const { setMetaAdSetStatus } = await import("./meta-api");
+    await setMetaAdSetStatus(t.accessToken, adSetId, "PAUSED");
+  },
+  enableAdSet: async (t, _accountId, adSetId) => {
+    const { setMetaAdSetStatus } = await import("./meta-api");
+    await setMetaAdSetStatus(t.accessToken, adSetId, "ACTIVE");
+  },
+  createAd: async (t, accountId, input) => {
+    if (!input.pageId || !input.linkUrl) throw new Error("Meta create_ad requiert pageId et linkUrl");
+    const { createMetaAd } = await import("./meta-api");
+    const res = await createMetaAd(t.accessToken, accountId, {
+      adSetId: input.adSetId,
+      name: input.name,
+      pageId: input.pageId,
+      linkUrl: input.linkUrl,
+      message: input.message,
+      headline: input.headline,
+      imageUrl: input.imageUrl,
+      imageHash: input.imageHash,
+    });
+    return { adId: res.adId, details: { creativeId: res.creativeId, imageHash: res.imageHash, status: "PAUSED" } };
+  },
+  uploadCreative: async (t, accountId, input) => {
+    const { uploadMetaCreative } = await import("./meta-api");
+    const res = await uploadMetaCreative(t.accessToken, accountId, input);
+    return { imageHash: res.imageHash };
+  },
+  createAudience: async (t, accountId, input) => {
+    const { createMetaCustomAudience } = await import("./meta-api");
+    const res = await createMetaCustomAudience(t.accessToken, accountId, input);
+    return { audienceId: res.audienceId };
   },
 };
 
@@ -238,6 +329,10 @@ const microsoftAds: PlatformAdapter = {
     const { updateMicrosoftCampaignBudget } = await import("./microsoft-ads-api");
     await updateMicrosoftCampaignBudget(t.accessToken, accountId, campaignId, dailyBudget);
   },
+  addKeywords: async (t, accountId, input) => {
+    const { addMicrosoftKeywords } = await import("./microsoft-ads-api");
+    return addMicrosoftKeywords(t.accessToken, accountId, input.adGroupId, input.keywords);
+  },
 };
 
 const xAds: PlatformAdapter = {
@@ -287,6 +382,10 @@ const amazonAds: PlatformAdapter = {
   updateBudget: async (t, accountId, campaignId, dailyBudget) => {
     const { updateAmazonCampaignBudget } = await import("./amazon-ads-api");
     await updateAmazonCampaignBudget(t.accessToken, accountId, campaignId, dailyBudget);
+  },
+  addKeywords: async (t, accountId, input) => {
+    const { addAmazonKeywords } = await import("./amazon-ads-api");
+    return addAmazonKeywords(t.accessToken, accountId, input.adGroupId, input.keywords);
   },
 };
 

@@ -1505,11 +1505,11 @@ const MCP_PLATFORMS = [
 ];
 
 const MCP_CAPABILITIES = [
-  { t: "Lancer", d: "Créer une campagne, fixer un budget, préparer un plan média" },
-  { t: "Optimiser", d: "Hausser ou baisser un budget, mettre en pause, répartir l’argent" },
-  { t: "Créer", d: "Générer des textes de pubs et voir vos créatives" },
-  { t: "Mesurer", d: "Voir les résultats, comparer, repérer ce qui dérape" },
-  { t: "Contrôler", d: "Approuver une action, voir l’historique, poser vos règles" },
+  { t: "Lancer", d: "Créer campagne, ad set, annonce, audience — puis fixer le budget" },
+  { t: "Optimiser", d: "Budget, pause, mots-clés (Google / Microsoft / Amazon)" },
+  { t: "Créer", d: "Textes de pubs et upload de créatives Meta" },
+  { t: "Mesurer", d: "Perf réelle multi-régies, anomalies, spend" },
+  { t: "Contrôler", d: "execute dry-run → confirm, approbations, audit, policies" },
 ];
 
 function McpSection() {

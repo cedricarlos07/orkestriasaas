@@ -85,7 +85,24 @@ export type WriteActionName =
   | "create_campaign"
   | "update_budget"
   | "pause_campaign"
-  | "enable_campaign";
+  | "enable_campaign"
+  | "create_ad_set"
+  | "create_ad"
+  | "upload_creative"
+  | "create_audience"
+  | "add_keywords";
+
+export const WRITE_ACTION_NAMES: WriteActionName[] = [
+  "create_campaign",
+  "update_budget",
+  "pause_campaign",
+  "enable_campaign",
+  "create_ad_set",
+  "create_ad",
+  "upload_creative",
+  "create_audience",
+  "add_keywords",
+];
 
 export type WriteActionInput = {
   orgId: string;
@@ -102,6 +119,21 @@ export type WriteActionInput = {
     objective?: string;
     countries?: string[];
     currentDailyBudget?: number;
+    adSetId?: string;
+    adGroupId?: string;
+    pageId?: string;
+    linkUrl?: string;
+    message?: string;
+    headline?: string;
+    imageUrl?: string;
+    imageHash?: string;
+    description?: string;
+    subtype?: string;
+    lookalikeRatio?: number;
+    originAudienceId?: string;
+    country?: string;
+    optimizationGoal?: string;
+    keywords?: { text: string; matchType?: string; bid?: number }[];
   };
 };
 
@@ -184,11 +216,54 @@ function buildDiff(input: WriteActionInput): Record<string, unknown> {
         campaignId: input.campaignId,
         before: input.params.currentDailyBudget ?? "inconnu",
         after: input.params.dailyBudget,
+        note: input.connector === "meta_ads" ? "Meta: campaignId = ad set id" : undefined,
       };
     case "pause_campaign":
       return { action: "pause_campaign", platform: input.connector, campaignId: input.campaignId, before: "ACTIVE", after: "PAUSED" };
     case "enable_campaign":
       return { action: "enable_campaign", platform: input.connector, campaignId: input.campaignId, before: "PAUSED", after: "ACTIVE" };
+    case "create_ad_set":
+      return {
+        action: "create_ad_set",
+        platform: input.connector,
+        campaignId: input.campaignId,
+        name: input.params.name,
+        dailyBudget: input.params.dailyBudget,
+        countries: input.params.countries ?? null,
+      };
+    case "create_ad":
+      return {
+        action: "create_ad",
+        platform: input.connector,
+        adSetId: input.params.adSetId,
+        name: input.params.name,
+        pageId: input.params.pageId,
+        linkUrl: input.params.linkUrl,
+        imageUrl: input.params.imageUrl ?? null,
+        imageHash: input.params.imageHash ?? null,
+      };
+    case "upload_creative":
+      return {
+        action: "upload_creative",
+        platform: input.connector,
+        imageUrl: input.params.imageUrl,
+        name: input.params.name ?? null,
+      };
+    case "create_audience":
+      return {
+        action: "create_audience",
+        platform: input.connector,
+        name: input.params.name,
+        subtype: input.params.subtype ?? "CUSTOM",
+        originAudienceId: input.params.originAudienceId ?? null,
+      };
+    case "add_keywords":
+      return {
+        action: "add_keywords",
+        platform: input.connector,
+        adGroupId: input.params.adGroupId,
+        keywords: input.params.keywords,
+      };
   }
 }
 
@@ -299,7 +374,13 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
   }
 
   // Spend caps (only block spend-increasing actions)
-  if (input.action === "create_campaign" || input.action === "update_budget" || input.action === "enable_campaign") {
+  if (
+    input.action === "create_campaign" ||
+    input.action === "update_budget" ||
+    input.action === "enable_campaign" ||
+    input.action === "create_ad_set" ||
+    input.action === "create_ad"
+  ) {
     const capError = await checkSpendCaps(input.orgId, input.connector, policy);
     if (capError) {
       await logRun({
@@ -320,8 +401,22 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
       mode: "dry_run", status: "ok", params: diff, result: { wouldExecute: true }, latencyMs: Date.now() - start,
     });
     return {
-      status: "dry_run", mode, diff,
-      message: "Dry run : aucune modification effectuée. Relancez avec mode « live » (ou « approval ») pour appliquer.",
+      status: "dry_run",
+      mode,
+      diff,
+      message:
+        "Dry run : aucune modification effectuée. Relancez execute avec dry_run=false (ou mode « live » / « approval ») pour appliquer.",
+      result: {
+        next_step: "Re-call execute with dry_run=false",
+        confirm: {
+          action: input.action,
+          platform: input.connector,
+          campaignId: input.campaignId,
+          accountId: input.accountId,
+          params: input.params,
+          dry_run: false,
+        },
+      },
     };
   }
 
@@ -405,6 +500,68 @@ async function executeWrite(
       await adapter.enableCampaign(tokens, accountId, input.campaignId);
       return { campaignId: input.campaignId, status: "ACTIVE" };
     }
+    case "create_ad_set": {
+      if (!adapter.createAdSet) throw new Error(`create_ad_set non supporté pour ${adapter.label}`);
+      if (!input.campaignId || !input.params.name || !input.params.dailyBudget) {
+        throw new Error("campaignId, name et dailyBudget requis");
+      }
+      const res = await adapter.createAdSet(tokens, accountId, {
+        campaignId: input.campaignId,
+        name: input.params.name,
+        dailyBudget: input.params.dailyBudget,
+        countries: input.params.countries,
+        optimizationGoal: input.params.optimizationGoal,
+      });
+      return { adSetId: res.adSetId, ...res.details };
+    }
+    case "create_ad": {
+      if (!adapter.createAd) throw new Error(`create_ad non supporté pour ${adapter.label}`);
+      if (!input.params.adSetId || !input.params.name) throw new Error("adSetId et name requis");
+      const res = await adapter.createAd(tokens, accountId, {
+        adSetId: input.params.adSetId,
+        name: input.params.name,
+        pageId: input.params.pageId,
+        linkUrl: input.params.linkUrl,
+        message: input.params.message,
+        headline: input.params.headline,
+        imageUrl: input.params.imageUrl,
+        imageHash: input.params.imageHash,
+      });
+      return { adId: res.adId, ...res.details };
+    }
+    case "upload_creative": {
+      if (!adapter.uploadCreative) throw new Error(`upload_creative non supporté pour ${adapter.label}`);
+      if (!input.params.imageUrl) throw new Error("imageUrl requis");
+      const res = await adapter.uploadCreative(tokens, accountId, {
+        imageUrl: input.params.imageUrl,
+        name: input.params.name,
+      });
+      return { imageHash: res.imageHash, creativeId: res.creativeId, ...res.details };
+    }
+    case "create_audience": {
+      if (!adapter.createAudience) throw new Error(`create_audience non supporté pour ${adapter.label}`);
+      if (!input.params.name) throw new Error("name requis");
+      const res = await adapter.createAudience(tokens, accountId, {
+        name: input.params.name,
+        description: input.params.description,
+        subtype: input.params.subtype,
+        lookalikeRatio: input.params.lookalikeRatio,
+        originAudienceId: input.params.originAudienceId,
+        country: input.params.country,
+      });
+      return { audienceId: res.audienceId, ...res.details };
+    }
+    case "add_keywords": {
+      if (!adapter.addKeywords) throw new Error(`add_keywords non supporté pour ${adapter.label}`);
+      if (!input.params.adGroupId || !input.params.keywords?.length) {
+        throw new Error("adGroupId et keywords[] requis");
+      }
+      const res = await adapter.addKeywords(tokens, accountId, {
+        adGroupId: input.params.adGroupId,
+        keywords: input.params.keywords,
+      });
+      return { count: res.count, ...res.details };
+    }
   }
 }
 
@@ -427,12 +584,28 @@ export async function approveAndExecute(orgId: string, approvalId: string): Prom
     connector: act.connector as ConnectorId,
     action: act.action as WriteActionName,
     campaignId: (after.campaignId as string) ?? undefined,
+    accountId: (after.accountId as string) ?? undefined,
     mode: "live",
     params: {
       name: (after.name as string) ?? undefined,
       dailyBudget: (after.after as number) ?? (after.dailyBudget as number) ?? undefined,
       objective: (after.objective as string) ?? undefined,
       countries: (after.countries as string[]) ?? undefined,
+      adSetId: (after.adSetId as string) ?? undefined,
+      adGroupId: (after.adGroupId as string) ?? undefined,
+      pageId: (after.pageId as string) ?? undefined,
+      linkUrl: (after.linkUrl as string) ?? undefined,
+      message: (after.message as string) ?? undefined,
+      headline: (after.headline as string) ?? undefined,
+      imageUrl: (after.imageUrl as string) ?? undefined,
+      imageHash: (after.imageHash as string) ?? undefined,
+      description: (after.description as string) ?? undefined,
+      subtype: (after.subtype as string) ?? undefined,
+      lookalikeRatio: (after.lookalikeRatio as number) ?? undefined,
+      originAudienceId: (after.originAudienceId as string) ?? undefined,
+      country: (after.country as string) ?? undefined,
+      optimizationGoal: (after.optimizationGoal as string) ?? undefined,
+      keywords: (after.keywords as { text: string; matchType?: string; bid?: number }[]) ?? undefined,
     },
   };
 

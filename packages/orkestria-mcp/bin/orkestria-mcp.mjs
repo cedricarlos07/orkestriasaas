@@ -4,7 +4,7 @@
  *
  * Config:
  *   ORKESTRIA_API_KEY  (required)  ork_... key created in the Orkestria dashboard
- *   ORKESTRIA_API_URL  (optional)  defaults to https://orkestria.one
+ *   ORKESTRIA_API_URL  (optional)  defaults to https://orkestria.top
  *
  * All tools are fetched from the Orkestria API at startup and proxied through
  * the hosted policy engine (dry-run / approval / live + audit trail).
@@ -16,13 +16,13 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-const API_URL = (process.env.ORKESTRIA_API_URL ?? "https://orkestria.one").replace(/\/$/, "");
+const API_URL = (process.env.ORKESTRIA_API_URL ?? "https://orkestria.top").replace(/\/$/, "");
 const API_KEY = process.env.ORKESTRIA_API_KEY;
 
 if (!API_KEY) {
   console.error(
-    "ORKESTRIA_API_KEY manquant.\n" +
-      "Créez une clé dans le dashboard Orkestria (Clés API) puis relancez :\n" +
+    "Missing ORKESTRIA_API_KEY.\n" +
+      "Create a key in the Orkestria dashboard (API Keys), then restart:\n" +
       '  { "env": { "ORKESTRIA_API_KEY": "ork_..." } }',
   );
   process.exit(1);
