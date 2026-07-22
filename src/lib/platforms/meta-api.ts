@@ -137,7 +137,31 @@ export type CreateMetaCampaignInput = {
 export type CreateMetaCampaignResult = {
   campaignId: string;
   adSetId: string;
+  details?: Record<string, unknown>;
 };
+
+export async function createMetaCampaignOnly(
+  accessToken: string,
+  adAccountId: string,
+  input: { name: string; objective?: string },
+): Promise<{ campaignId: string }> {
+  const act = actId(adAccountId);
+  const campaignRes = await fetch(`${GRAPH}/${act}/campaigns`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      name: input.name,
+      objective: input.objective ?? "OUTCOME_TRAFFIC",
+      status: "PAUSED",
+      special_ad_categories: "[]",
+      access_token: accessToken,
+    }),
+  });
+  if (!campaignRes.ok) throw new Error(`Meta create campaign: ${await campaignRes.text()}`);
+  const campaign = (await campaignRes.json()) as { id?: string };
+  if (!campaign.id) throw new Error("Meta create campaign: id manquant");
+  return { campaignId: campaign.id };
+}
 
 export async function createMetaCampaignPaused(
   input: CreateMetaCampaignInput,
@@ -185,7 +209,7 @@ export async function createMetaCampaignPaused(
   const adSet = (await adSetRes.json()) as { id?: string };
   if (!adSet.id) throw new Error("Meta create ad set: id manquant");
 
-  return { campaignId: campaign.id, adSetId: adSet.id };
+  return { campaignId: campaign.id, adSetId: adSet.id, details: { status: "PAUSED", maturity: "production" } };
 }
 
 function actId(adAccountId: string): string {

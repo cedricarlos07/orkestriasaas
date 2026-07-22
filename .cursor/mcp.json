@@ -1,9 +1,9 @@
 {
   "mcpServers": {
-    "adkit": {
-      "url": "https://mcp.adkit.so",
+    "orkestria": {
+      "url": "https://orkestria.top/api/mcp",
       "headers": {
-        "Authorization": "Bearer ${env:ADKIT_API_KEY}"
+        "Authorization": "Bearer ${env:ORKESTRIA_API_KEY}"
       }
     }
   }

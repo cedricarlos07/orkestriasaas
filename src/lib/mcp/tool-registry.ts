@@ -1,4 +1,5 @@
 import type { MCPServerId, MCPMode } from "@/lib/unified-ad-schema";
+import { getCapabilityMatrix } from "@/lib/mcp/capability-matrix";
 
 export type ToolDefinition = {
   name: string;
@@ -8,32 +9,12 @@ export type ToolDefinition = {
   risk: "none" | "low" | "medium" | "high";
 };
 
-export const MCP_TOOL_REGISTRY: ToolDefinition[] = [
-  { name: "list_campaigns", server: "google_ads_read", mode: "read", label: "Lister campagnes Google", risk: "none" },
-  { name: "update_budget", server: "google_ads_write", mode: "write", label: "Modifier budget Google", risk: "medium" },
-  { name: "pause_campaign", server: "google_ads_write", mode: "write", label: "Pause campagne Google", risk: "low" },
-  { name: "enable_campaign", server: "google_ads_write", mode: "write", label: "Activer campagne Google", risk: "medium" },
-  { name: "add_keywords", server: "google_ads_write", mode: "write", label: "Mots-clés Google", risk: "medium" },
-  { name: "list_ad_accounts", server: "meta_ads", mode: "read", label: "Comptes Meta", risk: "none" },
-  { name: "campaign_insights", server: "meta_ads", mode: "read", label: "Insights campagnes Meta", risk: "none" },
-  { name: "create_campaign", server: "meta_ads", mode: "write", label: "Créer campagne Meta", risk: "high" },
-  { name: "create_ad_set", server: "meta_ads", mode: "write", label: "Créer ad set Meta", risk: "high" },
-  { name: "create_ad", server: "meta_ads", mode: "write", label: "Créer annonce Meta", risk: "high" },
-  { name: "upload_creative", server: "meta_ads", mode: "write", label: "Upload créatif Meta", risk: "medium" },
-  { name: "create_audience", server: "meta_ads", mode: "write", label: "Audience Meta", risk: "medium" },
-  { name: "pause_campaign", server: "meta_ads", mode: "write", label: "Pause campagne Meta", risk: "low" },
-  { name: "update_budget", server: "meta_ads", mode: "write", label: "Budget ad set Meta", risk: "medium" },
-  { name: "campaign_report", server: "tiktok_ads", mode: "read", label: "Rapport TikTok", risk: "none" },
-  { name: "conversion_report", server: "ga4", mode: "read", label: "Conversions GA4", risk: "none" },
-  { name: "add_keywords", server: "microsoft_ads", mode: "write", label: "Mots-clés Microsoft", risk: "medium" },
-  { name: "add_keywords", server: "amazon_ads", mode: "write", label: "Mots-clés Amazon SP", risk: "medium" },
-];
-
+/** Legacy skill → tool-name hints (orchestrator). Prefer MCP skills.ts for agent SOPs. */
 export const SKILL_TOOL_MAP: Record<string, string[]> = {
-  analysis: ["list_campaigns", "campaign_insights", "campaign_report", "conversion_report"],
-  strategy: ["list_campaigns", "campaign_insights", "campaign_report", "conversion_report"],
-  budget: ["campaign_insights", "conversion_report", "update_budget"],
-  protection: ["pause_campaign"],
+  analysis: ["list_campaigns", "get_performance", "get_account_summary"],
+  strategy: ["list_campaigns", "get_performance", "create_media_plan"],
+  budget: ["get_spend", "update_budget", "reallocate_budget"],
+  protection: ["pause_campaign", "detect_anomalies"],
   creation: ["create_campaign", "create_ad_set", "create_ad", "upload_creative"],
 };
 
@@ -51,6 +32,43 @@ export const MCP_SERVER_ENV: Record<MCPServerId, string> = {
   pinterest_ads: "MCP_PINTEREST_ADS_URL",
   ga4: "MCP_GA4_URL",
 };
+
+/** Honest platform matrix derived from adapters + maturity tags (Synter-style). */
+export const MCP_CAPABILITIES = getCapabilityMatrix().map((c) => ({
+  platform: c.label,
+  connector: c.connector,
+  maturity: c.maturity,
+  read: c.read,
+  create: c.createCampaign,
+  modify: c.budget || c.pause,
+  pause: c.pause,
+  budget: c.budget,
+  creatives: c.creatives,
+  keywords: c.keywords,
+  audiences: c.audiences,
+  tracking: c.tracking,
+  note: c.note,
+  docsUrl: c.docsUrl,
+}));
+
+/** Minimal write-tool lookup for older action pipeline paths. */
+const WRITE_HINTS: ToolDefinition[] = [
+  { name: "update_budget", server: "google_ads_write", mode: "write", label: "Budget", risk: "medium" },
+  { name: "pause_campaign", server: "google_ads_write", mode: "write", label: "Pause", risk: "low" },
+  { name: "enable_campaign", server: "google_ads_write", mode: "write", label: "Enable", risk: "medium" },
+  { name: "add_keywords", server: "google_ads_write", mode: "write", label: "Keywords", risk: "medium" },
+  { name: "create_campaign", server: "meta_ads", mode: "write", label: "Create campaign", risk: "high" },
+  { name: "create_ad_set", server: "meta_ads", mode: "write", label: "Create ad set", risk: "high" },
+  { name: "create_ad", server: "meta_ads", mode: "write", label: "Create ad", risk: "high" },
+  { name: "upload_creative", server: "meta_ads", mode: "write", label: "Upload creative", risk: "medium" },
+  { name: "create_audience", server: "meta_ads", mode: "write", label: "Audience", risk: "medium" },
+  { name: "pause_campaign", server: "meta_ads", mode: "write", label: "Pause Meta", risk: "low" },
+  { name: "update_budget", server: "meta_ads", mode: "write", label: "Budget Meta", risk: "medium" },
+  { name: "add_keywords", server: "microsoft_ads", mode: "write", label: "Keywords MS", risk: "medium" },
+  { name: "add_keywords", server: "amazon_ads", mode: "write", label: "Keywords Amazon", risk: "medium" },
+];
+
+export const MCP_TOOL_REGISTRY: ToolDefinition[] = WRITE_HINTS;
 
 export function getTool(name: string, server?: MCPServerId): ToolDefinition | undefined {
   if (server) return MCP_TOOL_REGISTRY.find((t) => t.name === name && t.server === server);
@@ -73,14 +91,3 @@ export function toolsForSkill(skill: string): ToolDefinition[] {
   const names = SKILL_TOOL_MAP[skill] ?? [];
   return names.map((n) => getTool(n)).filter(Boolean) as ToolDefinition[];
 }
-
-export const MCP_CAPABILITIES = [
-  { platform: "Google Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: false, keywords: true },
-  { platform: "Meta Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: true, keywords: false },
-  { platform: "LinkedIn Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: false, keywords: false },
-  { platform: "TikTok Ads", read: true, create: true, modify: true, pause: true, budget: true, creatives: false, keywords: false },
-  { platform: "Microsoft Ads", read: true, create: false, modify: true, pause: true, budget: true, creatives: false, keywords: true },
-  { platform: "Amazon Ads (SP)", read: true, create: false, modify: true, pause: true, budget: true, creatives: false, keywords: true },
-  { platform: "Snap / Reddit / X / Pinterest", read: true, create: false, modify: true, pause: true, budget: true, creatives: false, keywords: false },
-  { platform: "GA4", read: true, create: false, modify: false, pause: false, budget: false, creatives: false, keywords: false },
-];

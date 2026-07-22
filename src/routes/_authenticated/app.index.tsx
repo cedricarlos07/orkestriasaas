@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUpRight, Megaphone, ShieldAlert, Sparkles, TrendingUp, TrendingDown, Minus, Wallet, Target, Coins, CheckCircle2, Plug, Activity, Check, X, Pencil, Loader2 } from "lucide-react";
+import { ArrowUpRight, Megaphone, ShieldAlert, Sparkles, TrendingUp, TrendingDown, Minus, Wallet, Target, Coins, CheckCircle2, Plug, Activity, Check, X, Pencil, Loader2, AlertCircle } from "lucide-react";
 import { useNotifications } from "@/lib/notifications-store";
 import { approveActionFn, listPendingApprovals, rejectActionFn } from "@/functions/ad-actions";
 import { getDashboardKpis } from "@/functions/dashboard";
+import { getSetupStatus } from "@/functions/setup-status";
 
 export const Route = createFileRoute("/_authenticated/app/")({ component: Today });
 
@@ -27,6 +28,11 @@ function Today() {
   const { data: pending = [] } = useQuery({
     queryKey: ["pending-approvals"],
     queryFn: () => listPendingApprovals(),
+  });
+  const { data: setup } = useQuery({
+    queryKey: ["setup-status"],
+    queryFn: () => getSetupStatus(),
+    staleTime: 60_000,
   });
 
   const kpiIcons: Record<string, typeof Wallet> = {
@@ -87,6 +93,41 @@ function Today() {
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-[14px] text-amber-900">
           Connectez votre compte Meta Ads pour afficher vos KPIs réels.{" "}
           <Link to="/app/connections" className="font-semibold underline">Aller aux connexions</Link>
+        </div>
+      )}
+
+      {setup && !setup.readyForCampaign && (
+        <div className="rounded-2xl border border-line/70 bg-white p-5">
+          <h2 className="flex items-center gap-2 font-display text-[16px] font-semibold text-ink">
+            <AlertCircle className="h-4 w-4 text-[#ff6c02]" /> Configuration V1
+          </h2>
+          <p className="mt-1 text-[13px] text-ink-soft">
+            Complétez ces étapes pour lancer des campagnes Meta via adkit (dry-run → PAUSED → activation).
+          </p>
+          <ul className="mt-3 space-y-1.5 text-[13px] text-ink">
+            {setup.missingSteps.length ? (
+              setup.missingSteps.map((step) => (
+                <li key={step} className="flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#ff6c02]" />
+                  {step}
+                </li>
+              ))
+            ) : (
+              <li>Vérifiez adkit et Meta dans Connexions.</li>
+            )}
+          </ul>
+          <Link to="/app/connections" className="btn-primary mt-4 inline-flex text-[13px]">
+            Ouvrir Connexions
+          </Link>
+        </div>
+      )}
+
+      {setup?.readyForCampaign && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-[13px] text-emerald-900">
+          <CheckCircle2 className="mr-1 inline h-4 w-4" />
+          Stack V1 prête — Meta + adkit configurés.
+          {setup.google.adloopLinked && " Google via AdLoop."}
+          {setup.research.useproxyHealth === "ok" && " Research concurrents actif."}
         </div>
       )}
 

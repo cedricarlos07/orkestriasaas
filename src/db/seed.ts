@@ -107,7 +107,7 @@ async function seed() {
   const { seedOrchestratorDefaults } = await import("@/lib/mcp/orchestrator");
   await seedOrchestratorDefaults();
 
-  const { probeMcpHealth } = await import("@/lib/mcp/gateway");
+  const { probeMcpHealth } = await import("@/lib/mcp/mcp-health");
   await probeMcpHealth();
 
   console.log("Seed complete.");

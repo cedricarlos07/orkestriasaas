@@ -13,15 +13,6 @@ import {
   resumeMetaCampaign,
 } from "@/lib/platforms/meta-api";
 import { classifyRisk } from "@/lib/mcp/action-pipeline";
-import { isAdkitEnabled } from "@/lib/mcp/clients/adkit";
-import {
-  adkitManage,
-  fetchAdkitAccountSnapshot,
-  mapMetaObjective,
-  toAdkitDailyBudget,
-} from "@/lib/mcp/adkit-bridge";
-import { requireOrgAdkitProjectId } from "@/lib/mcp/adkit-org";
-import { isWriteEnabled } from "@/lib/platforms/config";
 
 function parseFcfaAmount(raw: string | undefined): number {
   if (!raw) return 0;
@@ -41,20 +32,6 @@ function mapMetaStatus(status: string): string {
   return "draft";
 }
 
-function extractCampaignId(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  const p = payload as Record<string, unknown>;
-  for (const key of ["campaignId", "id", "externalId"] as const) {
-    if (typeof p[key] === "string" && p[key]) return p[key] as string;
-  }
-  if (Array.isArray(p.campaigns) && p.campaigns[0]) return extractCampaignId(p.campaigns[0]);
-  if (p.draft) return extractCampaignId(p.draft);
-  if (p.result) return extractCampaignId(p.result);
-  if (p.data) return extractCampaignId(p.data);
-  if (p.published) return extractCampaignId(p.published);
-  return null;
-}
-
 export const listCampaigns = createServerFn({ method: "GET" }).handler(async () => {
   const session = await ensureSession();
   const orgId = await getActiveOrgId(session);
@@ -65,63 +42,25 @@ export const syncCampaignsFromMeta = createServerFn({ method: "POST" }).handler(
   const session = await ensureSession();
   const orgId = await getActiveOrgId(session);
 
-  let snapshotCampaigns: {
-    id: string;
-    name: string;
-    status: string;
-    spend: number;
-    conversions: number;
-    roas: number | null;
-  }[] = [];
+  const meta = await getMetaConnection(orgId).catch(() => null);
+  if (!meta) return { synced: 0, via: "none" as const };
 
-  if (isAdkitEnabled()) {
-    try {
-      const projectId = await requireOrgAdkitProjectId(orgId);
-      const meta = await getMetaConnection(orgId).catch(() => null);
-      const accountId =
-        meta?.via === "oauth" && meta.tokens.accountId
-          ? metaAdAccountId(meta.tokens)
-          : undefined;
-      const snapshot = await fetchAdkitAccountSnapshot({
-        projectId,
-        platform: "meta",
-        accountId,
-        period: "30 derniers jours",
-      });
-      snapshotCampaigns = snapshot.campaigns.map((c) => ({
-        id: c.id,
-        name: c.name,
-        status: c.status,
-        spend: c.spend,
-        conversions: c.conversions,
-        roas: c.roas,
-      }));
-    } catch {
-      // fall through to direct Meta
-    }
-  }
-
-  if (!snapshotCampaigns.length) {
-    const meta = await getMetaConnection(orgId).catch(() => null);
-    if (!meta || meta.via === "adkit") return { synced: 0, via: "none" as const };
-    const snapshot = await fetchMetaAdsSnapshot(
-      meta.tokens.accessToken,
-      meta.tokens.accountId!,
-      "30 derniers jours",
-    );
-    snapshotCampaigns = snapshot.campaigns.map((c) => ({
-      id: c.id,
-      name: c.name,
-      status: c.status,
-      spend: c.spend,
-      conversions: c.conversions,
-      roas: c.roas,
-    }));
-  }
+  const snapshot = await fetchMetaAdsSnapshot(
+    meta.tokens.accessToken,
+    meta.tokens.accountId!,
+    "30 derniers jours",
+  );
+  const snapshotCampaigns = snapshot.campaigns.map((c) => ({
+    id: c.id,
+    name: c.name,
+    status: c.status,
+    spend: c.spend,
+    conversions: c.conversions,
+    roas: c.roas,
+  }));
 
   let synced = 0;
   const now = new Date();
-  const via = isAdkitEnabled() ? ("adkit" as const) : ("meta" as const);
 
   for (const c of snapshotCampaigns) {
     if (!c.id) continue;
@@ -155,7 +94,7 @@ export const syncCampaignsFromMeta = createServerFn({ method: "POST" }).handler(
     synced++;
   }
 
-  return { synced, via };
+  return { synced, via: "meta" as const };
 });
 
 export const createCampaign = createServerFn({ method: "POST" })
@@ -200,7 +139,7 @@ export const launchCampaign = createServerFn({ method: "POST" })
     const session = await ensureSession();
     const orgId = await getActiveOrgId(session);
     const meta = await getMetaConnection(orgId);
-    if (!meta && !isAdkitEnabled()) {
+    if (!meta) {
       throw new Error("Connectez Meta Ads avant de lancer une campagne.");
     }
 
@@ -222,55 +161,23 @@ export const launchCampaign = createServerFn({ method: "POST" })
     });
 
     let externalId: string;
-    let via: "adkit" | "meta" = "meta";
     try {
-      if (isAdkitEnabled()) {
-        via = "adkit";
-        const projectId = await requireOrgAdkitProjectId(orgId);
-        const accountId =
-          meta?.via === "oauth" && meta.tokens.accountId
-            ? metaAdAccountId(meta.tokens)
-            : undefined;
-        const daily = toAdkitDailyBudget(dailyBudget);
-        const result = await adkitManage(projectId, {
-          platform: "meta",
-          entity: "campaigns",
-          action: "create",
-          accountId,
-          params: {
-            name: data.name,
-            objective: mapMetaObjective(data.objective),
-            status: "paused",
-            budget: { daily },
-          },
-          publish: isWriteEnabled(),
-        });
-        externalId = extractCampaignId(result) ?? `adkit-draft:${actionId}`;
-        await db
-          .update(adActions)
-          .set({
-            status: "executed",
-            after: { ...data, dailyBudget, dailyBudgetAdkit: daily, campaignId: externalId, via, raw: result },
-          })
-          .where(eq(adActions.id, actionId));
-      } else {
-        const result = await createMetaCampaignPaused({
-          accessToken: meta!.tokens.accessToken,
-          adAccountId: metaAdAccountId(meta!.tokens),
-          name: data.name,
-          dailyBudget,
-          objective: data.objective ?? "OUTCOME_TRAFFIC",
-          countries: ["CI"],
-        });
-        externalId = result.campaignId;
-        await db
-          .update(adActions)
-          .set({
-            status: "executed",
-            after: { ...data, dailyBudget, campaignId: externalId, adSetId: result.adSetId, via },
-          })
-          .where(eq(adActions.id, actionId));
-      }
+      const result = await createMetaCampaignPaused({
+        accessToken: meta.tokens.accessToken,
+        adAccountId: metaAdAccountId(meta.tokens),
+        name: data.name,
+        dailyBudget,
+        objective: data.objective ?? "OUTCOME_TRAFFIC",
+        countries: ["CI"],
+      });
+      externalId = result.campaignId;
+      await db
+        .update(adActions)
+        .set({
+          status: "executed",
+          after: { ...data, dailyBudget, campaignId: externalId, adSetId: result.adSetId, via: "meta" },
+        })
+        .where(eq(adActions.id, actionId));
     } catch (e) {
       await db.update(adActions).set({ status: "failed" }).where(eq(adActions.id, actionId));
       throw e;
@@ -300,13 +207,8 @@ export const launchCampaign = createServerFn({ method: "POST" })
       externalId,
       dailyBudget,
       risk,
-      via,
-      message:
-        via === "adkit"
-          ? isWriteEnabled()
-            ? "Campagne créée via AdKit (pause sur Meta)."
-            : "Draft AdKit créé (MCP_WRITE_ENABLED=false — non publié sur Meta)."
-          : "Campagne créée sur Meta en pause — activez-la quand vous êtes prêt.",
+      via: "meta" as const,
+      message: "Campagne créée sur Meta en pause — activez-la quand vous êtes prêt.",
     };
   });
 
@@ -320,27 +222,12 @@ export const updateCampaignStatus = createServerFn({ method: "POST" })
     if (!campaign || campaign.organizationId !== orgId) throw new Error("Not found");
 
     if (campaign.externalId && campaign.connector === "meta_ads" && !campaign.externalId.startsWith("draft:")) {
-      if (isAdkitEnabled()) {
-        const projectId = await requireOrgAdkitProjectId(orgId);
-        const meta = await getMetaConnection(orgId);
-        const status = data.status === "live" ? "active" : "paused";
-        await adkitManage(projectId, {
-          platform: "meta",
-          entity: "campaigns",
-          action: "update",
-          accountId: meta ? metaAdAccountId(meta.tokens) : undefined,
-          id: campaign.externalId,
-          params: { id: campaign.externalId, status },
-          publish: isWriteEnabled(),
-        });
-      } else {
-        const meta = await getMetaConnection(orgId);
-        if (meta) {
-          if (data.status === "paused" || data.status === "draft") {
-            await pauseMetaCampaign(meta.tokens.accessToken, campaign.externalId);
-          } else if (data.status === "live") {
-            await resumeMetaCampaign(meta.tokens.accessToken, campaign.externalId);
-          }
+      const meta = await getMetaConnection(orgId);
+      if (meta) {
+        if (data.status === "paused" || data.status === "draft") {
+          await pauseMetaCampaign(meta.tokens.accessToken, campaign.externalId);
+        } else if (data.status === "live") {
+          await resumeMetaCampaign(meta.tokens.accessToken, campaign.externalId);
         }
       }
     }

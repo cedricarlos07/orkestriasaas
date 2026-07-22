@@ -1,15 +1,15 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { adActions, approvals, connections, globalPolicies, killSwitches } from "@/db/schema/index";
-import { invokeMCP } from "@/lib/mcp/gateway";
-import { getWriteToolForConnector } from "@/lib/mcp/tool-registry";
+import { adActions, approvals, globalPolicies, killSwitches } from "@/db/schema/index";
+import { runWriteAction, type WriteActionName } from "@/lib/mcp/policy-engine";
+import type { ConnectorId } from "@/lib/oauth/connectors";
 import { uid } from "@/functions/utils";
 
 export type ActionRisk = "low" | "medium" | "high";
 
 export function classifyRisk(action: string): ActionRisk {
   if (/create|launch|new_campaign|expand_geo/i.test(action)) return "high";
-  if (/budget|spend|bid/i.test(action)) return "medium";
+  if (/budget|spend|bid|activate/i.test(action)) return "medium";
   return "low";
 }
 
@@ -76,36 +76,39 @@ export async function rejectAction(orgId: string, approvalId: string) {
   return { ok: true };
 }
 
+function mapActionToWrite(action: string): WriteActionName {
+  if (action === "create_campaign") return "create_campaign";
+  if (action === "pause_campaign") return "pause_campaign";
+  if (action === "update_budget") return "update_budget";
+  return action as WriteActionName;
+}
+
 export async function executeAdAction(orgId: string, actionId: string, _actorId: string) {
   const rows = await db.select().from(adActions).where(eq(adActions.id, actionId)).limit(1);
   const action = rows[0];
   if (!action || action.organizationId !== orgId) throw new Error("Not found");
 
-  const tool = getWriteToolForConnector(action.connector, action.action);
-  if (!tool || tool.mode !== "write") {
-    await db.update(adActions).set({ status: "failed" }).where(eq(adActions.id, actionId));
-    throw new Error("Action write non disponible ou tool inconnu");
-  }
-
-  const conn = await db
-    .select()
-    .from(connections)
-    .where(eq(connections.organizationId, orgId))
-    .then((rows) => rows.find((c) => c.connector === action.connector && c.status === "connectée"));
-
-  if (!conn) {
-    await db.update(adActions).set({ status: "failed" }).where(eq(adActions.id, actionId));
-    throw new Error("Aucune connexion active pour cette plateforme");
-  }
+  const after = (action.after ?? {}) as Record<string, unknown>;
 
   try {
-    await invokeMCP({
-      server: tool.server,
-      tool: tool.name,
+    await runWriteAction({
       orgId,
-      connectionId: conn.id,
-      mode: "write",
-      params: (action.after as Record<string, unknown>) ?? {},
+      connector: action.connector as ConnectorId,
+      action: mapActionToWrite(action.action),
+      mode: "live",
+      campaignId: (after.campaignId as string) ?? undefined,
+      accountId: (after.accountId as string) ?? undefined,
+      params: {
+        name: after.name as string | undefined,
+        dailyBudget: after.dailyBudget as number | undefined,
+        objective: after.objective as string | undefined,
+        countries: after.countries as string[] | undefined,
+        adSetId: after.adSetId as string | undefined,
+        pageId: after.pageId as string | undefined,
+        linkUrl: after.linkUrl as string | undefined,
+        brief: after.brief as Record<string, unknown> | undefined,
+        adId: after.adId as string | undefined,
+      },
     });
     await db.update(adActions).set({ status: "executed" }).where(eq(adActions.id, actionId));
   } catch (e) {
@@ -117,6 +120,7 @@ export async function executeAdAction(orgId: string, actionId: string, _actorId:
 }
 
 export async function canAutoExecute(orgId: string, connector: string): Promise<boolean> {
+  void orgId;
   const ks = await db.select().from(killSwitches).where(eq(killSwitches.key, `${connector}_write`)).limit(1);
   if (ks[0]?.active) return false;
   const pol = await db.select().from(globalPolicies).where(eq(globalPolicies.id, "default")).limit(1);

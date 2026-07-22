@@ -1,21 +1,16 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { auditFindings, auditRuns, connections, runEvents, agentRuns } from "@/db/schema/index";
-import { invokeMCP } from "@/lib/mcp/gateway";
 import { CONNECTORS, type ConnectorId } from "@/lib/oauth/connectors";
 import {
   buildAuditSummary,
   mergeSnapshots,
   type UnifiedAccountSnapshot,
 } from "@/lib/unified-ad-schema";
+import { readPlatformSnapshot } from "@/lib/mcp/read-platform";
 import { uid } from "@/functions/utils";
 
-const CONNECTOR_TOOLS: Partial<Record<ConnectorId, { server: "google_ads_read" | "meta_ads" | "tiktok_ads" | "ga4"; tool: string }>> = {
-  google_ads: { server: "google_ads_read", tool: "account_diagnostics" },
-  meta_ads: { server: "meta_ads", tool: "campaign_insights" },
-  tiktok_ads: { server: "tiktok_ads", tool: "campaign_report" },
-  ga4: { server: "ga4", tool: "conversion_report" },
-};
+const AUDIT_CONNECTORS: ConnectorId[] = ["google_ads", "meta_ads", "tiktok_ads", "ga4"];
 
 export async function runMultichannelAudit(opts: {
   orgId: string;
@@ -77,23 +72,19 @@ export async function runMultichannelAudit(opts: {
 
   for (const conn of conns) {
     const connector = conn.connector as ConnectorId;
-    const cfg = CONNECTOR_TOOLS[connector];
-    if (!cfg) continue;
+    if (!AUDIT_CONNECTORS.includes(connector)) continue;
 
-    await emit("step.started", { step: cfg.tool, label: CONNECTORS[connector]?.label ?? connector });
+    await emit("step.started", { step: connector, label: CONNECTORS[connector]?.label ?? connector });
 
-    const { result } = await invokeMCP({
-      server: cfg.server,
-      tool: cfg.tool,
+    const { snapshot } = await readPlatformSnapshot({
       orgId: opts.orgId,
       connectionId: conn.id,
-      mode: "read",
-      runId,
-      params: { period },
+      connector,
+      period,
     });
 
-    snapshots.push(result as UnifiedAccountSnapshot);
-    await emit("step.completed", { step: cfg.tool, platform: CONNECTORS[connector]?.label });
+    snapshots.push(snapshot);
+    await emit("step.completed", { step: connector, platform: CONNECTORS[connector]?.label });
   }
 
   await emit("step.started", { step: "normalize", label: "Normalisation des données" });

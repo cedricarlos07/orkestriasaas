@@ -72,6 +72,7 @@ const SUGGESTIONS: { t: string; i: typeof BarChart3; grad: string; ic: string; i
   { t: "Analyse mes campagnes des 30 derniers jours", i: BarChart3, grad: "from-[#fff1e2] via-[#ffe0c2] to-[#ffcf9c]", ic: "text-[#c94a00]", intent: "audit" },
   { t: "Fais le rapport de la semaine", i: FileText, grad: "from-[#e6f7ee] via-[#c9edd8] to-[#a9e0bf]", ic: "text-[#0f7a3c]", intent: "report" },
   { t: "Lance une campagne pour mon nouveau menu", i: Rocket, grad: "from-[#ffe6ee] via-[#ffc7d8] to-[#ffa3bd]", ic: "text-[#9e1e4a]", intent: "campaign" },
+  { t: "Vérifier ma configuration V1", i: Cog, grad: "from-[#f0f4ff] via-[#dce4ff] to-[#c2d0ff]", ic: "text-[#1b3a8a]" },
   { t: "Prépare un rapport dirigeant sur mes campagnes Meta", i: Users, grad: "from-[#f0e6ff] via-[#dcc7ff] to-[#c2a3ff]", ic: "text-[#4a2a9e]" },
 ];
 

@@ -11,9 +11,8 @@ import {
 } from "@/db/schema/index";
 import type { ConnectorId } from "@/lib/oauth/connectors";
 import { CONNECTORS, hasOAuthCredentials } from "@/lib/oauth/connectors";
-import { getAdapter } from "@/lib/platforms/adapter";
-import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 import { uid } from "@/functions/utils";
+import type { MetaBrief } from "@/lib/mcp/meta-brief";
 
 export type ExecutionMode = "dry_run" | "approval" | "live";
 
@@ -131,7 +130,9 @@ export type WriteActionName =
   | "add_negative_keywords"
   | "create_conversion"
   | "attach_audience"
-  | "pause_ad";
+  | "pause_ad"
+  | "launch_meta_brief"
+  | "activate_meta_chain";
 
 export const WRITE_ACTION_NAMES: WriteActionName[] = [
   "create_campaign",
@@ -149,6 +150,8 @@ export const WRITE_ACTION_NAMES: WriteActionName[] = [
   "create_conversion",
   "attach_audience",
   "pause_ad",
+  "launch_meta_brief",
+  "activate_meta_chain",
 ];
 
 export type WriteActionInput = {
@@ -188,6 +191,8 @@ export type WriteActionInput = {
     category?: string;
     audienceId?: string;
     adId?: string;
+    brief?: Record<string, unknown>;
+    pageId?: string;
   };
 };
 
@@ -367,6 +372,25 @@ function buildDiff(input: WriteActionInput): Record<string, unknown> {
         before: "ACTIVE",
         after: "PAUSED",
       };
+    case "launch_meta_brief": {
+      const brief = input.params.brief;
+      return {
+        action: "launch_meta_brief",
+        platform: "meta_ads",
+        pageId: input.params.pageId ?? null,
+        brief: brief ?? null,
+        note: "Exécuté via adkit-mcp (launch_brief). Dry-run = adkit plan sans --go.",
+      };
+    }
+    case "activate_meta_chain":
+      return {
+        action: "activate_meta_chain",
+        platform: input.connector,
+        adId: input.params.adId,
+        before: "PAUSED",
+        after: "ACTIVE",
+        note: "Active la chaîne ad → ad set → campaign (dépense possible)",
+      };
   }
 }
 
@@ -482,7 +506,8 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
     input.action === "update_budget" ||
     input.action === "enable_campaign" ||
     input.action === "create_ad_set" ||
-    input.action === "create_ad"
+    input.action === "create_ad" ||
+    input.action === "activate_meta_chain"
   ) {
     const capError = await checkSpendCaps(input.orgId, input.connector, policy);
     if (capError) {
@@ -499,18 +524,44 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
   const accountId = input.accountId ?? "";
 
   if (mode === "dry_run") {
+    let adkitPreview: unknown;
+    if (input.action === "launch_meta_brief" && input.connector === "meta_ads") {
+      const brief = input.params.brief as MetaBrief | undefined;
+      if (brief?.campaign?.name && brief.adsets?.length) {
+        const { ensureFreshTokens } = await import("@/lib/platforms/token-refresh");
+        const { adkitLaunchBrief, buildAdkitEnv } = await import("@/lib/mcp/adkit-bridge");
+        const { resolveMetaPageId } = await import("@/lib/mcp/meta-org");
+        const tokens = await ensureFreshTokens(conn.id, input.orgId, input.connector);
+        const acct = accountId || tokens.accountId || "";
+        const pageId = await resolveMetaPageId(input.orgId, input.params.pageId as string | undefined);
+        if (pageId) {
+          const env = buildAdkitEnv({
+            accessToken: tokens.accessToken,
+            accountId: acct,
+            pageId,
+            allowSpend: false,
+          });
+          adkitPreview = await adkitLaunchBrief(env, brief, { go: false, pageId, accountId: acct });
+        }
+      }
+    }
+
     await logRun({
       orgId: input.orgId, apiKeyId: input.apiKeyId, connector: input.connector, tool: input.action,
-      mode: "dry_run", status: "ok", params: diff, result: { wouldExecute: true }, latencyMs: Date.now() - start,
+      mode: "dry_run", status: "ok", params: diff, result: { wouldExecute: true, adkitPreview }, latencyMs: Date.now() - start,
     });
+    const { getCapability } = await import("@/lib/mcp/capability-matrix");
+    const capability = getCapability(input.connector);
     return {
       status: "dry_run",
       mode,
       diff,
       message:
-        "Dry run : aucune modification effectuée. Relancez execute avec dry_run=false (ou mode « live » / « approval ») pour appliquer.",
+        "Dry run only — nothing was changed and nothing spent. Re-call execute with dry_run=false after review (or re-call this tool with dry_run=false).",
       result: {
         next_step: "Re-call execute with dry_run=false",
+        maturity: capability.maturity,
+        maturity_note: capability.note,
         confirm: {
           action: input.action,
           platform: input.connector,
@@ -519,6 +570,7 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
           params: input.params,
           dry_run: false,
         },
+        ...(adkitPreview ? { adkit: adkitPreview } : {}),
       },
     };
   }
@@ -557,12 +609,22 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
   }
 
   // live
-  const result = await executeWrite(input, conn.id, accountId);
-  await logRun({
-    orgId: input.orgId, apiKeyId: input.apiKeyId, connector: input.connector, tool: input.action,
-    mode: "live", status: "ok", params: diff, result, latencyMs: Date.now() - start,
-  });
-  return { status: "executed", mode, diff, result, message: "Action exécutée sur la plateforme." };
+  try {
+    const result = await executeWrite(input, conn.id, accountId);
+    await logRun({
+      orgId: input.orgId, apiKeyId: input.apiKeyId, connector: input.connector, tool: input.action,
+      mode: "live", status: "ok", params: diff, result, latencyMs: Date.now() - start,
+    });
+    return { status: "executed", mode, diff, result, message: "Action exécutée sur la plateforme." };
+  } catch (e) {
+    const { enrichPlatformError } = await import("@/lib/mcp/capability-matrix");
+    const enriched = enrichPlatformError(input.connector, e);
+    await logRun({
+      orgId: input.orgId, apiKeyId: input.apiKeyId, connector: input.connector, tool: input.action,
+      mode: "live", status: "error", params: diff, error: enriched.message, latencyMs: Date.now() - start,
+    });
+    throw enriched;
+  }
 }
 
 async function executeWrite(
@@ -570,155 +632,12 @@ async function executeWrite(
   connectionId: string,
   accountIdOverride: string,
 ): Promise<Record<string, unknown>> {
-  const adapter = getAdapter(input.connector);
-  const tokens = await ensureFreshTokens(connectionId, input.orgId, input.connector);
-  const accountId = accountIdOverride || tokens.accountId || "";
-
-  switch (input.action) {
-    case "create_campaign": {
-      if (!adapter.createCampaign) {
-        throw new Error(`Création de campagne non supportée pour ${adapter.label} — créez-la dans la console puis pilotez-la ici.`);
-      }
-      if (!input.params.name || !input.params.dailyBudget) throw new Error("name et dailyBudget requis");
-      const res = await adapter.createCampaign(tokens, accountId, {
-        name: input.params.name,
-        dailyBudget: input.params.dailyBudget,
-        objective: input.params.objective,
-        countries: input.params.countries,
-        type: input.params.campaignType,
-        keywords: input.params.keywords,
-        finalUrl: input.params.finalUrl,
-        headlines: input.params.headlines,
-        descriptions: input.params.descriptions,
-      });
-      return { campaignId: res.campaignId, ...res.details };
-    }
-    case "update_budget": {
-      if (!input.campaignId || !input.params.dailyBudget) throw new Error("campaignId et dailyBudget requis");
-      await adapter.updateBudget(tokens, accountId, input.campaignId, input.params.dailyBudget);
-      return { campaignId: input.campaignId, dailyBudget: input.params.dailyBudget };
-    }
-    case "pause_campaign": {
-      if (!input.campaignId) throw new Error("campaignId requis");
-      await adapter.pauseCampaign(tokens, accountId, input.campaignId);
-      return { campaignId: input.campaignId, status: "PAUSED" };
-    }
-    case "enable_campaign": {
-      if (!input.campaignId) throw new Error("campaignId requis");
-      await adapter.enableCampaign(tokens, accountId, input.campaignId);
-      return { campaignId: input.campaignId, status: "ACTIVE" };
-    }
-    case "pause_ad_set": {
-      if (!adapter.pauseAdSet) throw new Error(`pause_ad_set non supporté pour ${adapter.label}`);
-      const adSetId = input.params.adSetId ?? input.campaignId;
-      if (!adSetId) throw new Error("adSetId requis");
-      await adapter.pauseAdSet(tokens, accountId, adSetId);
-      return { adSetId, status: "PAUSED" };
-    }
-    case "enable_ad_set": {
-      if (!adapter.enableAdSet) throw new Error(`enable_ad_set non supporté pour ${adapter.label}`);
-      const adSetId = input.params.adSetId ?? input.campaignId;
-      if (!adSetId) throw new Error("adSetId requis");
-      await adapter.enableAdSet(tokens, accountId, adSetId);
-      return { adSetId, status: "ACTIVE" };
-    }
-    case "create_ad_set": {
-      if (!adapter.createAdSet) throw new Error(`create_ad_set non supporté pour ${adapter.label}`);
-      if (!input.campaignId || !input.params.name || !input.params.dailyBudget) {
-        throw new Error("campaignId, name et dailyBudget requis");
-      }
-      const res = await adapter.createAdSet(tokens, accountId, {
-        campaignId: input.campaignId,
-        name: input.params.name,
-        dailyBudget: input.params.dailyBudget,
-        countries: input.params.countries,
-        optimizationGoal: input.params.optimizationGoal,
-      });
-      return { adSetId: res.adSetId, ...res.details };
-    }
-    case "create_ad": {
-      if (!adapter.createAd) throw new Error(`create_ad non supporté pour ${adapter.label}`);
-      if (!input.params.adSetId || !input.params.name) throw new Error("adSetId et name requis");
-      const res = await adapter.createAd(tokens, accountId, {
-        adSetId: input.params.adSetId,
-        name: input.params.name,
-        pageId: input.params.pageId,
-        linkUrl: input.params.linkUrl,
-        message: input.params.message,
-        headline: input.params.headline,
-        imageUrl: input.params.imageUrl,
-        imageHash: input.params.imageHash,
-      });
-      return { adId: res.adId, ...res.details };
-    }
-    case "upload_creative": {
-      if (!adapter.uploadCreative) throw new Error(`upload_creative non supporté pour ${adapter.label}`);
-      if (!input.params.imageUrl) throw new Error("imageUrl requis");
-      const res = await adapter.uploadCreative(tokens, accountId, {
-        imageUrl: input.params.imageUrl,
-        name: input.params.name,
-      });
-      return { imageHash: res.imageHash, creativeId: res.creativeId, ...res.details };
-    }
-    case "create_audience": {
-      if (!adapter.createAudience) throw new Error(`create_audience non supporté pour ${adapter.label}`);
-      if (!input.params.name) throw new Error("name requis");
-      const res = await adapter.createAudience(tokens, accountId, {
-        name: input.params.name,
-        description: input.params.description,
-        subtype: input.params.subtype,
-        lookalikeRatio: input.params.lookalikeRatio,
-        originAudienceId: input.params.originAudienceId,
-        country: input.params.country,
-      });
-      return { audienceId: res.audienceId, ...res.details };
-    }
-    case "add_keywords": {
-      if (!adapter.addKeywords) throw new Error(`add_keywords non supporté pour ${adapter.label}`);
-      if (!input.params.adGroupId || !input.params.keywords?.length) {
-        throw new Error("adGroupId et keywords[] requis");
-      }
-      const res = await adapter.addKeywords(tokens, accountId, {
-        adGroupId: input.params.adGroupId,
-        keywords: input.params.keywords,
-      });
-      return { count: res.count, ...res.details };
-    }
-    case "add_negative_keywords": {
-      if (!adapter.addNegativeKeywords) throw new Error(`add_negative_keywords non supporté pour ${adapter.label}`);
-      if (!input.campaignId || !input.params.keywords?.length) throw new Error("campaignId et keywords[] requis");
-      const res = await adapter.addNegativeKeywords(tokens, accountId, {
-        campaignId: input.campaignId,
-        keywords: input.params.keywords,
-      });
-      return { count: res.count, ...res.details };
-    }
-    case "create_conversion": {
-      if (!adapter.createConversion) throw new Error(`create_conversion non supporté pour ${adapter.label}`);
-      if (!input.params.name) throw new Error("name requis");
-      const res = await adapter.createConversion(tokens, accountId, {
-        name: input.params.name,
-        category: input.params.category,
-      });
-      return { conversionId: res.conversionId, ...res.details };
-    }
-    case "attach_audience": {
-      if (!adapter.attachAudience) throw new Error(`attach_audience non supporté pour ${adapter.label}`);
-      if (!input.params.audienceId) throw new Error("audienceId requis");
-      const res = await adapter.attachAudience(tokens, accountId, {
-        audienceId: input.params.audienceId,
-        campaignId: input.campaignId,
-        adSetId: input.params.adSetId,
-      });
-      return { ok: true, ...res.details };
-    }
-    case "pause_ad": {
-      if (!adapter.pauseAd) throw new Error(`pause_ad non supporté pour ${adapter.label}`);
-      if (!input.params.adId) throw new Error("adId requis");
-      await adapter.pauseAd(tokens, accountId, input.params.adId);
-      return { adId: input.params.adId, status: "PAUSED" };
-    }
-  }
+  const { routeWrite } = await import("@/lib/mcp/execution-router");
+  return routeWrite({
+    ...input,
+    connectionId,
+    accountId: accountIdOverride || input.accountId,
+  });
 }
 
 /** Approve a pending MCP action then execute it live. */

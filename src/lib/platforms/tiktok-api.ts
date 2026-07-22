@@ -153,13 +153,13 @@ export async function createTikTokCampaignPaused(
       schedule_type: "SCHEDULE_FROM_NOW",
       billing_event: "CPC",
       bid_type: "BID_TYPE_NO_BID",
-      location_ids: [],
+      location_ids: ["6252001"],
       operation_status: "DISABLE",
       pacing: "PACING_MODE_SMOOTH",
     });
     adGroupId = String(ag.adgroup_id ?? "") || undefined;
   } catch {
-    // Campaign alone is still useful
+    // Campaign alone is still useful — ad group often needs richer geo/placement
   }
 
   return {
@@ -167,7 +167,8 @@ export async function createTikTokCampaignPaused(
     details: {
       status: "DISABLE",
       adGroupId,
-      note: "Campagne TikTok créée désactivée (PAUSE équivalent)",
+      maturity: "experimental",
+      note: "Campagne TikTok créée désactivée. Ad group optional — experimental path.",
     },
   };
 }
@@ -203,6 +204,13 @@ export async function createTikTokAdGroupPaused(
   advertiserId: string,
   input: { campaignId: string; name: string; dailyBudget: number; countries?: string[] },
 ): Promise<{ adSetId: string; details?: Record<string, unknown> }> {
+  // TikTok Marketing API requires location_ids for most auction ad groups.
+  // Default US (6252001) when none provided — callers should pass real geo.
+  const locationIds =
+    input.countries?.length && input.countries.every((c) => /^\d+$/.test(c))
+      ? input.countries
+      : ["6252001"];
+
   const ag = await tiktokJson(accessToken, "/adgroup/create/", {
     advertiser_id: advertiserId,
     campaign_id: input.campaignId,
@@ -213,13 +221,20 @@ export async function createTikTokAdGroupPaused(
     schedule_type: "SCHEDULE_FROM_NOW",
     billing_event: "CPC",
     bid_type: "BID_TYPE_NO_BID",
-    location_ids: [],
+    location_ids: locationIds,
     operation_status: "DISABLE",
     pacing: "PACING_MODE_SMOOTH",
   });
   const adSetId = String(ag.adgroup_id ?? "");
   if (!adSetId) throw new Error("TikTok create ad group: id manquant");
-  return { adSetId, details: { status: "DISABLE" } };
+  return {
+    adSetId,
+    details: {
+      status: "DISABLE",
+      location_ids: locationIds,
+      note: "Experimental: default location US (6252001) if countries were not TikTok location ids",
+    },
+  };
 }
 
 export async function createTikTokAdPaused(

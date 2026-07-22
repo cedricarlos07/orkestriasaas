@@ -8,7 +8,7 @@ import { getOAuthAvailability } from "@/functions/platform-config";
 
 const PLATFORMS = [
   { id: "meta", label: "Meta Ads", desc: "Facebook & Instagram", icon: Facebook, color: "#1877F2" },
-  { id: "google", label: "Google Ads", desc: "Search, YouTube, Display", icon: Chrome, color: "#4285F4" },
+  { id: "google", label: "Google Ads", desc: "Via AdLoop Cloud (clé alc_ dans Connexions)", icon: Chrome, color: "#4285F4" },
   { id: "tiktok", label: "TikTok Ads", desc: "For You & Spark Ads", icon: Music2, color: "#111" },
   { id: "ga4", label: "Google Analytics", desc: "GA4 · mesure des ventes", icon: BarChart3, color: "#F9AB00" },
 ];
@@ -37,7 +37,7 @@ function Step() {
 
   return (
     <>
-      <StepHeader eyebrow="Étape 3 · Connexions" title="Connectez vos comptes publicitaires" desc="Commencez par Meta — les autres plateformes s'ajoutent quand leurs credentials sont configurées." />
+      <StepHeader eyebrow="Étape 3 · Connexions" title="Connectez vos comptes publicitaires" desc="Commencez par Meta (OAuth). Google se lie via AdLoop (clé alc_) dans Connexions après l'onboarding." />
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {PLATFORMS.map(({ id, label, desc, icon: Icon, color }) => {
           const active = data.platforms.includes(id);

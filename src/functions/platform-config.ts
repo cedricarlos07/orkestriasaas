@@ -24,7 +24,10 @@ export const getOAuthAvailability = createServerFn({ method: "GET" }).handler(as
       process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim(),
     ),
     writeEnabled: process.env.MCP_WRITE_ENABLED === "true",
-    adkitConfigured: Boolean(process.env.ADKIT_API_KEY?.trim()),
+    adloopConfigured: Boolean(process.env.ADLOOP_API_KEY?.trim()),
+    useproxyConfigured: Boolean(process.env.USEPROXY_API_KEY?.trim()),
+    useproxyUrl: process.env.USEPROXY_MCP_URL ?? "https://mcp.useproxy.dev/mcp",
+    adkitCommand: process.env.ADKIT_MCP_COMMAND ?? "adkit-mcp",
     baseUrl: process.env.BETTER_AUTH_URL ?? "http://localhost:8080",
   };
 });

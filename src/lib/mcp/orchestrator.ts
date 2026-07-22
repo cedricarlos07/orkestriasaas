@@ -1,12 +1,13 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { connections, orchestratorPrompts, skills } from "@/db/schema/index";
-import { invokeMCP } from "@/lib/mcp/gateway";
 import { toolsForSkill, type ToolDefinition } from "@/lib/mcp/tool-registry";
 import type { AuditSummary } from "@/lib/unified-ad-schema";
 import { runMultichannelAudit } from "@/lib/mcp/audit-runner";
+import { readPlatformSnapshot } from "@/lib/mcp/read-platform";
+import { routeResearch } from "@/lib/mcp/execution-router";
 import { requireOpenAiKey } from "@/lib/platforms/config";
-import { CONNECTORS } from "@/lib/oauth/connectors";
+import { CONNECTORS, type ConnectorId } from "@/lib/oauth/connectors";
 
 export type OrchestratorInput = {
   orgId: string;
@@ -23,8 +24,10 @@ export type OrchestratorOutput = {
   runId?: string;
 };
 
-function detectIntent(message: string): "audit" | "report" | "campaign" | "general" {
+function detectIntent(message: string): "audit" | "report" | "campaign" | "research" | "setup" | "general" {
   const t = message.toLowerCase();
+  if (/config|configuration|setup|validate|vérifier|verifier|prêt|pret/.test(t)) return "setup";
+  if (/concurrent|competitor|ad library|spy|espion|benchmark/.test(t)) return "research";
   if (/audit|analys|diagnostic|bilan|problème/.test(t)) return "audit";
   if (/rapport|report|performance|résultat/.test(t)) return "report";
   if (/campagne|lancer|créer|budget|commande|vente/.test(t)) return "campaign";
@@ -60,27 +63,94 @@ async function executeReadTools(
     const conn = conns.find((c) => c.connector === connector);
     if (!conn) continue;
 
-    const { result } = await invokeMCP({
-      server: tool.server,
-      tool: tool.name,
+    const { snapshot } = await readPlatformSnapshot({
       orgId,
       connectionId: conn.id,
-      mode: "read",
-      runId,
+      connector: connector as ConnectorId,
     });
     toolsUsed.push(tool.name);
-    results.push(`${tool.label}: ${JSON.stringify(result).slice(0, 800)}`);
+    results.push(`${tool.label}: ${JSON.stringify(snapshot).slice(0, 800)}`);
+    void runId;
   }
 
   return { results, toolsUsed };
+}
+
+function extractBrandFromMessage(message: string): string | null {
+  const quoted = message.match(/["«]([^"»]+)["»]/);
+  if (quoted?.[1]) return quoted[1].trim();
+  const m = message.match(/(?:concurrent|marque|brand)\s+(\w[\w\s-]{1,40})/i);
+  return m?.[1]?.trim() ?? null;
 }
 
 export async function runOrchestrator(input: OrchestratorInput): Promise<OrchestratorOutput> {
   const intent = detectIntent(input.message);
   const skill =
     input.skill ??
-    (intent === "audit" || intent === "report" ? "analysis" : intent === "campaign" ? "strategy" : "analysis");
+    (intent === "audit" || intent === "report"
+      ? "analysis"
+      : intent === "campaign"
+        ? "strategy"
+        : "analysis");
   const tools = toolsForSkill(skill);
+
+  if (intent === "setup") {
+    const { getStackSetupStatus } = await import("@/lib/mcp/setup-status");
+    const stack = await getStackSetupStatus(input.orgId);
+    const lines = [
+      `**Meta OAuth :** ${stack.meta.oauthConnected ? "OK" : "manquant"}`,
+      `**Page Facebook :** ${stack.meta.pageId ?? "manquante"}`,
+      `**adkit :** ${stack.meta.adkitVerify}${stack.meta.adkitError ? ` (${stack.meta.adkitError})` : ""}`,
+      `**AdLoop Google :** ${stack.google.adloopLinked ? stack.google.adloopHealth : "non lié"}`,
+      `**Research useproxy :** ${stack.research.useproxyConfigured ? stack.research.useproxyHealth : "clé serveur manquante"}`,
+      "",
+      stack.readyForCampaign
+        ? "Prêt pour lancer des campagnes Meta (dry-run → PAUSED → activation)."
+        : `Étapes restantes :\n${stack.missingSteps.map((s) => `• ${s}`).join("\n")}`,
+      "",
+      "→ Connexions : /app/connections",
+    ];
+    return { reply: lines.join("\n"), toolsUsed: ["validate_setup"], runId: input.runId };
+  }
+
+  if (intent === "research") {
+    const brand = extractBrandFromMessage(input.message) ?? "Nike";
+    try {
+      const data = await routeResearch(input.orgId, { brand });
+      return {
+        reply: `Voici ce que j'ai trouvé sur **${brand}** dans la Meta Ad Library :\n\n${JSON.stringify(data, null, 2).slice(0, 2000)}\n\n**Prochaines étapes :** décrivez votre brief (objectif, budget, audience) → je lance un dry-run adkit (PAUSED) → vous confirmez → activation explicite.`,
+        toolsUsed: ["research_competitor_ads"],
+        runId: input.runId,
+      };
+    } catch (e) {
+      return {
+        reply: `Recherche concurrentielle indisponible : ${e instanceof Error ? e.message : "erreur"}. La clé useproxy doit être configurée côté serveur (URL : mcp.useproxy.dev). Contactez l'admin ou continuez sans research.`,
+        toolsUsed: [],
+        runId: input.runId,
+      };
+    }
+  }
+
+  if (intent === "campaign") {
+    const { getStackSetupStatus } = await import("@/lib/mcp/setup-status");
+    const stack = await getStackSetupStatus(input.orgId);
+    if (!stack.readyForCampaign) {
+      const steps = stack.missingSteps.length
+        ? stack.missingSteps.map((s, i) => `${i + 1}. ${s}`).join("\n")
+        : "1. Connecter Meta\n2. Enregistrer Page Facebook ID\n3. Vérifier adkit";
+      return {
+        reply: `Avant de lancer une campagne, complétez la configuration V1 :\n\n${steps}\n\n→ **Connexions** : /app/connections\n\nUne fois prêt, le flux sera : research concurrents (optionnel) → brief Meta en dry-run (adkit, tout PAUSED) → votre validation → activation explicite (dépense).`,
+        toolsUsed: ["validate_setup"],
+        runId: input.runId,
+      };
+    }
+    return {
+      reply:
+        "Configuration OK. Décrivez votre campagne Meta : objectif (trafic/leads), budget journalier, pays cibles, message et headline. Je commencerai par un **dry-run adkit** (rien ne dépense) avant toute création réelle.",
+      toolsUsed: [],
+      runId: input.runId,
+    };
+  }
 
   if (intent === "audit" || intent === "report") {
     const { runId, summary } = await runMultichannelAudit({
@@ -175,7 +245,7 @@ export async function seedOrchestratorDefaults() {
       id: "orch_default",
       key: "default",
       content:
-        "Tu es Orkestria. Un seul agent visible. Langage commercial. Base tes réponses uniquement sur les données MCP fournies.",
+        "Tu es Orkestria. Un seul agent visible. Langage commercial. Base tes réponses uniquement sur les données MCP fournies. Research concurrents d'abord (Ad Library) avant de créer des campagnes.",
       version: 1,
       updatedAt: new Date(),
     });

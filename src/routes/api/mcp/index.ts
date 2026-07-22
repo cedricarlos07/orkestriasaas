@@ -4,7 +4,7 @@ import { AGENT_TOOLS, invokeAgentTool } from "@/lib/mcp/agent-tools";
 import { randomUUID } from "node:crypto";
 
 const PROTOCOL_VERSION = "2025-03-26";
-const SERVER_INFO = { name: "orkestria-mcp", version: "1.1.0" };
+const SERVER_INFO = { name: "orkestria-mcp", version: "1.2.0" };
 
 type Session = { id: string; createdAt: number };
 const sessions = new Map<string, Session>();
@@ -46,7 +46,7 @@ async function handleRpc(request: Request, message: Record<string, unknown>): Pr
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
         instructions:
-          "Orkestria MCP — ad control for agents. Transport: Streamable HTTP (SSE) with JSON-RPC fallback. Auth: Authorization Bearer ork_…. Writes are policy-gated; use execute with dry_run=true then dry_run=false. Start with validate_setup.",
+          "Orkestria MCP — ad control for agents (Synter-style safety). Auth: Authorization Bearer ork_…. 1) Call validate_setup or list_capabilities (production vs experimental). 2) Measure with get_performance / detect_anomalies. 3) Propose changes. 4) Writes: execute or any write tool with dry_run=true (default), review the diff, then re-call with dry_run=false. Prefer production platforms (google_ads, meta_ads) for spend. Never skip dry-run on live accounts.",
       });
     case "ping":
       return rpcResult(id, {});

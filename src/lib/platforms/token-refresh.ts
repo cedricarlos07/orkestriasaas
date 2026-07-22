@@ -3,7 +3,6 @@ import { db } from "@/db";
 import { connections } from "@/db/schema/index";
 import { encryptTokens, type TokenPayload } from "@/lib/crypto/tokens";
 import { CONNECTORS, type ConnectorId } from "@/lib/oauth/connectors";
-import { ADKIT_LINK_MARKER } from "@/lib/mcp/adkit-org";
 
 export async function ensureFreshTokens(
   connectionId: string,
@@ -14,13 +13,6 @@ export async function ensureFreshTokens(
   const conn = rows[0];
   if (!conn || conn.organizationId !== orgId || !conn.encryptedTokens) {
     throw new Error("Connexion introuvable ou tokens absents");
-  }
-
-  if (conn.encryptedTokens === ADKIT_LINK_MARKER) {
-    return {
-      accessToken: ADKIT_LINK_MARKER,
-      accountName: conn.externalAccount ?? undefined,
-    };
   }
 
   const { decryptTokens } = await import("@/lib/crypto/tokens");

@@ -314,7 +314,14 @@ export async function createLinkedInCreativeDraft(
     res.headers.get("x-restli-id") ??
     String(((await res.json().catch(() => ({}))) as { id?: number | string }).id ?? "");
   if (!adId) throw new Error("LinkedIn create creative: id manquant");
-  return { adId: String(adId), details: { status: "DRAFT" } };
+  return {
+    adId: String(adId),
+    details: {
+      status: "DRAFT",
+      maturity: "experimental",
+      note: "LinkedIn creative draft — content schema is best-effort; see Marketing API docs if create fails.",
+    },
+  };
 }
 
 export async function listLinkedInCreatives(

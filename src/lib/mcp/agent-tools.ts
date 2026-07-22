@@ -16,6 +16,7 @@ import {
 } from "@/lib/mcp/policy-engine";
 import { listSkills, getSkill } from "@/lib/mcp/skills";
 import { runAutonomyTick } from "@/lib/mcp/autonomy";
+import { getCapabilityMatrix, summarizeMaturity } from "@/lib/mcp/capability-matrix";
 import {
   AD_CONNECTOR_IDS,
   CONNECTORS,
@@ -24,6 +25,7 @@ import {
 } from "@/lib/oauth/connectors";
 import { getAdapter } from "@/lib/platforms/adapter";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
+import { routeReadSnapshot, routeResearch } from "@/lib/mcp/execution-router";
 import type { UnifiedAccountSnapshot } from "@/lib/unified-ad-schema";
 
 export type AgentToolContext = ApiKeyContext;
@@ -82,11 +84,17 @@ async function getTokensFor(orgId: string, connector: ConnectorId) {
 }
 
 async function fetchSnapshot(orgId: string, connector: ConnectorId, accountId?: string, period?: string) {
-  const { tokens } = await getTokensFor(orgId, connector);
-  const adapter = getAdapter(connector);
+  const { conn, tokens } = await getTokensFor(orgId, connector);
   const acct = accountId ?? tokens.accountId;
-  if (!acct) throw new Error(`${adapter.label} : aucun compte publicitaire sélectionné.`);
-  return adapter.fetchSnapshot(tokens, acct, period);
+  if (!acct) throw new Error(`${CONNECTORS[connector].label} : aucun compte publicitaire sélectionné.`);
+  const { snapshot } = await routeReadSnapshot({
+    orgId,
+    connector,
+    connectionId: conn.id,
+    accountId: acct,
+    period,
+  });
+  return snapshot;
 }
 
 async function fetchAllSnapshots(orgId: string, period?: string): Promise<UnifiedAccountSnapshot[]> {
@@ -115,6 +123,14 @@ async function fetchAllSnapshots(orgId: string, period?: string): Promise<Unifie
   return snapshots;
 }
 
+const dryRunProp = {
+  dry_run: {
+    type: "boolean",
+    description:
+      "Default true (Synter-safe). Validates policy and returns confirm payload. Set false only after reviewing the dry-run diff.",
+  },
+};
+
 function writeTool(
   name: string,
   action: WriteActionName,
@@ -127,6 +143,7 @@ function writeTool(
     accountId?: string;
     params: Record<string, unknown>;
   },
+  fixedPlatform?: ConnectorId,
 ): AgentTool {
   return {
     name,
@@ -134,17 +151,41 @@ function writeTool(
     family,
     inputSchema: {
       type: "object",
-      properties: { ...platformProp, ...modeProp, ...extraProps },
-      required: ["platform", ...required],
+      properties: {
+        ...(fixedPlatform ? {} : platformProp),
+        ...dryRunProp,
+        ...modeProp,
+        ...extraProps,
+      },
+      required: fixedPlatform ? required : ["platform", ...required],
     },
     handler: async (ctx, args) => {
-      const mode = str(args.mode) as ExecutionMode | undefined;
-      if (mode === "live") requireScope(ctx, "write");
+      const platform = (fixedPlatform ?? (args.platform as ConnectorId)) as ConnectorId;
+      if (!platform) throw new Error("platform requis");
+
+      const dryRun = args.dry_run !== false && args.dry_run !== "false";
+      const policy = await getOrgPolicy(ctx.organizationId);
+
+      let mode: ExecutionMode;
+      if (dryRun) {
+        mode = "dry_run";
+      } else {
+        const requested = str(args.mode) as ExecutionMode | undefined;
+        if (requested === "dry_run") {
+          return {
+            status: "blocked",
+            message: "dry_run=false with mode=dry_run is a no-op. Use mode=live or mode=approval.",
+          };
+        }
+        mode = requested ?? (policy.defaultMode === "approval" ? "approval" : "live");
+        if (mode === "live") requireScope(ctx, "write");
+      }
+
       const mapped = mapArgs(args);
       return runWriteAction({
         orgId: ctx.organizationId,
         apiKeyId: ctx.keyId,
-        connector: args.platform as ConnectorId,
+        connector: platform,
         action,
         mode,
         campaignId: mapped.campaignId,
@@ -171,30 +212,53 @@ const coreTools: AgentTool[] = [
   },
   {
     name: "validate_setup",
-    description: "Validate the API key, list connected platforms and the active policy. Safe: performs no writes.",
+    description:
+      "Validate the API key, list connected platforms, policy, and the honest capability matrix (production vs experimental). Safe: no writes.",
     family: "core",
     inputSchema: { type: "object", properties: {} },
     handler: async (ctx) => {
       const rows = await db.select().from(connections).where(eq(connections.organizationId, ctx.organizationId));
       const policy = await getOrgPolicy(ctx.organizationId);
+      const capabilities = getCapabilityMatrix();
+      const { getStackSetupStatus } = await import("@/lib/mcp/setup-status");
+      const stack = await getStackSetupStatus(ctx.organizationId);
       return {
         ok: true,
         keyName: ctx.name,
         scopes: ctx.scopes,
         policy,
+        maturity: summarizeMaturity(capabilities),
+        capabilities,
+        stack,
         platforms: Object.values(CONNECTORS)
-          .filter((c) => c.group === "ads")
+          .filter((c) => c.group === "ads" || c.id === "ga4")
           .map((c) => {
             const conn = rows.find((r) => r.connector === c.id);
+            const cap = capabilities.find((x) => x.connector === c.id);
             return {
               platform: c.id,
               label: c.label,
+              maturity: cap?.maturity ?? "experimental",
               oauthConfigured: hasOAuthCredentials(c.id),
               connected: conn?.status === "connectée",
               account: conn?.externalAccount ?? null,
+              createCampaign: cap?.createCampaign ?? false,
             };
           }),
+        protocol:
+          "For writes: call execute (or any write tool) with dry_run=true first, review the diff, then re-call with dry_run=false. Prefer production platforms for spend.",
       };
+    },
+  },
+  {
+    name: "list_capabilities",
+    description:
+      "Honest Synter-style platform matrix: what Orkestria can read/create/pause per connector, with production vs experimental maturity.",
+    family: "core",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => {
+      const capabilities = getCapabilityMatrix();
+      return { capabilities, maturity: summarizeMaturity(capabilities) };
     },
   },
   {
@@ -204,12 +268,15 @@ const coreTools: AgentTool[] = [
     inputSchema: { type: "object", properties: {} },
     handler: async (ctx) => {
       const rows = await db.select().from(connections).where(eq(connections.organizationId, ctx.organizationId));
+      const capabilities = getCapabilityMatrix();
       return Object.values(CONNECTORS).map((c) => {
         const conn = rows.find((r) => r.connector === c.id);
+        const cap = capabilities.find((x) => x.connector === c.id);
         return {
           platform: c.id,
           label: c.label,
           group: c.group,
+          maturity: cap?.maturity ?? "experimental",
           connected: conn?.status === "connectée",
           account: conn?.externalAccount ?? null,
           lastSync: conn?.lastSync?.toISOString() ?? null,
@@ -237,7 +304,7 @@ const launchTools: AgentTool[] = [
   writeTool(
     "create_campaign",
     "create_campaign",
-    "Create a paused/draft campaign (Meta, Google Search/PMax, LinkedIn, TikTok). Policy-gated.",
+    "Create a paused/draft campaign. Check list_capabilities — google_ads/meta_ads are production; others experimental.",
     "launch",
     {
       name: { type: "string", description: "Campaign name" },
@@ -287,93 +354,180 @@ const launchTools: AgentTool[] = [
       },
     }),
   ),
-  {
-    name: "create_search_campaign",
-    description: "Create a Google Search campaign (PAUSED) with ad group, keywords and RSA. Platform forced to google_ads.",
-    family: "launch",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ...modeProp,
-        name: { type: "string" },
-        dailyBudget: { type: "number" },
-        keywords: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: { text: { type: "string" }, matchType: { type: "string" } },
-            required: ["text"],
-          },
+  writeTool(
+    "create_search_campaign",
+    "create_campaign",
+    "Create a Google Search campaign (PAUSED) with ad group, keywords and RSA. Production path.",
+    "launch",
+    {
+      name: { type: "string" },
+      dailyBudget: { type: "number" },
+      keywords: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { text: { type: "string" }, matchType: { type: "string" } },
+          required: ["text"],
         },
-        finalUrl: { type: "string" },
-        headlines: { type: "array", items: { type: "string" } },
-        descriptions: { type: "array", items: { type: "string" } },
-        accountId: { type: "string" },
       },
-      required: ["name", "dailyBudget"],
+      finalUrl: { type: "string" },
+      headlines: { type: "array", items: { type: "string" } },
+      descriptions: { type: "array", items: { type: "string" } },
+      accountId: { type: "string" },
     },
-    handler: async (ctx, args) => {
-      const mode = str(args.mode) as ExecutionMode | undefined;
-      if (mode === "live") requireScope(ctx, "write");
-      return runWriteAction({
-        orgId: ctx.organizationId,
-        apiKeyId: ctx.keyId,
-        connector: "google_ads",
-        action: "create_campaign",
-        mode,
-        accountId: str(args.accountId),
-        params: {
-          name: str(args.name),
-          dailyBudget: num(args.dailyBudget),
-          campaignType: "search",
-          keywords: Array.isArray(args.keywords)
-            ? (args.keywords as { text: string; matchType?: string }[])
-            : undefined,
-          finalUrl: str(args.finalUrl),
-          headlines: Array.isArray(args.headlines) ? (args.headlines as string[]) : undefined,
-          descriptions: Array.isArray(args.descriptions) ? (args.descriptions as string[]) : undefined,
-        },
-      });
-    },
-  },
-  {
-    name: "create_pmax_campaign",
-    description: "Create a Google Performance Max campaign (PAUSED). Platform forced to google_ads.",
-    family: "launch",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ...modeProp,
-        name: { type: "string" },
-        dailyBudget: { type: "number" },
-        finalUrl: { type: "string" },
-        headlines: { type: "array", items: { type: "string" } },
-        descriptions: { type: "array", items: { type: "string" } },
-        accountId: { type: "string" },
+    ["name", "dailyBudget"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: {
+        name: str(args.name),
+        dailyBudget: num(args.dailyBudget),
+        campaignType: "search",
+        keywords: Array.isArray(args.keywords)
+          ? (args.keywords as { text: string; matchType?: string }[])
+          : undefined,
+        finalUrl: str(args.finalUrl),
+        headlines: Array.isArray(args.headlines) ? (args.headlines as string[]) : undefined,
+        descriptions: Array.isArray(args.descriptions) ? (args.descriptions as string[]) : undefined,
       },
-      required: ["name", "dailyBudget"],
+    }),
+    "google_ads",
+  ),
+  writeTool(
+    "create_pmax_campaign",
+    "create_campaign",
+    "Create a Google Performance Max campaign (PAUSED). Production path.",
+    "launch",
+    {
+      name: { type: "string" },
+      dailyBudget: { type: "number" },
+      finalUrl: { type: "string" },
+      headlines: { type: "array", items: { type: "string" } },
+      descriptions: { type: "array", items: { type: "string" } },
+      accountId: { type: "string" },
     },
-    handler: async (ctx, args) => {
-      const mode = str(args.mode) as ExecutionMode | undefined;
-      if (mode === "live") requireScope(ctx, "write");
-      return runWriteAction({
-        orgId: ctx.organizationId,
-        apiKeyId: ctx.keyId,
-        connector: "google_ads",
-        action: "create_campaign",
-        mode,
-        accountId: str(args.accountId),
-        params: {
-          name: str(args.name),
-          dailyBudget: num(args.dailyBudget),
-          campaignType: "pmax",
-          finalUrl: str(args.finalUrl),
-          headlines: Array.isArray(args.headlines) ? (args.headlines as string[]) : undefined,
-          descriptions: Array.isArray(args.descriptions) ? (args.descriptions as string[]) : undefined,
-        },
-      });
+    ["name", "dailyBudget"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: {
+        name: str(args.name),
+        dailyBudget: num(args.dailyBudget),
+        campaignType: "pmax",
+        finalUrl: str(args.finalUrl),
+        headlines: Array.isArray(args.headlines) ? (args.headlines as string[]) : undefined,
+        descriptions: Array.isArray(args.descriptions) ? (args.descriptions as string[]) : undefined,
+      },
+    }),
+    "google_ads",
+  ),
+  writeTool(
+    "create_meta_campaign",
+    "create_campaign",
+    "Create a Meta (Facebook/Instagram) campaign + paused ad set. Production path.",
+    "launch",
+    {
+      name: { type: "string" },
+      dailyBudget: { type: "number" },
+      objective: { type: "string", description: "Default OUTCOME_TRAFFIC" },
+      countries: { type: "array", items: { type: "string" } },
+      accountId: { type: "string" },
     },
-  },
+    ["name", "dailyBudget"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: {
+        name: str(args.name),
+        dailyBudget: num(args.dailyBudget),
+        objective: str(args.objective) ?? "OUTCOME_TRAFFIC",
+        countries: Array.isArray(args.countries) ? (args.countries as string[]) : undefined,
+      },
+    }),
+    "meta_ads",
+  ),
+  writeTool(
+    "launch_meta_brief",
+    "launch_meta_brief",
+    "Create a full Meta funnel via upstream adkit (launch_brief). Everything PAUSED. dry_run calls adkit without --go.",
+    "launch",
+    {
+      brief: {
+        type: "object",
+        description: "Meta brief: { campaign: { name, objective?, dailyBudget? }, adsets: [{ name, dailyBudget, countries?, ads: [{ name, message?, headline?, link?, image? }] }] }",
+      },
+      pageId: { type: "string", description: "Facebook Page ID for creatives" },
+      accountId: { type: "string" },
+    },
+    ["brief", "pageId"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: {
+        brief: args.brief as Record<string, unknown>,
+        pageId: str(args.pageId),
+      },
+    }),
+    "meta_ads",
+  ),
+  writeTool(
+    "activate_meta_campaign",
+    "activate_meta_chain",
+    "Go live via adkit activate_ad (ad + ad set + campaign). Spend-gated — dry_run first.",
+    "launch",
+    {
+      adId: { type: "string", description: "Meta ad id to activate (chain goes live)" },
+      accountId: { type: "string" },
+    },
+    ["adId"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: { adId: str(args.adId) },
+    }),
+    "meta_ads",
+  ),
+  writeTool(
+    "create_linkedin_campaign",
+    "create_campaign",
+    "Create a LinkedIn DRAFT campaign (experimental maturity).",
+    "launch",
+    {
+      name: { type: "string" },
+      dailyBudget: { type: "number" },
+      countries: { type: "array", items: { type: "string" } },
+      finalUrl: { type: "string" },
+      accountId: { type: "string" },
+    },
+    ["name", "dailyBudget"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: {
+        name: str(args.name),
+        dailyBudget: num(args.dailyBudget),
+        countries: Array.isArray(args.countries) ? (args.countries as string[]) : undefined,
+        finalUrl: str(args.finalUrl),
+      },
+    }),
+    "linkedin_ads",
+  ),
+  writeTool(
+    "create_reddit_campaign",
+    "create_campaign",
+    "Create a Reddit PAUSED campaign (experimental — requires funding instrument).",
+    "launch",
+    {
+      name: { type: "string" },
+      dailyBudget: { type: "number" },
+      objective: { type: "string" },
+      accountId: { type: "string" },
+    },
+    ["name", "dailyBudget"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: {
+        name: str(args.name),
+        dailyBudget: num(args.dailyBudget),
+        objective: str(args.objective),
+      },
+    }),
+    "reddit_ads",
+  ),
   writeTool(
     "create_ad_set",
     "create_ad_set",
@@ -487,6 +641,24 @@ const launchTools: AgentTool[] = [
       campaignId: { type: "string", description: "Campaign id (Meta: ad set id)" },
       dailyBudget: { type: "number", description: "New daily budget (main currency unit)" },
       currentDailyBudget: { type: "number", description: "Current budget, used by the policy to validate the % change" },
+      accountId: { type: "string" },
+    },
+    ["campaignId", "dailyBudget"],
+    (args) => ({
+      campaignId: str(args.campaignId),
+      accountId: str(args.accountId),
+      params: { dailyBudget: num(args.dailyBudget), currentDailyBudget: num(args.currentDailyBudget) },
+    }),
+  ),
+  writeTool(
+    "update_campaign_budget",
+    "update_budget",
+    "Synter-style alias of set_budget / update_budget.",
+    "launch",
+    {
+      campaignId: { type: "string" },
+      dailyBudget: { type: "number" },
+      currentDailyBudget: { type: "number" },
       accountId: { type: "string" },
     },
     ["campaignId", "dailyBudget"],
@@ -897,6 +1069,94 @@ const createTools: AgentTool[] = [
 
 const measureTools: AgentTool[] = [
   {
+    name: "research_competitor_ads",
+    description:
+      "Spy competitor ads via Meta Ad Library (useproxy). Read-only research — no spend. Use before creating campaigns.",
+    family: "measure",
+    inputSchema: {
+      type: "object",
+      properties: {
+        brand: { type: "string", description: "Primary brand or advertiser name" },
+        brands: { type: "array", items: { type: "string" }, description: "Multiple brands to compare" },
+        country: { type: "string", description: "ISO country code filter (optional)" },
+      },
+      required: ["brand"],
+    },
+    handler: async (ctx, args) => {
+      const brand = str(args.brand);
+      if (!brand) throw new Error("brand requis");
+      return routeResearch(ctx.organizationId, {
+        brand,
+        brands: Array.isArray(args.brands) ? (args.brands as string[]) : undefined,
+        country: str(args.country),
+      });
+    },
+  },
+  {
+    name: "search_meta_targeting",
+    description: "Search Meta interest or job-title IDs via adkit (read-only). Use before launch_meta_brief.",
+    family: "measure",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        type: { type: "string", enum: ["adinterest", "adworkposition"], description: "Default adinterest" },
+        accountId: { type: "string" },
+      },
+      required: ["query"],
+    },
+    handler: async (ctx, args) => {
+      const query = str(args.query);
+      if (!query) throw new Error("query requis");
+      const { tokens } = await getTokensFor(ctx.organizationId, "meta_ads");
+      const { buildAdkitEnv, adkitSearchTargeting } = await import("@/lib/mcp/adkit-bridge");
+      const { resolveMetaPageId } = await import("@/lib/mcp/meta-org");
+      const pageId = await resolveMetaPageId(ctx.organizationId, null);
+      const env = buildAdkitEnv({
+        accessToken: tokens.accessToken,
+        accountId: str(args.accountId) ?? tokens.accountId ?? "",
+        pageId: pageId ?? undefined,
+        allowSpend: false,
+      });
+      return adkitSearchTargeting(env, query, str(args.type) ?? "adinterest");
+    },
+  },
+  {
+    name: "optimize_meta_ads",
+    description: "adkit optimize_report — KILL/SCALE/KEEP recommendations (read-only, no changes).",
+    family: "measure",
+    inputSchema: {
+      type: "object",
+      properties: {
+        campaignId: { type: "string" },
+        window: { type: "string", description: "e.g. last_3d" },
+        targetCpl: { type: "number" },
+        targetRoas: { type: "number" },
+        leadFormId: { type: "string" },
+        accountId: { type: "string" },
+      },
+    },
+    handler: async (ctx, args) => {
+      const { tokens } = await getTokensFor(ctx.organizationId, "meta_ads");
+      const { buildAdkitEnv, adkitOptimizeReport } = await import("@/lib/mcp/adkit-bridge");
+      const { resolveMetaPageId } = await import("@/lib/mcp/meta-org");
+      const pageId = await resolveMetaPageId(ctx.organizationId, null);
+      const env = buildAdkitEnv({
+        accessToken: tokens.accessToken,
+        accountId: str(args.accountId) ?? tokens.accountId ?? "",
+        pageId: pageId ?? undefined,
+        allowSpend: false,
+      });
+      return adkitOptimizeReport(env, {
+        campaign_id: str(args.campaignId),
+        window: str(args.window) ?? "last_3d",
+        target_cpl: num(args.targetCpl),
+        target_roas: num(args.targetRoas),
+        lead_form_id: str(args.leadFormId),
+      });
+    },
+  },
+  {
     name: "get_performance",
     description: "Get campaign-level performance (spend, impressions, clicks, conversions, CTR, CPA) for one platform over the last 30 days.",
     family: "measure",
@@ -982,6 +1242,21 @@ const measureTools: AgentTool[] = [
   {
     name: "get_spend",
     description: "Total spend over the last 30 days, per platform and overall.",
+    family: "measure",
+    inputSchema: { type: "object", properties: { ...platformProp } },
+    handler: async (ctx, args) => {
+      const snapshots = str(args.platform)
+        ? [await fetchSnapshot(ctx.organizationId, args.platform as ConnectorId)]
+        : await fetchAllSnapshots(ctx.organizationId);
+      return {
+        total: snapshots.reduce((s, a) => s + a.spend, 0),
+        perPlatform: snapshots.map((s) => ({ platform: s.platform, spend: s.spend, currency: s.currency })),
+      };
+    },
+  },
+  {
+    name: "get_daily_spend",
+    description: "Synter-style alias of get_spend — daily/period spend breakdown by platform.",
     family: "measure",
     inputSchema: { type: "object", properties: { ...platformProp } },
     handler: async (ctx, args) => {
@@ -1302,7 +1577,7 @@ const governTools: AgentTool[] = [
   },
   {
     name: "list_skills",
-    description: "List built-in Orkestria MCP skills (launch, optimize, audit).",
+    description: "List built-in Orkestria MCP skills (file SOPs + launch/optimize/audit/audience/creative_rotate).",
     family: "govern",
     inputSchema: { type: "object", properties: {} },
     handler: async () => listSkills(),
@@ -1314,17 +1589,68 @@ const governTools: AgentTool[] = [
     family: "govern",
     inputSchema: {
       type: "object",
-      properties: { skillId: { type: "string", enum: ["launch", "optimize", "audit"] } },
+      properties: {
+        skillId: {
+          type: "string",
+          enum: [
+            "launch",
+            "optimize",
+            "audit",
+            "audience",
+            "creative_rotate",
+            "campaign-manager",
+            "performance-analyzer",
+            "budget-optimizer",
+            "creative-generator",
+          ],
+        },
+      },
       required: ["skillId"],
     },
     handler: async (_ctx, args) => {
       const skill = getSkill(str(args.skillId) ?? "");
-      if (!skill) throw new Error("Skill inconnu");
+      if (!skill) throw new Error("Unknown skill — call list_skills");
       return {
         skill,
         instructions:
-          "Execute steps in order. For writes, call execute with dry_run=true first, then dry_run=false after review.",
+          "Execute steps in order. For writes, call execute with dry_run=true first, then dry_run=false after review. Check list_capabilities for maturity.",
       };
+    },
+  },
+  {
+    name: "list_tool_catalog",
+    description: "Catalog of all MCP tools (name, family, description) — Synter-style discovery.",
+    family: "govern",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () =>
+      getAgentTools().filter((t) => t.name !== "run_tool").map((t) => ({
+        name: t.name,
+        family: t.family,
+        description: t.description,
+      })),
+  },
+  {
+    name: "run_tool",
+    description:
+      "Run any Orkestria MCP tool by name (Synter-style long-tail). Prefer named tools when you know them. Writes still default to dry_run.",
+    family: "govern",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Tool name from list_tool_catalog" },
+        arguments: { type: "object", description: "Arguments for that tool" },
+      },
+      required: ["name"],
+    },
+    handler: async (ctx, args) => {
+      const toolName = str(args.name);
+      if (!toolName) throw new Error("name requis");
+      if (toolName === "run_tool") throw new Error("run_tool cannot call itself");
+      const nested =
+        typeof args.arguments === "object" && args.arguments !== null
+          ? (args.arguments as Record<string, unknown>)
+          : {};
+      return invokeAgentTool(ctx, toolName, nested);
     },
   },
   {
@@ -1358,6 +1684,9 @@ export const AGENT_TOOLS: AgentTool[] = [
   ...governTools,
 ];
 
+function getAgentTools(): AgentTool[] {
+  return AGENT_TOOLS;
+}
 export function getAgentTool(name: string): AgentTool | undefined {
   return AGENT_TOOLS.find((t) => t.name === name);
 }
@@ -1372,7 +1701,16 @@ export async function invokeAgentTool(
   if (!tool) throw new Error(`Tool inconnu : ${name}`);
   const isWrite =
     ["launch", "optimize"].includes(tool.family) ||
-    ["execute", "approve_action", "reject_action", "set_policy", "upload_creative", "autonomy_tick"].includes(name);
+    [
+      "execute",
+      "approve_action",
+      "reject_action",
+      "set_policy",
+      "upload_creative",
+      "autonomy_tick",
+      "launch_meta_brief",
+      "activate_meta_campaign",
+    ].includes(name);
   const start = Date.now();
   try {
     const result = await tool.handler(ctx, args ?? {});

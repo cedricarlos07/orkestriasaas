@@ -26,8 +26,6 @@ export function requireOAuthCredentials(connector: ConnectorId): void {
 }
 
 export function requireMcpOrDirectApi(server: MCPServerId): void {
-  if (process.env.ADKIT_API_KEY?.trim() && server !== "ga4") return;
-
   const envKey = MCP_SERVER_ENV[server];
   const mcpUrl = process.env[envKey];
   if (mcpUrl?.trim()) return;
@@ -36,12 +34,6 @@ export function requireMcpOrDirectApi(server: MCPServerId): void {
     requireEnv("GOOGLE_ADS_DEVELOPER_TOKEN");
     return;
   }
-  // Every other platform talks to its API directly with the connection's OAuth tokens.
-  return;
-}
-
-export function isAdkitConfigured(): boolean {
-  return Boolean(process.env.ADKIT_API_KEY?.trim());
 }
 
 export function isWriteEnabled(): boolean {

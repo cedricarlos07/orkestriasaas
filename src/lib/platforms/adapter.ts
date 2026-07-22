@@ -169,7 +169,7 @@ const googleAds: PlatformAdapter = {
       name: input.name,
       description: input.description,
     });
-    return { audienceId: res.audienceId };
+    return { audienceId: res.audienceId, details: res.details };
   },
   createConversion: async (t, accountId, input) => {
     const { createGoogleConversionAction } = await import("./google-ads-api");
@@ -232,7 +232,7 @@ const metaAds: PlatformAdapter = {
       objective: input.objective,
       countries: input.countries,
     });
-    return { campaignId: result.campaignId, details: { adSetId: result.adSetId, status: "PAUSED" } };
+    return { campaignId: result.campaignId, details: { adSetId: result.adSetId, ...result.details } };
   },
   createAdSet: async (t, accountId, input) => {
     const { createMetaAdSet } = await import("./meta-api");

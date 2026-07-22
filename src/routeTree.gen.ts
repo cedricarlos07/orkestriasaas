@@ -77,6 +77,7 @@ import { Route as AuthenticatedAppReportsRouteImport } from './routes/_authentic
 import { Route as AuthenticatedAppRunsRouteImport } from './routes/_authenticated/app.runs'
 import { Route as AuthenticatedAppSettingsRouteImport } from './routes/_authenticated/app.settings'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiCronAutonomyRouteImport } from './routes/api/cron/autonomy'
 import { Route as ApiMcpIndexRouteImport } from './routes/api/mcp/index'
 import { Route as ApiMcpCallRouteImport } from './routes/api/mcp/call'
 import { Route as ApiMcpToolsRouteImport } from './routes/api/mcp/tools'
@@ -437,6 +438,11 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronAutonomyRoute = ApiCronAutonomyRouteImport.update({
+  id: '/api/cron/autonomy',
+  path: '/api/cron/autonomy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMcpIndexRoute = ApiMcpIndexRouteImport.update({
   id: '/api/mcp/',
   path: '/api/mcp/',
@@ -579,6 +585,7 @@ export interface FileRoutesByFullPath {
   '/app/runs': typeof AuthenticatedAppRunsRouteWithChildren
   '/app/settings': typeof AuthenticatedAppSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/cron/autonomy': typeof ApiCronAutonomyRoute
   '/api/mcp/call': typeof ApiMcpCallRoute
   '/api/mcp/tools': typeof ApiMcpToolsRoute
   '/publicite/$sector/$city': typeof PubliciteSectorCityRoute
@@ -657,6 +664,7 @@ export interface FileRoutesByTo {
   '/app/runs': typeof AuthenticatedAppRunsRouteWithChildren
   '/app/settings': typeof AuthenticatedAppSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/cron/autonomy': typeof ApiCronAutonomyRoute
   '/api/mcp/call': typeof ApiMcpCallRoute
   '/api/mcp/tools': typeof ApiMcpToolsRoute
   '/publicite/$sector/$city': typeof PubliciteSectorCityRoute
@@ -742,6 +750,7 @@ export interface FileRoutesById {
   '/_authenticated/app/runs': typeof AuthenticatedAppRunsRouteWithChildren
   '/_authenticated/app/settings': typeof AuthenticatedAppSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/cron/autonomy': typeof ApiCronAutonomyRoute
   '/api/mcp/call': typeof ApiMcpCallRoute
   '/api/mcp/tools': typeof ApiMcpToolsRoute
   '/publicite/$sector/$city': typeof PubliciteSectorCityRoute
@@ -826,6 +835,7 @@ export interface FileRouteTypes {
     | '/app/runs'
     | '/app/settings'
     | '/api/auth/$'
+    | '/api/cron/autonomy'
     | '/api/mcp/call'
     | '/api/mcp/tools'
     | '/publicite/$sector/$city'
@@ -904,6 +914,7 @@ export interface FileRouteTypes {
     | '/app/runs'
     | '/app/settings'
     | '/api/auth/$'
+    | '/api/cron/autonomy'
     | '/api/mcp/call'
     | '/api/mcp/tools'
     | '/publicite/$sector/$city'
@@ -988,6 +999,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/runs'
     | '/_authenticated/app/settings'
     | '/api/auth/$'
+    | '/api/cron/autonomy'
     | '/api/mcp/call'
     | '/api/mcp/tools'
     | '/publicite/$sector/$city'
@@ -1025,6 +1037,7 @@ export interface RootRouteChildren {
   PlateformesIndexRoute: typeof PlateformesIndexRoute
   SecteursIndexRoute: typeof SecteursIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiCronAutonomyRoute: typeof ApiCronAutonomyRoute
   ApiMcpCallRoute: typeof ApiMcpCallRoute
   ApiMcpToolsRoute: typeof ApiMcpToolsRoute
   PubliciteSectorCityRoute: typeof PubliciteSectorCityRoute
@@ -1512,6 +1525,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/autonomy': {
+      id: '/api/cron/autonomy'
+      path: '/api/cron/autonomy'
+      fullPath: '/api/cron/autonomy'
+      preLoaderRoute: typeof ApiCronAutonomyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mcp/': {
       id: '/api/mcp/'
       path: '/api/mcp'
@@ -1847,6 +1867,7 @@ const rootRouteChildren: RootRouteChildren = {
   PlateformesIndexRoute: PlateformesIndexRoute,
   SecteursIndexRoute: SecteursIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiCronAutonomyRoute: ApiCronAutonomyRoute,
   ApiMcpCallRoute: ApiMcpCallRoute,
   ApiMcpToolsRoute: ApiMcpToolsRoute,
   PubliciteSectorCityRoute: PubliciteSectorCityRoute,

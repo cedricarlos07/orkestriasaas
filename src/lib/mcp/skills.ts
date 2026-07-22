@@ -1,5 +1,6 @@
 /**
- * Built-in MCP skills (SOPs) — chain existing tools under the policy engine.
+ * Built-in MCP skills (SOPs) — Synter-style file SOPs + in-code launch skills.
+ * File SOPs live under skills/ and agents/ad-operator.md.
  */
 export type SkillDefinition = {
   id: string;
@@ -14,9 +15,9 @@ export const MCP_SKILLS: SkillDefinition[] = [
     name: "Launch campaign",
     description: "Validate setup, propose a media plan, then create a paused campaign.",
     steps: [
-      { tool: "validate_setup", hint: "Check key, connections and policy" },
+      { tool: "validate_setup", hint: "Check key, connections, policy, maturity matrix" },
       { tool: "create_media_plan", hint: "Allocate budget across connected platforms" },
-      { tool: "create_campaign", hint: "Create paused campaign (use execute dry_run first)" },
+      { tool: "create_campaign", hint: "Create paused campaign (dry_run=true then false)" },
     ],
   },
   {
@@ -26,7 +27,7 @@ export const MCP_SKILLS: SkillDefinition[] = [
     steps: [
       { tool: "detect_anomalies", hint: "Find spend without conversions / low CTR / high CPA" },
       { tool: "get_performance", hint: "Pull 30-day performance" },
-      { tool: "pause_campaign", hint: "Pause clear losers via execute dry_run then confirm" },
+      { tool: "pause_campaign", hint: "Pause clear losers via dry_run then confirm" },
     ],
   },
   {
@@ -55,8 +56,48 @@ export const MCP_SKILLS: SkillDefinition[] = [
     description: "Find low-CTR Meta ads and pause losers under policy.",
     steps: [
       { tool: "suggest_creative_rotation", hint: "List Meta ads with low CTR" },
-      { tool: "pause_ad", hint: "Pause suggested ads via execute dry_run then confirm" },
+      { tool: "pause_ad", hint: "Pause suggested ads via dry_run then confirm" },
       { tool: "list_creatives", hint: "Refresh creative inventory" },
+    ],
+  },
+  {
+    id: "campaign-manager",
+    name: "Campaign manager",
+    description: "Synter-style campaign launch SOP (see skills/campaign-manager/SKILL.md).",
+    steps: [
+      { tool: "list_capabilities", hint: "Honest matrix" },
+      { tool: "create_media_plan", hint: "Budget allocation" },
+      { tool: "create_meta_campaign", hint: "Or create_search_campaign / create_pmax_campaign" },
+    ],
+  },
+  {
+    id: "performance-analyzer",
+    name: "Performance analyzer",
+    description: "Cross-platform performance SOP (see skills/performance-analyzer/SKILL.md).",
+    steps: [
+      { tool: "get_account_summary", hint: "Totals" },
+      { tool: "compare_campaigns", hint: "Rank campaigns" },
+      { tool: "detect_anomalies", hint: "Surface issues" },
+    ],
+  },
+  {
+    id: "budget-optimizer",
+    name: "Budget optimizer",
+    description: "Budget reallocation SOP (see skills/budget-optimizer/SKILL.md).",
+    steps: [
+      { tool: "get_daily_spend", hint: "Spend breakdown" },
+      { tool: "compare_campaigns", hint: "Efficiency ranking" },
+      { tool: "update_campaign_budget", hint: "Apply with dry_run protocol" },
+    ],
+  },
+  {
+    id: "creative-generator",
+    name: "Creative generator",
+    description: "Copy + upload creatives (see skills/creative-generator/SKILL.md). No Imagen/Veo.",
+    steps: [
+      { tool: "generate_ad_copy", hint: "Text variants" },
+      { tool: "upload_creative", hint: "Upload image asset" },
+      { tool: "list_creatives", hint: "Inventory" },
     ],
   },
 ];

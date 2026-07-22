@@ -4,7 +4,6 @@ import { db } from "@/db";
 import { connections } from "@/db/schema/index";
 import { ensureSession } from "@/lib/auth.functions";
 import { CONNECTORS, hasOAuthCredentials, type ConnectorId } from "@/lib/oauth/connectors";
-import { isAdkitEnabled } from "@/lib/mcp/clients/adkit";
 import { disconnectConnection, getAuthorizeRedirectAsync } from "@/lib/oauth/service";
 import { getActiveOrgId } from "./context";
 
@@ -21,12 +20,7 @@ export type ConnectionView = {
 };
 
 function connectorConfigured(id: ConnectorId): boolean {
-  if (hasOAuthCredentials(id)) return true;
-  // Ads régies: available via unified MCP (AdKit) when API key is on the server
-  if (id === "meta_ads" || id === "google_ads" || id === "tiktok_ads") {
-    return isAdkitEnabled();
-  }
-  return false;
+  return hasOAuthCredentials(id);
 }
 
 export const listConnections = createServerFn({ method: "GET" }).handler(async () => {
@@ -35,12 +29,7 @@ export const listConnections = createServerFn({ method: "GET" }).handler(async (
   const rows = await db.select().from(connections).where(eq(connections.organizationId, orgId));
   return rows.map((r) => {
     const cfg = CONNECTORS[r.connector as ConnectorId];
-    const via =
-      r.encryptedTokens === "adkit:linked"
-        ? ("unified" as const)
-        : r.encryptedTokens
-          ? ("oauth" as const)
-          : ("none" as const);
+    const via = r.encryptedTokens ? ("oauth" as const) : ("none" as const);
     return {
       id: r.id,
       connector: r.connector as ConnectorId,

@@ -347,6 +347,7 @@ export async function createGoogleCampaignPaused(
         note: assetGroupId
           ? "PMax créée en PAUSE avec asset group textuel minimal"
           : "PMax créée en PAUSE — asset group à compléter dans Google Ads",
+        maturity: "production",
       },
     };
   }
@@ -448,6 +449,7 @@ export async function createGoogleCampaignPaused(
       adId,
       keywords: kw.resourceNames.length,
       note: "Search créée en PAUSE avec ad group, mots-clés et RSA",
+      maturity: "production",
     },
   };
 }
@@ -483,7 +485,7 @@ export async function createGoogleUserList(
   accessToken: string,
   customerId: string,
   input: { name: string; description?: string },
-): Promise<{ audienceId: string }> {
+): Promise<{ audienceId: string; details?: Record<string, unknown> }> {
   const cid = customerId.replace(/\D/g, "");
   const res = await fetch(`${API}/customers/${cid}/userLists:mutate`, {
     method: "POST",
@@ -508,7 +510,12 @@ export async function createGoogleUserList(
   const data = (await res.json()) as { results?: { resourceName?: string }[] };
   const rn = data.results?.[0]?.resourceName;
   if (!rn) throw new Error("Google create audience: id manquant");
-  return { audienceId: resourceId(rn) };
+  return {
+    audienceId: resourceId(rn),
+    details: {
+      note: "Customer Match user list shell created — upload hashed PII separately; list is empty until members are added.",
+    },
+  };
 }
 
 export async function createGoogleConversionAction(

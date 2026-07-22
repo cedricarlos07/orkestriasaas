@@ -371,7 +371,7 @@ export async function createMicrosoftCampaignPaused(
   if (!campaignId) throw new Error("Microsoft Ads create campaign: id manquant");
   return {
     campaignId,
-    details: { status: "Paused", note: "Campagne Microsoft Ads créée en Paused" },
+    details: { status: "Paused", maturity: "experimental", note: "Campagne Microsoft Ads créée en Paused (experimental)" },
   };
 }
 

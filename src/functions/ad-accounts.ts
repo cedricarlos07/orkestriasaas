@@ -9,7 +9,6 @@ import { listAccessibleGoogleAdsCustomers } from "@/lib/platforms/google-ads-api
 import { listMetaAdAccounts } from "@/lib/platforms/meta-api";
 import { listTikTokAdvertisers } from "@/lib/platforms/tiktok-api";
 import { listGa4Properties } from "@/lib/platforms/ga4-api";
-import { ADKIT_LINK_MARKER } from "@/lib/mcp/adkit-org";
 import { getActiveOrgId } from "./context";
 
 export type AdAccountView = {
@@ -44,19 +43,6 @@ export const listAdAccounts = createServerFn({ method: "GET" }).handler(async ()
     const connector = conn.connector as ConnectorId;
     const cfg = CONNECTORS[connector];
     try {
-      if (conn.encryptedTokens === ADKIT_LINK_MARKER) {
-        accounts.push({
-          id: `${connector}:unified`,
-          connectionId: conn.id,
-          connector,
-          platform: cfg?.label ?? connector,
-          name: conn.externalAccount ?? "Compte lié",
-          masked: "via Orkestria",
-          currency: "—",
-          timezone: "—",
-        });
-        continue;
-      }
       const tokens = await ensureFreshTokens(conn.id, orgId, connector);
       switch (connector) {
         case "google_ads": {

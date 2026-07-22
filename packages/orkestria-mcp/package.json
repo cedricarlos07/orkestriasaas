@@ -1,7 +1,7 @@
 {
   "name": "orkestria-mcp",
-  "version": "1.1.0",
-  "description": "Orkestria MCP server — control your ad campaigns (Google, Meta, LinkedIn, TikTok, Snapchat, Reddit, Microsoft, X, Amazon, Pinterest) from any MCP-compatible agent, with policy gates, dry-run and audit trail.",
+  "version": "1.2.0",
+  "description": "Orkestria MCP — Synter-style safe-by-default ad control (Google/Meta production; other platforms experimental) with dry-run, policy gates and audit trail.",
   "type": "module",
   "bin": {
     "orkestria-mcp": "bin/orkestria-mcp.mjs"

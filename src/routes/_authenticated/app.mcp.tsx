@@ -456,9 +456,22 @@ function SkillsPanel() {
   return (
     <section className="card-soft rounded-2xl p-6">
       <p className="mb-2 font-display text-[16px] font-semibold text-ink">Skills MCP</p>
-      <p className="mb-4 text-[13px] text-ink-soft">
-        SOPs appelables via <code className="rounded bg-surface-2 px-1">list_skills</code> /{" "}
+      <p className="mb-3 text-[13px] text-ink-soft">
+        SOPs via <code className="rounded bg-surface-2 px-1">list_skills</code> /{" "}
         <code className="rounded bg-surface-2 px-1">run_skill</code> — pas un Campaign IDE.
+      </p>
+      <div className="mb-4 flex flex-wrap gap-2 text-[12px]">
+        <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-800">
+          production · google_ads · meta_ads
+        </span>
+        <span className="rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-800">
+          experimental · LinkedIn · TikTok · Snap · Reddit · MS · X · Amazon · Pinterest
+        </span>
+        <span className="rounded-full bg-surface-2 px-2.5 py-1 font-medium text-ink-soft">reporting · ga4</span>
+      </div>
+      <p className="mb-4 text-[12px] text-ink-soft">
+        Maturity via <code className="rounded bg-surface-2 px-1">list_capabilities</code> /{" "}
+        <code className="rounded bg-surface-2 px-1">validate_setup</code>. Writes : dry_run → confirm.
       </p>
       {isLoading ? (
         <p className="flex items-center gap-2 text-[13px] text-ink-soft">

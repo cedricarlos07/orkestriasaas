@@ -3,7 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { mcpCalls, mcpStatusSnapshots } from "@/db/schema/index";
 import { ensureSession, ensureSuperAdmin } from "@/lib/auth.functions";
-import { probeMcpHealth } from "@/lib/mcp/gateway";
+import { probeMcpHealth } from "@/lib/mcp/mcp-health";
 import { MCP_CAPABILITIES, MCP_TOOL_REGISTRY } from "@/lib/mcp/tool-registry";
 import { getActiveOrgId } from "./context";
 
