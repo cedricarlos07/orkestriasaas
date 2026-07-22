@@ -16,10 +16,14 @@ export const getMetaSetupStatus = createServerFn({ method: "GET" }).handler(asyn
   const rows = await db.select().from(connections).where(eq(connections.organizationId, orgId));
   const metaConn = rows.find((r) => r.connector === "meta_ads" && r.status === "connectée");
 
-  let adkitHealth: { ok: boolean; error?: string } = { ok: false, error: "Meta non connecté" };
+  let oauthConnected = false;
+  let tokenError: string | undefined;
+  let automationHealth: { ok: boolean; error?: string } = { ok: false, error: "Meta non connecté" };
+
   if (metaConn) {
     try {
       const tokens = await ensureFreshTokens(metaConn.id, orgId, "meta_ads");
+      oauthConnected = true;
       const resolvedPageId = await resolveMetaPageId(orgId, pageId);
       const env = buildAdkitEnv({
         accessToken: tokens.accessToken,
@@ -28,17 +32,22 @@ export const getMetaSetupStatus = createServerFn({ method: "GET" }).handler(asyn
         allowSpend: false,
       });
       await adkitVerify(env);
-      adkitHealth = { ok: true };
+      automationHealth = { ok: true };
     } catch (e) {
-      adkitHealth = { ok: false, error: e instanceof Error ? e.message : "adkit verify failed" };
+      const message = e instanceof Error ? e.message : "Vérification Meta échouée";
+      if (!oauthConnected) tokenError = message;
+      automationHealth = { ok: false, error: message };
     }
   }
 
   return {
-    oauthConnected: Boolean(metaConn),
-    account: metaConn?.externalAccount ?? null,
+    oauthConnected,
+    tokenError,
+    account: oauthConnected ? (metaConn?.externalAccount ?? null) : null,
     pageId,
-    adkitHealth,
+    /** @deprecated use automationHealth — kept for callers not yet updated */
+    adkitHealth: automationHealth,
+    automationHealth,
   };
 });
 
