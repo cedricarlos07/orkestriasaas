@@ -7,6 +7,7 @@ import { getActiveOrgId } from "./context";
 import { uid } from "./utils";
 
 import { runOrchestrator } from "@/lib/mcp/orchestrator";
+import { enforceQuotas, QuotaError, recordUsage } from "@/lib/quotas/enforce";
 
 const WELCOME =
   "Bonjour 👋 Dites-moi ce que je peux faire pour vous aujourd'hui. Vous pouvez me demander un audit, un rapport, ou de lancer une campagne.";
@@ -72,11 +73,25 @@ export const sendChatMessage = createServerFn({ method: "POST" })
       createdAt: now,
     });
 
+    try {
+      await enforceQuotas({ orgId, kind: "llm_call", costUsd: 0.002 });
+    } catch (e) {
+      if (e instanceof QuotaError) throw e;
+      throw e;
+    }
+
     const orchestrated = await runOrchestrator({
       orgId,
       userId: session.user.id,
       message: data.text,
       skill: "analysis",
+    });
+
+    await recordUsage({
+      orgId,
+      kind: "llm_call",
+      costUsd: 0.002,
+      meta: { via: "chat", threadId: data.threadId },
     });
 
     await db.insert(chatMessages).values({

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ApiAuthError, authenticateApiKey } from "@/lib/mcp/api-keys";
 import { AGENT_TOOLS, invokeAgentTool } from "@/lib/mcp/agent-tools";
+import { classifyTool, enforceQuotas, QuotaError, recordUsage } from "@/lib/quotas/enforce";
 import { randomUUID } from "node:crypto";
 
 const PROTOCOL_VERSION = "2025-03-26";
@@ -63,12 +64,26 @@ async function handleRpc(request: Request, message: Record<string, unknown>): Pr
       const params = (message.params ?? {}) as { name?: string; arguments?: Record<string, unknown> };
       if (!params.name) return rpcError(id, -32602, "params.name requis");
       try {
+        const kind = classifyTool(params.name);
+        await enforceQuotas({ orgId: ctx.organizationId, kind, tool: params.name });
         const result = await invokeAgentTool(ctx, params.name, params.arguments ?? {});
+        await recordUsage({
+          orgId: ctx.organizationId,
+          kind: kind === "write" ? "write" : "mcp_call",
+          meta: { tool: params.name, via: "mcp/tools/call" },
+        });
         return rpcResult(id, {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
           structuredContent: result,
         });
       } catch (e) {
+        if (e instanceof QuotaError) {
+          return rpcResult(id, {
+            content: [{ type: "text", text: e.message }],
+            isError: true,
+            structuredContent: { error: e.message, code: e.code, retryAfterSec: e.retryAfterSec },
+          });
+        }
         return rpcResult(id, {
           content: [{ type: "text", text: e instanceof Error ? e.message : "Erreur d'exécution" }],
           isError: true,

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Users2, ShieldCheck, CreditCard, BellRing, Save, UserPlus, Trash2, X, Check, KeyRound, Smartphone, Mail, MessageSquare, Sparkles, Monitor, ExternalLink, Loader2 } from "lucide-react";
+import { Building2, Users2, ShieldCheck, CreditCard, BellRing, Save, UserPlus, Check, KeyRound, Smartphone, Mail, MessageSquare, Sparkles, Monitor, ExternalLink, Loader2 } from "lucide-react";
 import { getProfile } from "@/functions/profiles";
 import { getBillingStatus, openBillingPortal, startCheckout } from "@/functions/billing";
 import { authClient } from "@/lib/auth-client";
@@ -97,7 +97,12 @@ function Form({ fields }: { fields: [string, string][] }) {
           <input defaultValue={v} className="flex-1 rounded-xl border border-line bg-white px-3 py-2 text-[14px] text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] focus:border-[#ff6c02] focus:outline-none focus:ring-2 focus:ring-[#ff6c02]/20" />
         </div>
       ))}
-      <div className="pt-2"><button className="btn-primary"><Save className="h-4 w-4" /> Enregistrer</button></div>
+      <div className="flex flex-wrap items-center gap-3 pt-2">
+        <button type="button" className="chip-ghost" disabled title="Persistance bientôt disponible">
+          <Save className="h-4 w-4" /> Enregistrer
+        </button>
+        <span className="text-[12px] text-ink-soft">Enregistrement entreprise bientôt disponible.</span>
+      </div>
     </div>
   );
 }
@@ -106,22 +111,14 @@ type Member = { n: string; r: string; e: string };
 
 function Members({ owner }: { owner: { n: string; e: string } }) {
   const list: Member[] = [{ n: owner.n, r: "Propriétaire", e: owner.e }];
-  const [invite, setInvite] = useState(false);
-  const [extra, setExtra] = useState<Member[]>([]);
-  const all = [...list, ...extra];
-  const roleTint: Record<string, string> = {
-    "Propriétaire": "bg-gradient-to-r from-[#ff8a3c] to-[#ff6c02] text-white",
-    "Media buyer": "bg-sky-100 text-sky-800 ring-1 ring-sky-200",
-    "Créatif": "bg-violet-100 text-violet-800 ring-1 ring-violet-200",
-  };
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
         <p className="font-display text-[16px] font-semibold text-ink">Équipe</p>
-        <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-ink-soft ring-1 ring-line/60">{all.length} membre{all.length > 1 ? "s" : ""}</span>
+        <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-ink-soft ring-1 ring-line/60">1 membre</span>
       </div>
       <ul className="divide-y divide-line/60 rounded-xl border border-line/60 bg-gradient-to-b from-white to-[#faf6ef] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-        {all.map((m) => (
+        {list.map((m) => (
           <li key={m.e} className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="flex items-center gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff8a3c] to-[#ff6c02] text-[12px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">
@@ -132,81 +129,15 @@ function Members({ owner }: { owner: { n: string; e: string } }) {
                 <p className="text-[12px] text-ink-soft">{m.e}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] ${roleTint[m.r] ?? "bg-surface-2 text-ink"}`}>{m.r}</span>
-              {m.r !== "Propriétaire" && (
-                <button
-                  onClick={() => setExtra((l) => l.filter((x) => x.e !== m.e))}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-ink-soft ring-1 ring-line/60 transition hover:-translate-y-0.5 hover:text-rose-600"
-                  title="Retirer"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
+            <span className="rounded-full bg-gradient-to-r from-[#ff8a3c] to-[#ff6c02] px-2.5 py-1 text-[11px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">{m.r}</span>
           </li>
         ))}
       </ul>
-      <button onClick={() => setInvite(true)} className="mt-4 btn-primary"><UserPlus className="h-4 w-4" /> Inviter un membre</button>
-      <p className="mt-2 text-[12px] text-ink-soft">Les invitations locales ne sont pas encore synchronisées en base.</p>
-      {invite && (
-        <InviteDialog
-          onClose={() => setInvite(false)}
-          onInvite={(m) => { setExtra((l) => [...l, m]); setInvite(false); }}
-        />
-      )}
+      <button type="button" disabled className="mt-4 chip-ghost" title="Bientôt">
+        <UserPlus className="h-4 w-4" /> Inviter un membre
+      </button>
+      <p className="mt-2 text-[12px] text-ink-soft">Les invitations d&apos;équipe seront disponibles prochainement.</p>
     </div>
-  );
-}
-
-function InviteDialog({ onClose, onInvite }: { onClose: () => void; onInvite: (m: Member) => void }) {
-  const [n, setN] = useState("");
-  const [e, setE] = useState("");
-  const [r, setR] = useState("Media buyer");
-  const valid = n.trim() && e.includes("@");
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <button aria-label="Fermer" onClick={onClose} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-gradient-to-b from-white to-[#faf6ef] shadow-2xl ring-1 ring-line/60 animate-[fadeInUp_.2s_ease-out]">
-        <div aria-hidden className="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-[#ff6c02]/20 blur-3xl" />
-        <header className="relative flex items-center justify-between border-b border-line/60 px-5 py-4">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff8a3c] to-[#ff6c02] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"><UserPlus className="h-4 w-4" /></span>
-            <h2 className="font-display text-[16px] font-semibold text-ink">Inviter un membre</h2>
-          </div>
-          <button onClick={onClose} className="rounded-full p-1.5 text-ink-soft hover:bg-white hover:text-ink"><X className="h-4 w-4" /></button>
-        </header>
-        <div className="relative space-y-3 p-5">
-          <TextInput label="Nom complet" value={n} onChange={setN} placeholder="Ex : Fatou N'Guessan" />
-          <TextInput label="E-mail" value={e} onChange={setE} placeholder="prenom@agence.ci" />
-          <div>
-            <span className="mb-1 block text-[12px] font-medium text-ink-soft">Rôle</span>
-            <div className="flex flex-wrap gap-2">
-              {["Media buyer", "Créatif", "Analyste"].map((role) => (
-                <button
-                  key={role}
-                  onClick={() => setR(role)}
-                  className={`rounded-full px-3 py-1.5 text-[12px] font-medium ring-1 transition ${r === role ? "bg-gradient-to-r from-[#ff8a3c] to-[#ff6c02] text-white ring-[#ff6c02]/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]" : "bg-white text-ink-soft ring-line/60 hover:text-ink"}`}
-                >{role}</button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <footer className="relative flex items-center justify-end gap-2 border-t border-line/60 bg-white/70 px-5 py-3">
-          <button onClick={onClose} className="chip-ghost">Annuler</button>
-          <button disabled={!valid} onClick={() => onInvite({ n, e, r })} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"><Check className="h-4 w-4" /> Envoyer l'invitation</button>
-        </footer>
-      </div>
-    </div>
-  );
-}
-
-function TextInput({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-[12px] font-medium text-ink-soft">{label}</span>
-      <input value={value} onChange={(ev) => onChange(ev.target.value)} placeholder={placeholder} className="w-full rounded-xl border border-line bg-white px-3 py-2 text-[14px] text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] focus:border-[#ff6c02] focus:outline-none focus:ring-2 focus:ring-[#ff6c02]/20" />
-    </label>
   );
 }
 
@@ -221,7 +152,7 @@ function Security() {
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-sky-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"><KeyRound className="h-4 w-4" /></span>
             <div>
               <p className="text-[14px] font-medium text-ink">Mot de passe</p>
-              <p className="text-[12px] text-ink-soft">Géré via Better Auth.</p>
+              <p className="text-[12px] text-ink-soft">Géré depuis votre compte Orkestria.</p>
             </div>
           </div>
           <button className="chip-ghost" type="button" disabled title="Bientôt">Modifier</button>
@@ -237,7 +168,10 @@ function Security() {
               <p className="text-[12px] text-ink-soft">Pas encore branchée — préférence locale uniquement.</p>
             </div>
           </div>
-          <SwitchToggle on={twoFA} onChange={() => setTwoFA((v) => !v)} />
+          <div className="flex flex-col items-end gap-1">
+            <SwitchToggle on={twoFA} onChange={() => setTwoFA((v) => !v)} />
+            <span className="text-[10px] text-ink-soft">Aperçu · non enregistré</span>
+          </div>
         </div>
       </div>
 
@@ -334,6 +268,45 @@ function Billing() {
             {(checkout.error || portal.error)?.message ?? "Erreur Stripe"}
           </p>
         )}
+        {data.quotas && (
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              {
+                label: "Runs / mois",
+                used: data.quotas.usage.runsMonth,
+                max: data.quotas.quotas.runsPerMonth,
+              },
+              {
+                label: "MCP / mois",
+                used: data.quotas.usage.mcpCallsMonth,
+                max: data.quotas.quotas.mcpCallsPerMonth,
+              },
+              {
+                label: "IA / jour",
+                used: data.quotas.usage.llmCallsDay,
+                max: data.quotas.quotas.llmCallsPerDay,
+              },
+              {
+                label: "Budget IA $",
+                used: Number(data.quotas.usage.aiSpendUsdMonth.toFixed(2)),
+                max: data.quotas.quotas.aiBudgetUsdMonthly,
+              },
+            ].map((m) => (
+              <div key={m.label} className="rounded-xl bg-white/80 px-3 py-2 ring-1 ring-black/5">
+                <p className="text-[11px] uppercase tracking-wider text-ink-soft">{m.label}</p>
+                <p className="mt-0.5 text-[13px] font-semibold text-ink">
+                  {m.used}
+                  <span className="font-normal text-ink-soft">
+                    {" "}/ {m.max < 0 ? "∞" : m.max}
+                  </span>
+                </p>
+                <p className="text-[10px] text-ink-soft">
+                  {data.quotas!.quotas.apiPerMinute}/min · {data.quotas!.quotas.apiPerHour}/h
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between gap-3">
@@ -420,6 +393,9 @@ function Notifications() {
   ];
   return (
     <div className="space-y-3">
+      <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+        Aperçu des préférences — pas encore enregistrées sur le serveur.
+      </p>
       {rows.map((r) => (
         <div key={r.key} className="flex items-center justify-between gap-3 rounded-2xl border border-line/60 bg-gradient-to-br from-white to-[#faf6ef] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
           <div className="flex items-start gap-3">

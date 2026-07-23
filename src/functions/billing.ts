@@ -8,11 +8,19 @@ import {
 } from "@/lib/stripe/billing";
 import type { PlanId } from "@/lib/pricing/plans";
 import { isStripeConfigured } from "@/lib/stripe/client";
+import { getQuotaStatus } from "@/lib/quotas/enforce";
 
 export const getBillingStatus = createServerFn({ method: "GET" }).handler(async () => {
   const session = await ensureSession();
   const orgId = await getActiveOrgId(session);
-  return getOrgBilling(orgId);
+  const [billing, quotas] = await Promise.all([getOrgBilling(orgId), getQuotaStatus(orgId)]);
+  return { ...billing, quotas };
+});
+
+export const getUsageQuotas = createServerFn({ method: "GET" }).handler(async () => {
+  const session = await ensureSession();
+  const orgId = await getActiveOrgId(session);
+  return getQuotaStatus(orgId);
 });
 
 export const startCheckout = createServerFn({ method: "POST" })

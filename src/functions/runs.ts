@@ -3,6 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { agentRuns, runEvents } from "@/db/schema/index";
 import { ensureSession } from "@/lib/auth.functions";
+import { enforceQuotas, recordUsage } from "@/lib/quotas/enforce";
 import { getActiveOrgId } from "./context";
 import { uid } from "./utils";
 
@@ -50,6 +51,7 @@ export const createRun = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const session = await ensureSession();
     const orgId = await getActiveOrgId(session);
+    await enforceQuotas({ orgId, kind: "agent_run" });
     const now = new Date();
     const id = uid("run");
     const row = {
@@ -67,6 +69,7 @@ export const createRun = createServerFn({ method: "POST" })
       updatedAt: now,
     };
     await db.insert(agentRuns).values(row);
+    await recordUsage({ orgId, kind: "agent_run", meta: { runId: id, via: "createRun" } });
     await db.insert(runEvents).values({
       id: uid("ev"),
       runId: id,

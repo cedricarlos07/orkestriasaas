@@ -771,3 +771,22 @@ export const oauthStates = pgTable(
   },
   (t) => [index("oauth_states_expires_idx").on(t.expiresAt)],
 );
+
+/** Durable usage counters for quotas (MCP / LLM / writes). */
+export const usageEvents = pgTable(
+  "usage_events",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    costUsd: numeric("cost_usd", { precision: 12, scale: 6 }).default("0"),
+    meta: jsonb("meta").default({}),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("usage_events_org_created_idx").on(t.organizationId, t.createdAt),
+    index("usage_events_org_kind_idx").on(t.organizationId, t.kind),
+  ],
+);
