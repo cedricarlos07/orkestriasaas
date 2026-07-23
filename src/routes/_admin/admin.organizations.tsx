@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { getOrganizations, PLANS, fmtMoney, fmtNum, fmtRelative, type OrgStatus, type OrgType, type RiskLevel } from "@/lib/admin-store";
+import { useEffect, useMemo, useState } from "react";
+import { getOrganizations, PLANS, fmtMoney, fmtNum, fmtRelative, type Organization, type OrgStatus, type OrgType, type RiskLevel } from "@/lib/admin-store";
 import { StatusPill } from "./admin.index";
 import { Search, Filter, Download } from "lucide-react";
 
@@ -16,8 +16,19 @@ function OrgsLayout() {
   return <OrgsList />;
 }
 
+function useLiveOrgs() {
+  const [orgs, setOrgs] = useState<Organization[]>(() => getOrganizations());
+  useEffect(() => {
+    const sync = () => setOrgs([...getOrganizations()]);
+    sync();
+    window.addEventListener("admin:refreshed", sync);
+    return () => window.removeEventListener("admin:refreshed", sync);
+  }, []);
+  return orgs;
+}
+
 function OrgsList() {
-  const orgs = getOrganizations();
+  const orgs = useLiveOrgs();
   const [q, setQ] = useState("");
   const [type, setType] = useState<OrgType | "all">("all");
   const [status, setStatus] = useState<OrgStatus | "all">("all");
@@ -36,9 +47,9 @@ function OrgsList() {
         <div>
           <p className="text-[12px] font-semibold uppercase tracking-wider text-[#ff8a3d]">Organisations</p>
           <h1 className="mt-1 font-display text-[26px] font-semibold">Toutes les entreprises, agences et groupes</h1>
-          <p className="mt-1 text-[13px] text-white/60">{rows.length} organisation{rows.length > 1 ? "s" : ""} · vue synthétique, données détaillées cloisonnées.</p>
+          <p className="mt-1 text-[13px] text-white/60">{rows.length} organisation{rows.length > 1 ? "s" : ""} · données live Neon.</p>
         </div>
-        <button className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[12.5px] hover:bg-white/[0.06]">
+        <button type="button" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-[12.5px] hover:bg-white/[0.06]">
           <Download className="h-3.5 w-3.5" /> Exporter la liste
         </button>
       </header>
@@ -49,9 +60,9 @@ function OrgsList() {
             <Search className="h-4 w-4 text-white/50" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher (nom, pays…)" className="w-full bg-transparent text-[13px] outline-none placeholder:text-white/40" />
           </div>
-          <FilterSelect value={type} onChange={(v) => setType(v as any)} options={[["all", "Tous types"], ["entreprise", "Entreprise"], ["agence", "Agence"], ["groupe", "Groupe"]]} />
-          <FilterSelect value={status} onChange={(v) => setStatus(v as any)} options={[["all", "Tous statuts"], ["active", "Active"], ["essai", "Essai"], ["suspendue", "Suspendue"], ["impayée", "Impayée"]]} />
-          <FilterSelect value={risk} onChange={(v) => setRisk(v as any)} options={[["all", "Tous risques"], ["faible", "Faible"], ["moyen", "Moyen"], ["élevé", "Élevé"]]} />
+          <FilterSelect value={type} onChange={(v) => setType(v as OrgType | "all")} options={[["all", "Tous types"], ["entreprise", "Entreprise"], ["agence", "Agence"], ["groupe", "Groupe"]]} />
+          <FilterSelect value={status} onChange={(v) => setStatus(v as OrgStatus | "all")} options={[["all", "Tous statuts"], ["active", "Active"], ["essai", "Essai"], ["suspendue", "Suspendue"], ["impayée", "Impayée"]]} />
+          <FilterSelect value={risk} onChange={(v) => setRisk(v as RiskLevel | "all")} options={[["all", "Tous risques"], ["faible", "Faible"], ["moyen", "Moyen"], ["élevé", "Élevé"]]} />
         </div>
       </div>
 
@@ -82,7 +93,7 @@ function OrgsList() {
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={12} className="px-4 py-10 text-center text-white/50">Aucune organisation ne correspond à ces filtres.</td></tr>
+              <tr><td colSpan={12} className="px-4 py-10 text-center text-white/50">Aucune organisation en base (ou filtres trop stricts).</td></tr>
             )}
           </tbody>
         </table>

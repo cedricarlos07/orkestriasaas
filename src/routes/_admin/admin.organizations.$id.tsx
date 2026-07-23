@@ -1,8 +1,8 @@
 import { createFileRoute, Link, useParams, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   getOrganization, PLANS, updateOrganization, logAudit, getUsers, getConnections, connectorLabel,
-  fmtMoney, fmtNum, fmtRelative, planLabel, type Organization,
+  fmtMoney, fmtNum, fmtRelative, planLabel, type Organization, type PlatformUser, type Connection,
 } from "@/lib/admin-store";
 import { setOrganizationWriteBlock } from "@/functions/admin";
 import { StatusPill } from "./admin.index";
@@ -19,9 +19,22 @@ export const Route = createFileRoute("/_admin/admin/organizations/$id")({
 function OrgDetail() {
   const { id } = useParams({ from: "/admin/organizations/$id" });
   const nav = useNavigate();
-  const org = getOrganization(id);
+  const [org, setOrg] = useState(() => getOrganization(id));
+  const [members, setMembers] = useState<PlatformUser[]>(() => getUsers().filter((u) => u.orgId === id));
+  const [conns, setConns] = useState<Connection[]>(() => getConnections().filter((c) => c.orgId === id));
   const [reasonModal, setReasonModal] = useState<{ action: string; run: (reason: string) => void } | null>(null);
   const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const sync = () => {
+      setOrg(getOrganization(id));
+      setMembers(getUsers().filter((u) => u.orgId === id));
+      setConns(getConnections().filter((c) => c.orgId === id));
+    };
+    sync();
+    window.addEventListener("admin:refreshed", sync);
+    return () => window.removeEventListener("admin:refreshed", sync);
+  }, [id]);
 
   if (!org) {
     return (
@@ -32,13 +45,12 @@ function OrgDetail() {
     );
   }
 
-  const plan = PLANS.find((p) => p.id === org.plan)!;
-  const members = getUsers().filter((u) => u.orgId === org.id);
-  const conns = getConnections().filter((c) => c.orgId === org.id);
+  const plan = PLANS.find((p) => p.id === org.plan) ?? PLANS[0];
 
   const run = (action: string, patch: Partial<Organization>, need = true) => {
     const exec = (reason: string) => {
       updateOrganization(org.id, patch);
+      setOrg((prev) => (prev ? { ...prev, ...patch } : prev));
       void setOrganizationWriteBlock({
         data: {
           organizationId: org.id,
@@ -83,7 +95,7 @@ function OrgDetail() {
           <div className="text-right">
             <p className="text-[11px] uppercase tracking-wider text-white/40">Dépenses supervisées</p>
             <p className="mt-0.5 font-display text-[22px] font-semibold">{fmtMoney(org.adSpend)}</p>
-            <p className="text-[11.5px] text-white/50">Coût IA : {Math.round(org.aiSpend)} $ · Renouvellement {fmtRelative(org.renewsAt)}</p>
+            <p className="text-[11.5px] text-white/50">Coût IA : {Math.round(org.aiSpend)} $ · Renouvellement {org.renewsAt ? fmtRelative(org.renewsAt) : "—"}</p>
           </div>
         </div>
       </header>
@@ -104,7 +116,7 @@ function OrgDetail() {
             ["Fuseau", org.timezone],
             ["Langue", org.language],
             ["Responsable de compte", org.accountManager],
-            ["Renouvellement", new Date(org.renewsAt).toLocaleDateString("fr-FR")],
+            ["Renouvellement", org.renewsAt ? new Date(org.renewsAt).toLocaleDateString("fr-FR") : "—"],
           ]} />
         </Panel>
         <Panel title="Workspaces & activité">

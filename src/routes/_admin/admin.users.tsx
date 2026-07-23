@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getUsers, getOrganizations, logAudit, fmtRelative, type PlatformUser } from "@/lib/admin-store";
 import { Search, Filter, ShieldCheck, KeyRound, LogOut, UserX, UserCheck, ArrowRightLeft, UserCog, Eye } from "lucide-react";
 
@@ -9,9 +9,18 @@ export const Route = createFileRoute("/_admin/admin/users")({
 });
 
 function UsersPage() {
-  const orgs = getOrganizations();
-  const orgMap = Object.fromEntries(orgs.map((o) => [o.id, o.name]));
-  const [users, setUsers] = useState<PlatformUser[]>(getUsers());
+  const [orgs, setOrgs] = useState(() => getOrganizations());
+  const [users, setUsers] = useState<PlatformUser[]>(() => getUsers());
+  useEffect(() => {
+    const sync = () => {
+      setOrgs([...getOrganizations()]);
+      setUsers([...getUsers()]);
+    };
+    sync();
+    window.addEventListener("admin:refreshed", sync);
+    return () => window.removeEventListener("admin:refreshed", sync);
+  }, []);
+  const orgMap = useMemo(() => Object.fromEntries(orgs.map((o) => [o.id, o.name])), [orgs]);
   const [q, setQ] = useState("");
   const [role, setRole] = useState("all");
   const [status, setStatus] = useState("all");
@@ -36,7 +45,7 @@ function UsersPage() {
       <header>
         <p className="text-[12px] font-semibold uppercase tracking-wider text-[#ff8a3d]">Utilisateurs</p>
         <h1 className="mt-1 font-display text-[26px] font-semibold">Gestion des comptes plateforme</h1>
-        <p className="mt-1 text-[13px] text-white/60">{rows.length} utilisateur{rows.length > 1 ? "s" : ""} · impersonation strictement encadrée.</p>
+        <p className="mt-1 text-[13px] text-white/60">{rows.length} utilisateur{rows.length > 1 ? "s" : ""} · données live Neon · impersonation encadrée.</p>
       </header>
 
       <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
@@ -45,7 +54,7 @@ function UsersPage() {
             <Search className="h-4 w-4 text-white/50" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nom, e-mail, organisation…" className="w-full bg-transparent text-[13px] outline-none placeholder:text-white/40" />
           </div>
-          <Sel value={role} onChange={setRole} options={[["all", "Tous rôles"], ["owner", "Owner"], ["admin", "Admin"], ["media_buyer", "Media buyer"], ["analyst", "Analyst"], ["viewer", "Viewer"]]} />
+          <Sel value={role} onChange={setRole} options={[["all", "Tous rôles"], ["owner", "Owner"], ["admin", "Admin"], ["member", "Member"], ["media_buyer", "Media buyer"], ["analyst", "Analyst"], ["viewer", "Viewer"]]} />
           <Sel value={status} onChange={setStatus} options={[["all", "Tous statuts"], ["actif", "Actif"], ["suspendu", "Suspendu"], ["invité", "Invité"]]} />
           <Sel value={twofa} onChange={setTwofa} options={[["all", "2FA (tous)"], ["on", "2FA actif"], ["off", "2FA désactivé"]]} />
         </div>
@@ -99,9 +108,10 @@ function UsersPage() {
   );
 }
 
-function nextRole(r: PlatformUser["role"]): PlatformUser["role"] {
-  const order: PlatformUser["role"][] = ["viewer", "analyst", "media_buyer", "admin", "owner"];
-  return order[(order.indexOf(r) + 1) % order.length];
+function nextRole(r: string): string {
+  const order = ["viewer", "analyst", "media_buyer", "admin", "owner", "member"];
+  const i = order.indexOf(r);
+  return order[i < 0 ? 0 : (i + 1) % order.length];
 }
 
 function Sel({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: [string, string][] }) {

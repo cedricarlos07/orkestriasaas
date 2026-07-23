@@ -34,7 +34,7 @@ export type Organization = {
 
 export type PlatformUser = {
   id: string; name: string; email: string; phone: string; orgId: string;
-  role: "owner" | "admin" | "media_buyer" | "analyst" | "viewer";
+  role: string;
   country: string; status: "actif" | "suspendu" | "invité"; twoFA: boolean;
   lastLogin: string; device: string; consumption: number; incidents: number;
 };
@@ -153,6 +153,7 @@ function buildOrgs(): Organization[] {
 }
 
 let _orgs: Organization[] | null = null;
+let _serverSynced = false;
 let _serverKpis: {
   activeOrgs: number;
   activeUsers: number;
@@ -169,7 +170,12 @@ let _serverKpis: {
   pendingApprovals: number;
   failedInvoices: number;
 } | null = null;
-export function getOrganizations(): Organization[] { if (!_orgs) _orgs = buildOrgs(); return _orgs; }
+export function getOrganizations(): Organization[] {
+  if (_orgs) return _orgs;
+  if (_serverSynced) return [];
+  _orgs = buildOrgs();
+  return _orgs;
+}
 export function getOrganization(id: string): Organization | undefined { return getOrganizations().find((o) => o.id === id); }
 export function updateOrganization(id: string, patch: Partial<Organization>) {
   const list = getOrganizations();
@@ -212,7 +218,12 @@ function buildUsers(): PlatformUser[] {
   return users;
 }
 let _users: PlatformUser[] | null = null;
-export function getUsers(): PlatformUser[] { if (!_users) _users = buildUsers(); return _users; }
+export function getUsers(): PlatformUser[] {
+  if (_users) return _users;
+  if (_serverSynced) return [];
+  _users = buildUsers();
+  return _users;
+}
 
 function buildInvoices(): Invoice[] {
   const orgs = getOrganizations();
@@ -234,7 +245,12 @@ function buildInvoices(): Invoice[] {
   return out;
 }
 let _invoices: Invoice[] | null = null;
-export function getInvoices(): Invoice[] { if (!_invoices) _invoices = buildInvoices(); return _invoices; }
+export function getInvoices(): Invoice[] {
+  if (_invoices) return _invoices;
+  if (_serverSynced) return [];
+  _invoices = buildInvoices();
+  return _invoices;
+}
 
 const CONNECTORS: { id: ConnectorId; label: string }[] = [
   { id: "meta", label: "Meta Ads" },
@@ -270,7 +286,12 @@ function buildConnections(): Connection[] {
   return out;
 }
 let _connections: Connection[] | null = null;
-export function getConnections(): Connection[] { if (!_connections) _connections = buildConnections(); return _connections; }
+export function getConnections(): Connection[] {
+  if (_connections) return _connections;
+  if (_serverSynced) return [];
+  _connections = buildConnections();
+  return _connections;
+}
 export function getConnection(id: string) { return getConnections().find((c) => c.id === id); }
 export function updateConnection(id: string, patch: Partial<Connection>) {
   const list = getConnections();
@@ -397,7 +418,12 @@ function buildRuns(): AgentRun[] {
   return out;
 }
 let _runs: AgentRun[] | null = null;
-export function getRuns(): AgentRun[] { if (!_runs) _runs = buildRuns(); return _runs; }
+export function getRuns(): AgentRun[] {
+  if (_runs) return _runs;
+  if (_serverSynced) return [];
+  _runs = buildRuns();
+  return _runs;
+}
 export function getRun(id: string) { return getRuns().find((r) => r.id === id); }
 export function updateRun(id: string, patch: Partial<AgentRun>) {
   const list = getRuns();
@@ -442,7 +468,12 @@ function buildAdActions(): AdAction[] {
   });
 }
 let _actions: AdAction[] | null = null;
-export function getAdActions(): AdAction[] { if (!_actions) _actions = buildAdActions(); return _actions; }
+export function getAdActions(): AdAction[] {
+  if (_actions) return _actions;
+  if (_serverSynced) return [];
+  _actions = buildAdActions();
+  return _actions;
+}
 export function updateAdAction(id: string, patch: Partial<AdAction>) {
   const list = getAdActions();
   const i = list.findIndex((a) => a.id === id);
@@ -487,7 +518,12 @@ function buildApprovals(): Approval[] {
   });
 }
 let _approvals: Approval[] | null = null;
-export function getApprovals(): Approval[] { if (!_approvals) _approvals = buildApprovals(); return _approvals; }
+export function getApprovals(): Approval[] {
+  if (_approvals) return _approvals;
+  if (_serverSynced) return [];
+  _approvals = buildApprovals();
+  return _approvals;
+}
 
 // ============= Policies / autonomy =============
 export type PolicyTemplate = {
@@ -577,8 +613,11 @@ export function getMCPStatuses(): MCPStatus[] {
   }));
 }
 
+let _incidents: Incident[] | null = null;
 export function getIncidents(): Incident[] {
-  return [
+  if (_incidents) return _incidents;
+  if (_serverSynced) return [];
+  _incidents = [
     { id: "inc_01", kind: "cap_dépassé", severity: "critique", message: "Velvet Studio — campagne « Ventes Éclair » a franchi le plafond quotidien de $380.", orgId: "org_0001", at: daysAgo(0.1) },
     { id: "inc_02", kind: "action_non_confirmée", severity: "warn", message: "Baobab Retail — 3 actions financières exécutées sans double confirmation.", orgId: "org_0002", at: daysAgo(0.3) },
     { id: "inc_03", kind: "mcp_erreurs", severity: "critique", message: "Google Ads Write MCP — taux d'erreur > 8 % sur les 15 dernières minutes.", at: daysAgo(0.05) },
@@ -586,10 +625,19 @@ export function getIncidents(): Incident[] {
     { id: "inc_05", kind: "coût_ia_anormal", severity: "warn", message: "Loop Media — coût IA x3 vs moyenne 7 j (128 USD aujourd'hui).", orgId: "org_0007", at: daysAgo(0.5) },
     { id: "inc_06", kind: "oauth_perdu", severity: "info", message: "Aya Cosmetics — token Meta expiré, reconnexion demandée au client.", orgId: "org_0017", at: daysAgo(1.2) },
   ];
+  return _incidents;
 }
 
 export function getGlobalKPIs() {
   if (_serverKpis) return _serverKpis;
+  if (_serverSynced) {
+    return {
+      activeOrgs: 0, activeUsers: 0, payingSubs: 0, mrr: 0, arr: 0,
+      supervisedCampaigns: 0, adSpendOrchestrated: 0, agentActionsToday: 0,
+      actionFailureRate: 0, connectionErrors: 0, aiCostTotal: 0,
+      criticalIncidents: 0, pendingApprovals: 0, failedInvoices: 0,
+    };
+  }
   const orgs = getOrganizations();
   const users = getUsers();
   const invoices = getInvoices();
@@ -667,7 +715,10 @@ export function fmtDateShort(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
 }
 export function fmtRelative(iso: string) {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (!iso) return "—";
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "—";
+  const diff = (Date.now() - t) / 1000;
   if (diff < 60) return "à l'instant";
   if (diff < 3600) return `il y a ${Math.floor(diff / 60)} min`;
   if (diff < 86400) return `il y a ${Math.floor(diff / 3600)} h`;
@@ -1007,7 +1058,12 @@ function buildTickets(): SupportTicket[] {
   });
 }
 let _tickets: SupportTicket[] | null = null;
-export function getTickets(): SupportTicket[] { if (!_tickets) _tickets = buildTickets(); return _tickets; }
+export function getTickets(): SupportTicket[] {
+  if (_tickets) return _tickets;
+  if (_serverSynced) return [];
+  _tickets = buildTickets();
+  return _tickets;
+}
 export function updateTicket(id: string, patch: Partial<SupportTicket>) {
   const list = getTickets();
   const i = list.findIndex((t) => t.id === id);
@@ -1204,9 +1260,35 @@ export function getComplianceEvents(): ComplianceEvent[] {
 
 // ============= Server sync (Neon PostgreSQL) =============
 
-export async function refreshAdminFromServer() {
+function asIso(v: unknown): string {
+  if (!v) return "";
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === "string") return v;
+  return String(v);
+}
+
+function mapConnector(raw: string): ConnectorId {
+  if (raw === "meta_ads" || raw === "meta") return "meta";
+  if (raw === "google_ads") return "google_ads";
+  if (raw === "tiktok_ads" || raw === "tiktok") return "tiktok";
+  if (raw === "ga4") return "ga4";
+  if (raw.includes("google")) return "google_ads";
+  return "meta";
+}
+
+function mapConnStatus(raw: string): Connection["status"] {
+  const s = (raw || "").toLowerCase();
+  if (s.includes("connect") && !s.includes("dé")) return "active";
+  if (s === "active" || s === "connectée") return "active";
+  if (s.includes("expir")) return "expirée";
+  if (s.includes("erreur") || s.includes("error")) return "erreur";
+  if (s.includes("permission")) return "permissions_manquantes";
+  return "déconnectée";
+}
+
+export async function refreshAdminFromServer(): Promise<boolean> {
   try {
-    const [orgs, users, invoices, connections, runs, actions, approvals, incidents, platformIncidents, mcp, tickets, kpisRaw, aiLimitsRaw] =
+    const [orgs, users, invoices, connections, runs, actions, approvals, incidents, mcp, tickets, kpisRaw, aiLimitsRaw] =
       await Promise.all([
         fetchOrganizations(),
         fetchUsers(),
@@ -1216,52 +1298,101 @@ export async function refreshAdminFromServer() {
         fetchAdActions(),
         fetchApprovals(),
         fetchIncidents(),
-        fetchPlatformIncidents(),
         fetchMCPStatuses(),
         fetchTickets(),
         fetchGlobalKPIs(),
         fetchAiLimits(),
       ]);
 
-    _orgs = orgs as Organization[];
-    _users = users as PlatformUser[];
-    _invoices = invoices as Invoice[];
-    _connections = connections as Connection[];
+    _orgs = orgs.map((o) => ({
+      ...o,
+      type: (o.type as Organization["type"]) || "entreprise",
+      plan: (o.plan as Organization["plan"]) || "solo",
+      status: (o.status as Organization["status"]) || "active",
+      risk: (o.risk as Organization["risk"]) || "faible",
+      health: (o.health as Organization["health"]) || "ok",
+      createdAt: asIso(o.createdAt),
+      lastActive: asIso(o.lastActive),
+    }));
+
+    _users = users.map((u) => ({
+      ...u,
+      role: String(u.role || "member"),
+      status: (u.status as PlatformUser["status"]) || "actif",
+      lastLogin: asIso(u.lastLogin),
+      phone: u.phone || "",
+      device: u.device || "—",
+      twoFA: Boolean(u.twoFA),
+      consumption: Number(u.consumption ?? 0),
+      incidents: Number(u.incidents ?? 0),
+    }));
+
+    _invoices = invoices.map((i) => ({
+      ...i,
+      status: i.status as Invoice["status"],
+      method: (i.method as Invoice["method"]) || "carte",
+      issuedAt: asIso(i.issuedAt),
+    }));
+
+    _connections = connections.map((c) => ({
+      id: c.id,
+      orgId: c.organizationId,
+      connector: mapConnector(c.connector),
+      status: mapConnStatus(c.status),
+      lastSync: asIso(c.lastSync ?? c.updatedAt),
+      calls24h: Number(c.calls24h ?? 0),
+      errorRate: Number(c.errorRate ?? 0),
+      scopes: Array.isArray(c.scopes) ? (c.scopes as string[]) : [],
+    }));
+
     _runs = runs.map((r) => ({
       id: r.id,
       orgId: r.organizationId,
-      org: orgs.find((o) => o.id === r.organizationId)?.name ?? "—",
-      goal: r.goal,
-      state: r.state as RunState,
+      org: _orgs?.find((o) => o.id === r.organizationId)?.name ?? "—",
+      goal: r.goal ?? "—",
+      state: (r.state as RunState) || "completed",
       model: "deepseek-v4-flash",
       costUsd: Number(r.costUsd ?? 0),
-      startedAt: r.createdAt.toISOString(),
-      durationSec: Math.floor((Date.now() - r.createdAt.getTime()) / 1000),
+      startedAt: asIso(r.createdAt),
+      durationSec: 0,
       steps: [],
       events: [],
       decisions: [],
       approvals: [],
       errors: [],
     })) as AgentRun[];
+
     _actions = actions as unknown as AdAction[];
     _approvals = approvals as unknown as Approval[];
+    _incidents = incidents.map((i) => ({
+      id: i.id,
+      kind: (i.kind as Incident["kind"]) || "mcp_erreurs",
+      severity: (i.severity as Incident["severity"]) || "info",
+      message: i.message,
+      orgId: i.organizationId ?? undefined,
+      at: asIso(i.createdAt),
+    }));
+    void mcp;
+    void tickets;
 
     _serverKpis = {
       activeOrgs: kpisRaw.orgs,
       activeUsers: kpisRaw.users,
-      payingSubs: orgs.filter((o) => o.status === "active").length,
+      payingSubs: _orgs.filter((o) => o.status === "active").length,
       mrr: kpisRaw.mrr,
       arr: kpisRaw.mrr * 12,
       supervisedCampaigns: 0,
-      adSpendOrchestrated: orgs.reduce((s, o) => s + o.adSpend, 0),
+      adSpendOrchestrated: _orgs.reduce((s, o) => s + o.adSpend, 0),
       agentActionsToday: kpisRaw.runs,
       actionFailureRate: 0,
-      connectionErrors: connections.filter((c) => c.status !== "active").length,
+      connectionErrors: _connections.filter((c) => c.status !== "active").length,
       aiCostTotal: kpisRaw.aiCostTotal,
       criticalIncidents: incidents.filter((i) => i.severity === "critique").length,
       pendingApprovals: kpisRaw.pendingApprovals,
-      failedInvoices: invoices.filter((i) => i.status === "échec").length,
+      failedInvoices: _invoices.filter((i) => i.status === "échec").length,
     };
+
+    _serverSynced = true;
 
     if (typeof window !== "undefined") {
       localStorage.setItem(AI_LIMITS_KEY, JSON.stringify({
@@ -1271,8 +1402,23 @@ export async function refreshAdminFromServer() {
       }));
       window.dispatchEvent(new Event("admin:refreshed"));
     }
+    return true;
   } catch (e) {
     console.error("refreshAdminFromServer failed", e);
+    _serverSynced = true;
+    _orgs = _orgs ?? [];
+    _users = _users ?? [];
+    _invoices = _invoices ?? [];
+    _connections = _connections ?? [];
+    _runs = _runs ?? [];
+    _actions = _actions ?? [];
+    _approvals = _approvals ?? [];
+    _incidents = _incidents ?? [];
+    _tickets = _tickets ?? [];
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("admin:refreshed"));
+    }
+    return false;
   }
 }
 

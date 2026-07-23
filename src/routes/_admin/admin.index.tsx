@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import {
   getGlobalKPIs, getMCPStatuses, getIncidents, PLANS, getOrganizations,
   getPlatformIncidents, getInvoices, getTickets, getAiLimits,
@@ -16,6 +17,13 @@ export const Route = createFileRoute("/_admin/admin/")({
 });
 
 function AdminHome() {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const sync = () => setTick((t) => t + 1);
+    window.addEventListener("admin:refreshed", sync);
+    return () => window.removeEventListener("admin:refreshed", sync);
+  }, []);
+
   const k = getGlobalKPIs();
   const mcp = getMCPStatuses();
   const incidents = getIncidents();
