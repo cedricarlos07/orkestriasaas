@@ -977,12 +977,11 @@ function TestimonialVisual() {
       <img
         src={aichaPhoto}
         alt="Aïcha Konaté, fondatrice d'une boutique de mode à Abidjan"
-        className="absolute inset-0 h-full w-full object-cover object-[50%_20%] md:object-[50%_25%]"
+        className="absolute inset-0 h-full w-full object-cover object-[42%_28%] sm:object-[40%_30%] md:object-[38%_32%]"
         loading="lazy"
         decoding="async"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/5" />
-      <div className="absolute inset-0 opacity-40 mix-blend-overlay" style={{ backgroundImage: "radial-gradient(circle at 15% 15%, rgba(255,170,90,0.55), transparent 45%), radial-gradient(circle at 85% 90%, rgba(0,0,0,0.5), transparent 45%)" }} />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/35 to-black/10" />
       <div className="relative flex h-full min-h-[420px] flex-col justify-between gap-8 p-5 sm:p-6 md:p-8">
         <div className="flex items-center gap-3">
           <span className="rounded-full bg-white/15 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-white/90 ring-1 ring-white/25 backdrop-blur">Cas client</span>
@@ -993,20 +992,20 @@ function TestimonialVisual() {
             <div className="text-[13px] text-white/80">Boutique de mode · Abidjan</div>
           </div>
           <div className="rounded-2xl bg-white/12 p-4 backdrop-blur ring-1 ring-white/20">
-          <div className="text-[11px] font-medium uppercase tracking-wider text-white/80">Ce mois-ci</div>
-          <div className="mt-2 flex items-end justify-between">
-            <div>
-              <div className="font-display text-[36px] font-semibold">312</div>
-              <div className="text-[12px] text-white/80">Commandes</div>
+            <div className="text-[11px] font-medium uppercase tracking-wider text-white/80">Ce mois-ci</div>
+            <div className="mt-2 flex items-end justify-between">
+              <div>
+                <div className="font-display text-[36px] font-semibold">312</div>
+                <div className="text-[12px] text-white/80">Commandes</div>
+              </div>
+              <div className="text-right">
+                <div className="font-display text-[36px] font-semibold">4.1×</div>
+                <div className="text-[12px] text-white/80">ROAS</div>
+              </div>
             </div>
-            <div className="text-right">
-              <div className="font-display text-[36px] font-semibold">4.1×</div>
-              <div className="text-[12px] text-white/80">ROAS</div>
-            </div>
-          </div>
-          <svg viewBox="0 0 200 40" className="mt-3 h-10 w-full">
-            <path d="M0,32 C30,26 50,18 80,20 C110,22 130,8 160,10 C180,11 195,6 200,5" fill="none" stroke="white" strokeWidth="2" />
-          </svg>
+            <svg viewBox="0 0 200 40" className="mt-3 h-10 w-full" aria-hidden>
+              <path d="M0,32 C30,26 50,18 80,20 C110,22 130,8 160,10 C180,11 195,6 200,5" fill="none" stroke="white" strokeWidth="2" />
+            </svg>
           </div>
         </div>
       </div>
