@@ -56,11 +56,11 @@ export const getDashboardKpis = createServerFn({ method: "GET" }).handler(async 
       kpis: [
         {
           key: "account",
-          label: "Compte Meta",
-          value: (meta.tokens.accountName ?? meta.conn.externalAccount ?? "Lié").slice(0, 18),
+          label: "Compte",
+          value: (meta.tokens.accountName ?? meta.conn.externalAccount ?? "Lié").slice(0, 20),
           delta: "—",
           trend: "flat",
-          deltaLabel: "OAuth OK",
+          deltaLabel: "connexion OK",
         },
       ],
       pendingApprovalsHint: "Les KPIs détaillés seront disponibles dès que Meta renverra les statistiques.",
