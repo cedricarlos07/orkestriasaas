@@ -81,6 +81,7 @@ import { Route as ApiCronAutonomyRouteImport } from './routes/api/cron/autonomy'
 import { Route as ApiMcpIndexRouteImport } from './routes/api/mcp/index'
 import { Route as ApiMcpCallRouteImport } from './routes/api/mcp/call'
 import { Route as ApiMcpToolsRouteImport } from './routes/api/mcp/tools'
+import { Route as ApiStripeWebhookRouteImport } from './routes/api/stripe/webhook'
 import { Route as PubliciteSectorCityRouteImport } from './routes/publicite.$sector.$city'
 import { Route as AdminAdminConnectionsIdRouteImport } from './routes/_admin/admin.connections.$id'
 import { Route as AdminAdminOrganizationsIdRouteImport } from './routes/_admin/admin.organizations.$id'
@@ -458,6 +459,11 @@ const ApiMcpToolsRoute = ApiMcpToolsRouteImport.update({
   path: '/api/mcp/tools',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiStripeWebhookRoute = ApiStripeWebhookRouteImport.update({
+  id: '/api/stripe/webhook',
+  path: '/api/stripe/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PubliciteSectorCityRoute = PubliciteSectorCityRouteImport.update({
   id: '/publicite/$sector/$city',
   path: '/publicite/$sector/$city',
@@ -588,6 +594,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/autonomy': typeof ApiCronAutonomyRoute
   '/api/mcp/call': typeof ApiMcpCallRoute
   '/api/mcp/tools': typeof ApiMcpToolsRoute
+  '/api/stripe/webhook': typeof ApiStripeWebhookRoute
   '/publicite/$sector/$city': typeof PubliciteSectorCityRoute
   '/admin/': typeof AdminAdminIndexRoute
   '/app/': typeof AuthenticatedAppIndexRoute
@@ -667,6 +674,7 @@ export interface FileRoutesByTo {
   '/api/cron/autonomy': typeof ApiCronAutonomyRoute
   '/api/mcp/call': typeof ApiMcpCallRoute
   '/api/mcp/tools': typeof ApiMcpToolsRoute
+  '/api/stripe/webhook': typeof ApiStripeWebhookRoute
   '/publicite/$sector/$city': typeof PubliciteSectorCityRoute
   '/admin': typeof AdminAdminIndexRoute
   '/app': typeof AuthenticatedAppIndexRoute
@@ -753,6 +761,7 @@ export interface FileRoutesById {
   '/api/cron/autonomy': typeof ApiCronAutonomyRoute
   '/api/mcp/call': typeof ApiMcpCallRoute
   '/api/mcp/tools': typeof ApiMcpToolsRoute
+  '/api/stripe/webhook': typeof ApiStripeWebhookRoute
   '/publicite/$sector/$city': typeof PubliciteSectorCityRoute
   '/_admin/admin/': typeof AdminAdminIndexRoute
   '/_authenticated/app/': typeof AuthenticatedAppIndexRoute
@@ -838,6 +847,7 @@ export interface FileRouteTypes {
     | '/api/cron/autonomy'
     | '/api/mcp/call'
     | '/api/mcp/tools'
+    | '/api/stripe/webhook'
     | '/publicite/$sector/$city'
     | '/admin/'
     | '/app/'
@@ -917,6 +927,7 @@ export interface FileRouteTypes {
     | '/api/cron/autonomy'
     | '/api/mcp/call'
     | '/api/mcp/tools'
+    | '/api/stripe/webhook'
     | '/publicite/$sector/$city'
     | '/admin'
     | '/app'
@@ -1002,6 +1013,7 @@ export interface FileRouteTypes {
     | '/api/cron/autonomy'
     | '/api/mcp/call'
     | '/api/mcp/tools'
+    | '/api/stripe/webhook'
     | '/publicite/$sector/$city'
     | '/_admin/admin/'
     | '/_authenticated/app/'
@@ -1040,6 +1052,7 @@ export interface RootRouteChildren {
   ApiCronAutonomyRoute: typeof ApiCronAutonomyRoute
   ApiMcpCallRoute: typeof ApiMcpCallRoute
   ApiMcpToolsRoute: typeof ApiMcpToolsRoute
+  ApiStripeWebhookRoute: typeof ApiStripeWebhookRoute
   PubliciteSectorCityRoute: typeof PubliciteSectorCityRoute
   ApiMcpIndexRoute: typeof ApiMcpIndexRoute
   ApiOauthConnectorAuthorizeRoute: typeof ApiOauthConnectorAuthorizeRoute
@@ -1553,6 +1566,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMcpToolsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/stripe/webhook': {
+      id: '/api/stripe/webhook'
+      path: '/api/stripe/webhook'
+      fullPath: '/api/stripe/webhook'
+      preLoaderRoute: typeof ApiStripeWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/publicite/$sector/$city': {
       id: '/publicite/$sector/$city'
       path: '/publicite/$sector/$city'
@@ -1870,6 +1890,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronAutonomyRoute: ApiCronAutonomyRoute,
   ApiMcpCallRoute: ApiMcpCallRoute,
   ApiMcpToolsRoute: ApiMcpToolsRoute,
+  ApiStripeWebhookRoute: ApiStripeWebhookRoute,
   PubliciteSectorCityRoute: PubliciteSectorCityRoute,
   ApiMcpIndexRoute: ApiMcpIndexRoute,
   ApiOauthConnectorAuthorizeRoute: ApiOauthConnectorAuthorizeRoute,

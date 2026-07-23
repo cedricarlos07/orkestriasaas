@@ -1,9 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Building2, Users2, ShieldCheck, CreditCard, BellRing, Save, UserPlus, Trash2, X, Check, KeyRound, Smartphone, Mail, MessageSquare, Sparkles, Monitor } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Building2, Users2, ShieldCheck, CreditCard, BellRing, Save, UserPlus, Trash2, X, Check, KeyRound, Smartphone, Mail, MessageSquare, Sparkles, Monitor, ExternalLink, Loader2 } from "lucide-react";
 import { getProfile } from "@/functions/profiles";
+import { getBillingStatus, openBillingPortal, startCheckout } from "@/functions/billing";
 import { authClient } from "@/lib/auth-client";
+import { formatPriceCents } from "@/lib/pricing/money";
+import type { PlanId } from "@/lib/pricing/plans";
 
 export const Route = createFileRoute("/_authenticated/app/settings")({ component: Settings });
 
@@ -262,13 +265,135 @@ function Security() {
 }
 
 function Billing() {
+  const qc = useQueryClient();
+  const [interval, setInterval] = useState<"month" | "year">("month");
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["billing"],
+    queryFn: () => getBillingStatus(),
+  });
+  const checkout = useMutation({
+    mutationFn: (planId: PlanId) => startCheckout({ data: { planId, interval } }),
+    onSuccess: (res) => {
+      if (res.url) window.location.href = res.url;
+    },
+  });
+  const portal = useMutation({
+    mutationFn: () => openBillingPortal(),
+    onSuccess: (res) => {
+      if (res.url) window.location.href = res.url;
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-[14px] text-ink-soft">
+        <Loader2 className="h-4 w-4 animate-spin" /> Chargement facturation…
+      </div>
+    );
+  }
+  if (error || !data) {
+    return (
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-[14px] text-rose-700">
+        Impossible de charger la facturation.
+      </div>
+    );
+  }
+
+  const plans = data.catalog.filter((p) => p.audience !== "enterprise" || p.id === "enterprise");
+
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-line/60 bg-gradient-to-br from-white to-[#faf6ef] p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-        <p className="font-display text-[18px] font-semibold text-ink">Facturation</p>
-        <p className="mt-2 text-[14px] text-ink-soft">
-          Les plans et abonnements seront affichés ici dès activation de la facturation. Contactez le support pour changer de plan.
-        </p>
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-line/60 bg-gradient-to-br from-white to-[#faf6ef] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Abonnement actuel</p>
+            <p className="mt-1 font-display text-[22px] font-semibold text-ink">{data.planName}</p>
+            <p className="mt-1 text-[13px] text-ink-soft">
+              Statut : <span className="font-medium text-ink">{data.status}</span>
+              {data.billingInterval ? ` · facturation ${data.billingInterval === "year" ? "annuelle" : "mensuelle"}` : ""}
+              {" · USD"}
+            </p>
+          </div>
+          {data.stripeCustomerId && (
+            <button
+              type="button"
+              className="btn-dark"
+              disabled={portal.isPending}
+              onClick={() => portal.mutate()}
+            >
+              {portal.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+              Gérer dans Stripe
+            </button>
+          )}
+        </div>
+        {!data.configured && (
+          <p className="mt-3 text-[13px] text-amber-700">Stripe n’est pas encore configuré côté serveur.</p>
+        )}
+        {(checkout.error || portal.error) && (
+          <p className="mt-3 text-[13px] text-rose-600">
+            {(checkout.error || portal.error)?.message ?? "Erreur Stripe"}
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-display text-[16px] font-semibold text-ink">Changer de plan</p>
+        <div className="inline-flex rounded-full bg-surface-2 p-1 ring-1 ring-black/5">
+          <button
+            type="button"
+            onClick={() => setInterval("month")}
+            className={`rounded-full px-3 py-1.5 text-[12px] font-medium ${interval === "month" ? "bg-ink text-white" : "text-ink-soft"}`}
+          >
+            Mensuel
+          </button>
+          <button
+            type="button"
+            onClick={() => setInterval("year")}
+            className={`rounded-full px-3 py-1.5 text-[12px] font-medium ${interval === "year" ? "bg-ink text-white" : "text-ink-soft"}`}
+          >
+            Annuel (−17 %)
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {plans.map((p) => {
+          const cents = interval === "year" ? p.priceYearlyCents : p.priceMonthlyCents;
+          const current = p.id === data.planId;
+          return (
+            <div
+              key={p.id}
+              className={`rounded-2xl border p-4 ${current ? "border-[#ff6c02]/40 bg-[#fff6ee]" : "border-line/60 bg-white"}`}
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="font-display text-[16px] font-semibold text-ink">{p.name}</p>
+                {current && (
+                  <span className="rounded-full bg-[#ff6c02] px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
+                    Actuel
+                  </span>
+                )}
+              </div>
+              <p className="mt-2 font-display text-[24px] font-semibold text-ink">
+                {formatPriceCents(cents)}
+                <span className="text-[12px] font-normal text-ink-soft">
+                  /{interval === "year" ? "an" : "mois"}
+                </span>
+              </p>
+              <button
+                type="button"
+                className="btn-primary mt-4 w-full justify-center"
+                disabled={!data.configured || current || checkout.isPending || !p.stripe}
+                onClick={() => {
+                  checkout.mutate(p.id as PlanId);
+                  void qc;
+                }}
+              >
+                {checkout.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {current ? "Plan actuel" : "Souscrire"}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

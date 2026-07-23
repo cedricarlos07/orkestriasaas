@@ -180,6 +180,11 @@ export const organizationMetadata = pgTable("organization_metadata", {
   adloopApiKeyEncrypted: text("adloop_api_key_encrypted"),
   /** Facebook Page ID for Meta ad creatives (adkit). */
   metaPageId: text("meta_page_id"),
+  /** Stripe Billing (live) */
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  stripePriceId: text("stripe_price_id"),
+  billingInterval: text("billing_interval"),
   adSpend: numeric("ad_spend", { precision: 14, scale: 2 }).default("0"),
   aiSpend: numeric("ai_spend", { precision: 14, scale: 2 }).default("0"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -415,6 +420,10 @@ export const subscriptions = pgTable(
       .references(() => plans.id),
     status: text("status").default("active"),
     renewsAt: timestamp("renews_at"),
+    stripeCustomerId: text("stripe_customer_id"),
+    stripeSubscriptionId: text("stripe_subscription_id"),
+    stripePriceId: text("stripe_price_id"),
+    billingInterval: text("billing_interval"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [index("subscriptions_org_id_idx").on(t.organizationId)],
