@@ -1345,16 +1345,15 @@ function Pricing() {
         {PLANS.map((p) => {
           const isSelected = selected === p.id;
           return (
-            <button
+            <div
               key={p.id}
-              type="button"
+              role="presentation"
               onClick={() => setSelected(p.id)}
-              aria-pressed={isSelected}
               className={
-                "group relative overflow-hidden rounded-3xl p-8 text-left transition duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/60 " +
+                "group relative overflow-hidden rounded-3xl p-8 text-left transition duration-300 " +
                 (isSelected
                   ? "-translate-y-1 bg-ink text-white shadow-[0_30px_60px_-25px_rgba(0,0,0,0.4)] ring-1 ring-black/10"
-                  : "bg-surface-2 text-ink ring-1 ring-black/5 hover:-translate-y-0.5 hover:shadow-[0_20px_40px_-25px_rgba(0,0,0,0.25)]")
+                  : "cursor-pointer bg-surface-2 text-ink ring-1 ring-black/5 hover:-translate-y-0.5 hover:shadow-[0_20px_40px_-25px_rgba(0,0,0,0.25)]")
               }
             >
               {isSelected && (
@@ -1401,18 +1400,28 @@ function Pricing() {
                 {p.id === "agency_start" ? (
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); openContact({ topic: "Plan Agence", step: "Tarifs", goal: "Agence", message: "Bonjour, je souhaite en savoir plus sur le plan Agence." }); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openContact({
+                        topic: "Plan Agence",
+                        step: "Tarifs",
+                        goal: "Agence",
+                        message: "Bonjour, je souhaite en savoir plus sur le plan Agence.",
+                      });
+                    }}
                     className={(isSelected ? "btn-primary" : "btn-dark") + " mt-8 w-full justify-center"}
                   >
                     {p.cta}
                   </button>
                 ) : (
-                  <SmartCta variant={isSelected ? "primary" : "dark"} className="mt-8 w-full justify-center">
-                    {p.cta}
-                  </SmartCta>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <SmartCta variant={isSelected ? "primary" : "dark"} className="mt-8 w-full justify-center">
+                      {p.cta}
+                    </SmartCta>
+                  </div>
                 )}
               </div>
-            </button>
+            </div>
           );
         })}
       </div>

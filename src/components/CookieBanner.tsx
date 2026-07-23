@@ -111,7 +111,7 @@ export function CookieBanner() {
 
 function Row({ label, desc, checked, disabled, onChange }: { label: string; desc: string; checked: boolean; disabled?: boolean; onChange?: (v: boolean) => void }) {
   return (
-    <label className={`flex items-start justify-between gap-3 rounded-lg px-2 py-1.5 ${disabled ? "opacity-70" : "cursor-pointer hover:bg-white"}`}>
+    <div className={`flex items-start justify-between gap-3 rounded-lg px-2 py-1.5 ${disabled ? "opacity-70" : ""}`}>
       <div className="min-w-0">
         <div className="text-[13px] font-semibold text-ink">{label}</div>
         <div className="text-[12px] text-ink/60">{desc}</div>
@@ -120,13 +120,14 @@ function Row({ label, desc, checked, disabled, onChange }: { label: string; desc
         type="button"
         role="switch"
         aria-checked={checked}
+        aria-label={label}
         disabled={disabled}
         onClick={() => !disabled && onChange?.(!checked)}
-        className={`relative mt-1 h-5 w-9 shrink-0 rounded-full transition ${checked ? "bg-[#ff6c02]" : "bg-black/15"} ${disabled ? "cursor-not-allowed" : ""}`}
+        className={`relative mt-1 h-5 w-9 shrink-0 rounded-full transition ${checked ? "bg-[#ff6c02]" : "bg-black/15"} ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
       >
         <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${checked ? "left-[18px]" : "left-0.5"}`} />
       </button>
-    </label>
+    </div>
   );
 }
 
