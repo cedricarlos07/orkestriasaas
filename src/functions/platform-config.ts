@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { CONNECTORS, hasOAuthCredentials, type ConnectorId } from "@/lib/oauth/connectors";
 import { oauthCallbackUrl } from "@/lib/oauth/connectors";
+import { isLlmConfigured } from "@/lib/llm/client";
 
 export type ConnectorAvailability = {
   id: ConnectorId;
@@ -19,7 +20,7 @@ export const getOAuthAvailability = createServerFn({ method: "GET" }).handler(as
 
   return {
     connectors,
-    openAiConfigured: Boolean(process.env.OPENAI_API_KEY?.trim()),
+    openAiConfigured: isLlmConfigured(),
     googleLoginConfigured: Boolean(
       process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim(),
     ),

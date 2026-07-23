@@ -4,11 +4,11 @@ import { StepHeader } from "@/components/onboarding/StepHeader";
 import { useOnboarding } from "@/lib/onboarding-store";
 
 const BUDGETS = [
-  "Moins de 50 000 FCFA",
-  "50 000 à 150 000 FCFA",
-  "150 000 à 500 000 FCFA",
-  "500 000 à 2 000 000 FCFA",
-  "Plus de 2 000 000 FCFA",
+  "Moins de $75/mois",
+  "$75 à $250/mois",
+  "$250 à $800/mois",
+  "$800 à $3,000/mois",
+  "Plus de $3,000/mois",
   "Je ne sais pas encore",
 ];
 
@@ -18,7 +18,7 @@ function Step() {
   const { data, setField } = useOnboarding();
   return (
     <>
-      <StepHeader eyebrow="Étape 6 · Budget" title="Quel budget publicitaire par mois ?" desc="Une fourchette suffit. Vous pourrez l'ajuster à tout moment." />
+      <StepHeader eyebrow="Étape 6 · Budget" title="Quel budget publicitaire par mois ?" desc="Montants en USD. Une fourchette suffit — vous pourrez ajuster à tout moment." />
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {BUDGETS.map((b) => {
           const active = data.budget === b;

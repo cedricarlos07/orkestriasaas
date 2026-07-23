@@ -79,7 +79,7 @@ function Detail() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         {[
-          { k: "Dépense", v: `${c.spend} FCFA`, i: Wallet },
+          { k: "Dépense", v: `$${c.spend}`, i: Wallet },
           { k: "Conversions", v: String(c.conv), i: Target },
           { k: "ROAS", v: c.roas, i: Sparkles },
           { k: "Canal", v: c.channel, i: Megaphone },

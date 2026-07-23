@@ -11,7 +11,7 @@ echo "using pid=$PID"
 tr '\0' '\n' < "/proc/$PID/environ" > /tmp/orkestria.env.raw
 
 set -a
-source <(grep -E '^(PORT|NODE_ENV|DATABASE_URL|BETTER_AUTH_URL|BETTER_AUTH_SECRET|TOKEN_ENCRYPTION_KEY|MCP_WRITE_ENABLED|OPENAI_MODEL)=' /tmp/orkestria.env.raw)
+source <(grep -E '^(PORT|NODE_ENV|DATABASE_URL|BETTER_AUTH_URL|BETTER_AUTH_SECRET|TOKEN_ENCRYPTION_KEY|MCP_WRITE_ENABLED|LLM_|DEEPSEEK_)=' /tmp/orkestria.env.raw)
 set +a
 export PORT="${PORT:-3016}"
 export NODE_ENV="${NODE_ENV:-production}"

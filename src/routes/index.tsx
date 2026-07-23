@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { authClient } from "@/lib/auth-client";
 import { getProfile } from "@/functions/profiles";
+import { LANDING_PLANS } from "@/lib/pricing/plans";
 import { useQuery } from "@tanstack/react-query";
 import { saveContactSubmission } from "@/lib/contact-store";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -74,7 +75,7 @@ export const Route = createFileRoute("/")({
           applicationCategory: "BusinessApplication",
           operatingSystem: "Web",
           description: "Agent IA qui lance et pilote vos publicités Meta, Google et TikTok depuis une conversation.",
-          offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
+          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
           aggregateRating: { "@type": "AggregateRating", ratingValue: "4.8", ratingCount: "127" },
         }),
       },
@@ -125,7 +126,7 @@ const FAQ = [
 const COMPARE = {
   before: [
     "Vous passez vos soirées dans le Gestionnaire de pubs",
-    "Vous payez une agence 800 €/mois sans savoir ce qu'elle fait",
+    "Vous payez une agence $800/mois sans savoir ce qu'elle fait",
     "Vos campagnes s'arrêtent le week-end faute de surveillance",
     "Vous ne savez pas quelle pub ramène vraiment des clients",
     "Chaque plateforme a son jargon, ses réglages, ses bugs",
@@ -134,7 +135,7 @@ const COMPARE = {
     "Vous parlez en français, l'agent fait le reste",
     "Un tarif clair, aucune commission cachée sur vos dépenses",
     "Un œil qui veille 24/7 et bloque les dérapages avant vous",
-    "Chaque euro relié à une commande, en clair, sur votre téléphone",
+    "Chaque dollar relié à une commande, en clair, sur votre téléphone",
     "Meta, Google et TikTok pilotés depuis une seule conversation",
   ],
 };
@@ -155,50 +156,7 @@ const TRUST = [
   { icon: ShieldCheck, title: "Données hébergées en Europe", text: "RGPD, chiffrement et sauvegardes quotidiennes de série." },
 ];
 
-const PLANS = [
-  {
-    id: "solo",
-    name: "Solo",
-    price: "29 €",
-    tag: "Pour démarrer",
-    text: "Une entreprise, un objectif à la fois. Idéal pour vos 15 premières minutes.",
-    features: ["1 marque connectée", "Meta + Google + TikTok", "Alertes budget & performance", "Assistance par email"],
-    cta: "Commencer",
-    kpis: [
-      { label: "Marques", value: "1" },
-      { label: "Automations", value: "Basiques" },
-      { label: "Support", value: "48 h" },
-    ],
-  },
-  {
-    id: "business",
-    name: "Business",
-    price: "89 €",
-    tag: "Le plus choisi",
-    text: "Pour les entrepreneurs qui veulent vendre à grande échelle sans embaucher.",
-    features: ["Jusqu'à 5 marques", "Automations avancées", "Rapports hebdo par email", "Assistance prioritaire"],
-    cta: "Commencer",
-    kpis: [
-      { label: "Marques", value: "5" },
-      { label: "Automations", value: "Avancées" },
-      { label: "Support", value: "4 h" },
-    ],
-  },
-  {
-    id: "agence",
-    name: "Agence",
-    price: "Sur devis",
-    tag: "Marque blanche",
-    text: "Un portail client sous votre marque, des rôles, des approbations, des rapports auto.",
-    features: ["Clients illimités", "Portail marque blanche", "Rôles & approbations", "Manager dédié"],
-    cta: "Parler à un humain",
-    kpis: [
-      { label: "Clients", value: "∞" },
-      { label: "Automations", value: "Sur-mesure" },
-      { label: "Support", value: "Dédié" },
-    ],
-  },
-];
+const PLANS = LANDING_PLANS;
 
 // ---------- Shared context helpers ----------
 
@@ -808,7 +766,7 @@ function MockupBudget() {
     <div className="card-soft mx-6 mt-6 p-5">
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-medium text-ink">Répartition budget</span>
-        <span className="text-[12px] text-ink-soft">1 200 000 FCFA / mois</span>
+        <span className="text-[12px] text-ink-soft">$1,850 / mois</span>
       </div>
       <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full ring-1 ring-black/5 shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]">
         {parts.map((p) => (
@@ -858,13 +816,13 @@ function MockupSales() {
       </svg>
       <div className="mt-3 space-y-1.5">
         {[
-          { n: "Aïcha K.", a: "24 500" },
-          { n: "Kouassi M.", a: "18 900" },
-          { n: "Fatou D.", a: "32 000" },
+          { n: "Aïcha K.", a: "$37" },
+          { n: "Kouassi M.", a: "$29" },
+          { n: "Fatou D.", a: "$49" },
         ].map((o) => (
           <div key={o.n} className="flex items-center justify-between rounded-lg bg-gradient-to-b from-white to-[#f7f4ef] px-3 py-2 text-[12px] ring-1 ring-black/5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
             <span className="text-ink">{o.n}</span>
-            <span className="font-semibold text-ink">{o.a} FCFA</span>
+            <span className="font-semibold text-ink">{o.a}</span>
           </div>
         ))}
       </div>
@@ -941,7 +899,7 @@ function StepVisual({ kind }: { kind: "connect" | "goal" | "launch" }) {
         </div>
         <div className="mt-3 rounded-xl bg-ink p-3 text-white">
           <div className="text-[11px] font-medium uppercase tracking-wider text-[#ffb27a]">Orkestria</div>
-          <div className="mt-1 text-[13px]">Plan proposé : 320k FCFA sur Meta + Google, ROAS visé 3.2×.</div>
+          <div className="mt-1 text-[13px]">Plan proposé : $490 sur Meta + Google, ROAS visé 3.2×.</div>
         </div>
         <div className="mt-3 flex gap-2">
           <span className="rounded-full bg-surface-2 px-2.5 py-1 text-[11px] text-ink ring-1 ring-black/10">Meta 60%</span>
@@ -1383,7 +1341,7 @@ function Pricing() {
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
         {PLANS.map((p) => {
           const isSelected = selected === p.id;
           return (
@@ -1418,7 +1376,7 @@ function Pricing() {
                 <div className="mt-5 flex items-baseline gap-1">
                   <span className="font-display text-[44px] font-semibold">{p.price}</span>
                   {p.price !== "Sur devis" && (
-                    <span className={isSelected ? "text-[13px] text-white/70" : "text-[13px] text-ink-soft"}>/mois</span>
+                    <span className={isSelected ? "text-[13px] text-white/70" : "text-[13px] text-ink-soft"}>/mois · USD</span>
                   )}
                 </div>
                 <p className={isSelected ? "mt-3 text-[14px] text-white/80" : "mt-3 text-[14px] text-ink-soft"}>{p.text}</p>
@@ -1440,7 +1398,7 @@ function Pricing() {
                     </li>
                   ))}
                 </ul>
-                {p.id === "agence" ? (
+                {p.id === "agency_start" ? (
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); openContact({ topic: "Plan Agence", step: "Tarifs", goal: "Agence", message: "Bonjour, je souhaite en savoir plus sur le plan Agence." }); }}

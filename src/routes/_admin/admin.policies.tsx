@@ -55,10 +55,10 @@ function PoliciesPage() {
 
       <section className="grid gap-4 lg:grid-cols-2">
         <Card title="Limites financières">
-          <NumField label="Plafond journalier par offre (XOF)" value={policy.maxDailyBudgetXOF} onChange={(v) => setPolicy({ ...policy, maxDailyBudgetXOF: v })} />
-          <p className="text-[11px] text-white/40">Actuel : {fmtMoney(policy.maxDailyBudgetXOF)}</p>
-          <NumField label="Plafond mensuel (XOF)" value={policy.monthlySpendCapXOF} onChange={(v) => setPolicy({ ...policy, monthlySpendCapXOF: v })} />
-          <p className="text-[11px] text-white/40">Actuel : {fmtMoney(policy.monthlySpendCapXOF)}</p>
+          <NumField label="Plafond journalier par offre (USD)" value={policy.maxDailyBudgetUsd} onChange={(v) => setPolicy({ ...policy, maxDailyBudgetUsd: v })} />
+          <p className="text-[11px] text-white/40">Actuel : {fmtMoney(policy.maxDailyBudgetUsd)}</p>
+          <NumField label="Plafond mensuel (USD)" value={policy.monthlySpendCapUsd} onChange={(v) => setPolicy({ ...policy, monthlySpendCapUsd: v })} />
+          <p className="text-[11px] text-white/40">Actuel : {fmtMoney(policy.monthlySpendCapUsd)}</p>
         </Card>
 
         <ListCard title="Actions interdites globalement" items={policy.forbiddenActions} onAdd={(v) => addToList("forbiddenActions", v)} onRemove={(i) => removeFromList("forbiddenActions", i)} placeholder="Ex. Ciblage < 18 ans" />

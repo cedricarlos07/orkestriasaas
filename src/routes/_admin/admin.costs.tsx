@@ -26,7 +26,7 @@ function CostsPage() {
   const perOrg = useMemo(() => {
     return orgs.map((o) => {
       const u = usage.find((x) => x.orgId === o.id);
-      const cost = u ? u.monthlyCostXOF / 600 : 0; // approximatif USD
+      const cost = u ? u.monthlyCostUsd : 0;
       const revenue = o.aiSpend;
       const margin = revenue - cost;
       return { org: o, cost, revenue, margin };

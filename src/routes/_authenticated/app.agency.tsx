@@ -249,7 +249,7 @@ function NewClientDialog({ onClose, onCreate }: { onClose: () => void; onCreate:
         <div className="relative space-y-3 p-5">
           <Field label="Nom" value={name} onChange={setName} placeholder="Ex : Atelier Baobab" />
           <Field label="Secteur" value={sector} onChange={setSector} placeholder="Ex : Mode" />
-          <Field label="Budget mensuel" value={budget} onChange={setBudget} placeholder="Ex : 300 000 FCFA/mois" />
+          <Field label="Budget mensuel" value={budget} onChange={setBudget} placeholder="Ex : $800/mois" />
         </div>
         <footer className="relative flex items-center justify-end gap-2 border-t border-line/60 bg-white/70 px-5 py-3">
           <button onClick={onClose} className="chip-ghost">Annuler</button>

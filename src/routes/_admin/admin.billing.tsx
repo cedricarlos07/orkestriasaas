@@ -50,8 +50,8 @@ function PlanCard({ p }: { p: Plan }) {
         </div>
         <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10.5px] text-white/70">{p.autonomy}</span>
       </div>
-      <p className="mt-3 font-display text-[24px] font-semibold">{fmtMoney(p.priceMonthly)}<span className="text-[12px] font-normal text-white/50"> / mois</span></p>
-      <p className="text-[11.5px] text-white/50">ou {fmtMoney(p.priceYearly)} / an</p>
+      <p className="mt-3 font-display text-[24px] font-semibold">{fmtMoney(p.priceMonthly, "plan")}<span className="text-[12px] font-normal text-white/50"> / mois</span></p>
+      <p className="text-[11.5px] text-white/50">ou {fmtMoney(p.priceYearly, "plan")} / an</p>
       <ul className="mt-4 space-y-1.5 text-[12.5px] text-white/75">
         <Li>{p.orgs} organisation{p.orgs === 1 ? "" : "s"}</Li>
         <Li>{p.workspaces} workspace{p.workspaces === 1 ? "" : "s"}</Li>
@@ -145,7 +145,7 @@ function InvoicesTab() {
               <tr key={i.id} className="hover:bg-white/[0.03]">
                 <td className="px-4 py-2.5 font-mono text-[12px] text-white/80">{i.id}</td>
                 <td className="text-white/80">{orgs[i.orgId]}</td>
-                <td className="text-white/80">{fmtMoney(i.amount, i.currency)}</td>
+                <td className="text-white/80">{fmtMoney(i.amount, "plan")}</td>
                 <td className="text-white/70"><MethodPill m={i.method} /></td>
                 <td><InvStatus s={i.status} /></td>
                 <td className="text-white/50">{fmtRelative(i.issuedAt)}</td>

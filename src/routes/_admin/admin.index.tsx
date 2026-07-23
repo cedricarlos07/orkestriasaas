@@ -42,8 +42,8 @@ function AdminHome() {
     { label: "Organisations actives", value: fmtNum(k.activeOrgs), icon: Building2, hint: "+3 cette semaine" },
     { label: "Utilisateurs actifs", value: fmtNum(k.activeUsers), icon: Users, hint: "+12 %" },
     { label: "Abonnements payants", value: fmtNum(k.payingSubs), icon: CreditCard, hint: "+2" },
-    { label: "MRR", value: fmtMoney(k.mrr), icon: TrendingUp, hint: "+8.2 %" },
-    { label: "ARR", value: fmtMoney(k.arr), icon: TrendingUp, hint: "projection annuelle" },
+    { label: "MRR", value: fmtMoney(k.mrr, "plan"), icon: TrendingUp, hint: "+8.2 %" },
+    { label: "ARR", value: fmtMoney(k.arr, "plan"), icon: TrendingUp, hint: "projection annuelle" },
     { label: "Campagnes supervisées", value: fmtNum(k.supervisedCampaigns), icon: Megaphone, hint: "en cours" },
     { label: "Dépenses pub orchestrées", value: fmtMoney(k.adSpendOrchestrated), icon: Wallet, hint: "mois en cours" },
     { label: "Actions agents (24 h)", value: fmtNum(k.agentActionsToday), icon: Bot, hint: `${fmtPct(k.actionFailureRate, 2)} d'échec` },
@@ -241,7 +241,7 @@ function AdminHome() {
                   <td className="text-white/70 capitalize">{o.type}</td>
                   <td className="text-white/70">{PLANS.find((p) => p.id === o.plan)?.name}</td>
                   <td><StatusPill s={o.status} /></td>
-                  <td className="text-white/70">{fmtMoney(o.adSpend, o.currency)}</td>
+                  <td className="text-white/70">{fmtMoney(o.adSpend)}</td>
                   <td className="text-white/50">{fmtRelative(o.lastActive)}</td>
                 </tr>
               ))}

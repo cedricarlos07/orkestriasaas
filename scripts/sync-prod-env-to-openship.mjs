@@ -3,8 +3,8 @@
  * Usage: fill .env.production.local then node scripts/sync-prod-env-to-openship.mjs
  *
  * Required keys for Meta-first prod:
- *   META_APP_ID, META_APP_SECRET, OPENAI_API_KEY
- * Optional: OPENAI_MODEL, MCP_WRITE_ENABLED
+ *   META_APP_ID, META_APP_SECRET, DEEPSEEK_API_KEY
+ * Optional: LLM_MODEL, MCP_WRITE_ENABLED
  */
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -20,8 +20,10 @@ const KEYS = [
   "META_PAGE_ID",
   "META_API_VERSION",
   "ADVERTISER_URL",
-  "OPENAI_API_KEY",
-  "OPENAI_MODEL",
+  "DEEPSEEK_API_KEY",
+  "LLM_BASE_URL",
+  "LLM_MODEL",
+  "LLM_MODEL_THINKING",
   "MCP_WRITE_ENABLED",
   "USEPROXY_BEARER_TOKEN",
   "USEPROXY_API_KEY",
@@ -62,7 +64,7 @@ function parseEnv(content) {
 
 if (!existsSync(envPath)) {
   console.error(`Missing ${envPath}`);
-  console.error("Copy .env.example → .env.production.local and fill META_APP_* + OPENAI_API_KEY");
+  console.error("Copy .env.example → .env.production.local and fill META_APP_* + DEEPSEEK_API_KEY");
   process.exit(1);
 }
 

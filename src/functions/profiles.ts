@@ -23,7 +23,7 @@ export const saveUserProfile = createServerFn({ method: "POST" })
       size: data.size ?? null,
       country: data.country ?? null,
       language: "fr",
-      currency: "XOF",
+      currency: "USD",
       updatedAt: new Date(),
     };
     if (existing) {

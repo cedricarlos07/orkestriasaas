@@ -25,7 +25,7 @@ export const Route = createFileRoute("/plateformes/$slug")({
         children: JSON.stringify({
           "@context": "https://schema.org", "@type": "SoftwareApplication",
           name: `Orkestria pour ${p.name}`, applicationCategory: "BusinessApplication",
-          operatingSystem: "Web", offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
+          operatingSystem: "Web", offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
           description: desc,
         }),
       }],

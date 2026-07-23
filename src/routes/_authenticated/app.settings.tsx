@@ -23,7 +23,7 @@ function Settings() {
     ["Nom de l'entreprise", profile?.company ?? "—"],
     ["Secteur", profile?.sector ?? "—"],
     ["Pays", profile?.country ?? "Côte d'Ivoire"],
-    ["Devise", profile?.currency ?? "FCFA"],
+    ["Devise", profile?.currency ?? "USD"],
     ["Site web", "—"],
   ];
   const owner = {

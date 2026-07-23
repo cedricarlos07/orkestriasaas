@@ -19,13 +19,13 @@ function FinancePage() {
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="MRR" value={fmtMoney(r.mrr)} icon={Landmark} />
-        <Kpi label="ARR" value={fmtMoney(r.arr)} icon={Landmark} />
+        <Kpi label="MRR" value={fmtMoney(r.mrr, "plan")} icon={Landmark} />
+        <Kpi label="ARR" value={fmtMoney(r.arr, "plan")} icon={Landmark} />
         <Kpi label="Marge brute" value={fmtPct(r.grossMargin, 0)} icon={TrendingUp} tone="ok" />
         <Kpi label="Churn mensuel" value={fmtPct(r.churn, 1)} icon={TrendingDown} tone="warn" />
-        <Kpi label="LTV" value={fmtMoney(r.ltvXOF)} icon={TrendingUp} />
-        <Kpi label="CAC" value={fmtMoney(r.cacXOF)} icon={TrendingDown} />
-        <Kpi label="ARPU" value={fmtMoney(r.arpuXOF)} icon={Landmark} />
+        <Kpi label="LTV" value={fmtMoney(r.ltvUsdCents, "plan")} icon={TrendingUp} />
+        <Kpi label="CAC" value={fmtMoney(r.cacUsdCents, "plan")} icon={TrendingDown} />
+        <Kpi label="ARPU" value={fmtMoney(r.arpuUsdCents, "plan")} icon={Landmark} />
         <Kpi label="Coûts IA / Infra" value={`${r.aiCostsUSD} + ${r.infraCostsUSD} USD`} icon={TrendingDown} />
       </div>
 
@@ -43,9 +43,9 @@ function FinancePage() {
                 <tr key={p.plan.id}>
                   <td className="px-5 py-2.5 text-white/90">{p.plan.name}</td>
                   <td className="text-white/70">{p.count}</td>
-                  <td className="text-white/80">{fmtMoney(p.avgRevenue)}</td>
-                  <td className="text-white/60">{fmtMoney(p.avgCost)}</td>
-                  <td className="text-white/85">{fmtMoney(p.revenue)}</td>
+                  <td className="text-white/80">{fmtMoney(p.avgRevenue, "plan")}</td>
+                  <td className="text-white/60">{fmtMoney(p.avgCost, "plan")}</td>
+                  <td className="text-white/85">{fmtMoney(p.revenue, "plan")}</td>
                   <td className={p.margin >= 0.7 ? "text-emerald-300" : "text-amber-300"}>{fmtPct(p.margin, 0)}</td>
                 </tr>
               ))}
@@ -62,7 +62,7 @@ function FinancePage() {
           {r.revenueByCountry.map((c) => (
             <div key={c.country} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
               <p className="text-[12px] text-white/60">{c.country}</p>
-              <p className="mt-1 font-display text-[16px] font-semibold">{fmtMoney(c.revenue)}</p>
+              <p className="mt-1 font-display text-[16px] font-semibold">{fmtMoney(c.revenue, "plan")}</p>
             </div>
           ))}
         </div>
@@ -71,11 +71,11 @@ function FinancePage() {
       <section className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
           <p className="text-[11.5px] uppercase tracking-wider text-white/50">Impayés</p>
-          <p className="mt-1 font-display text-[20px] font-semibold text-rose-300">{fmtMoney(r.unpaidXOF)}</p>
+          <p className="mt-1 font-display text-[20px] font-semibold text-rose-300">{fmtMoney(r.unpaidUsdCents, "plan")}</p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
           <p className="text-[11.5px] uppercase tracking-wider text-white/50">Remboursements</p>
-          <p className="mt-1 font-display text-[20px] font-semibold text-amber-300">{fmtMoney(r.refundsXOF)}</p>
+          <p className="mt-1 font-display text-[20px] font-semibold text-amber-300">{fmtMoney(r.refundsUsdCents, "plan")}</p>
         </div>
       </section>
     </div>

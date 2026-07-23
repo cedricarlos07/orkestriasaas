@@ -7,6 +7,7 @@ import { runMultichannelAudit } from "@/lib/mcp/audit-runner";
 import { readPlatformSnapshot } from "@/lib/mcp/read-platform";
 import { routeResearch } from "@/lib/mcp/execution-router";
 import { requireOpenAiKey } from "@/lib/platforms/config";
+import { llmChatCompletion } from "@/lib/llm/client";
 import { CONNECTORS, type ConnectorId } from "@/lib/oauth/connectors";
 
 export type OrchestratorInput = {
@@ -166,7 +167,7 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
     };
   }
 
-  const apiKey = requireOpenAiKey();
+  requireOpenAiKey();
   const prompt = await loadOrchestratorPrompt();
   const { results, toolsUsed } = await executeReadTools(input.orgId, tools.slice(0, 4), input.runId);
 
@@ -175,31 +176,15 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
       ? `\n\nDonnées live des plateformes connectées :\n${results.join("\n\n")}`
       : "\n\nAucune connexion active — demandez à l'utilisateur de connecter ses comptes.";
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-      messages: [
-        { role: "system", content: prompt + toolContext },
-        { role: "user", content: input.message },
-      ],
-      max_tokens: 800,
-    }),
+  const res = await llmChatCompletion({
+    messages: [
+      { role: "system", content: prompt + toolContext },
+      { role: "user", content: input.message },
+    ],
+    maxTokens: 800,
   });
 
-  if (!res.ok) {
-    throw new Error(`OpenAI API error: ${await res.text()}`);
-  }
-
-  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const text = data.choices?.[0]?.message?.content;
-  if (!text) throw new Error("Réponse OpenAI vide");
-
-  return { reply: text, toolsUsed, runId: input.runId };
+  return { reply: res, toolsUsed, runId: input.runId };
 }
 
 function formatAuditReply(summary: AuditSummary): string {

@@ -74,7 +74,7 @@ function OrgDetail() {
           </div>
           <div className="text-right">
             <p className="text-[11px] uppercase tracking-wider text-white/40">Dépenses supervisées</p>
-            <p className="mt-0.5 font-display text-[22px] font-semibold">{fmtMoney(org.adSpend, org.currency)}</p>
+            <p className="mt-0.5 font-display text-[22px] font-semibold">{fmtMoney(org.adSpend)}</p>
             <p className="text-[11.5px] text-white/50">Coût IA : {Math.round(org.aiSpend)} $ · Renouvellement {fmtRelative(org.renewsAt)}</p>
           </div>
         </div>

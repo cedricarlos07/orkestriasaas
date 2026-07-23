@@ -13,7 +13,7 @@ git checkout "$COMMIT"
 PID="$(ss -tlnp | grep ":${PORT}" | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1 || true)"
 if [ -n "${PID:-}" ] && [ -r "/proc/$PID/environ" ]; then
   tr '\0' '\n' < "/proc/$PID/environ" > /tmp/orkestria.env.raw
-  grep -E '^(PORT|NODE_ENV|DATABASE_URL|BETTER_AUTH_|TOKEN_ENCRYPTION_KEY|MCP_WRITE_ENABLED|OPENAI_MODEL|META_APP_ID|META_APP_SECRET|META_API_VERSION|ADLOOP_MCP_|ADLOOP_CONFIG|USEPROXY_MCP_URL|ADKIT_MCP_COMMAND|ADVERTISER_URL)=' \
+  grep -E '^(PORT|NODE_ENV|DATABASE_URL|BETTER_AUTH_|TOKEN_ENCRYPTION_KEY|MCP_WRITE_ENABLED|LLM_|DEEPSEEK_|META_APP_ID|META_APP_SECRET|META_API_VERSION|ADLOOP_MCP_|ADLOOP_CONFIG|USEPROXY_MCP_URL|ADKIT_MCP_COMMAND|ADVERTISER_URL)=' \
     /tmp/orkestria.env.raw > /tmp/orkestria.env || true
 fi
 
@@ -24,7 +24,8 @@ NODE_ENV=production
 DATABASE_URL=postgresql://openship:openship@127.0.0.1:5433/orkestria
 BETTER_AUTH_URL=https://orkestria.top
 MCP_WRITE_ENABLED=true
-OPENAI_MODEL=gpt-4o-mini
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-v4-flash
 ADLOOP_MCP_COMMAND=python3
 ADLOOP_MCP_ARGS=-m adloop
 USEPROXY_MCP_URL=https://mcp.useproxy.dev/mcp

@@ -73,7 +73,7 @@ function IncidentsPage() {
               <Field label="Services">{i.services.join(", ")}</Field>
               <Field label="Organisations touchées">{i.orgIdsAffected.length}</Field>
               <Field label="Actions exécutées">{i.actionsExecuted}</Field>
-              <Field label="Dépenses concernées">{fmtMoney(i.potentialSpendXOF)}</Field>
+              <Field label="Dépenses concernées">{fmtMoney(i.potentialSpendUsd)}</Field>
               <Field label="Cause">{i.cause}</Field>
               <Field label="Résolution">{i.resolution}</Field>
               <Field label="Préventif">{i.preventive.join(", ")}</Field>

@@ -144,7 +144,7 @@ function List() {
               <th className="px-5 py-3 font-medium">Campagne</th>
               <th className="px-3 py-3 font-medium">Canal</th>
               <th className="px-3 py-3 font-medium">Statut</th>
-              <th className="px-3 py-3 font-medium">Dépense (FCFA)</th>
+              <th className="px-3 py-3 font-medium">Dépense (USD)</th>
               <th className="px-3 py-3 font-medium">Conversions</th>
               <th className="px-3 py-3 font-medium">ROAS</th>
               <th className="px-5 py-3 text-right">Actions</th>

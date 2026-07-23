@@ -70,11 +70,8 @@ export const getDashboardKpis = createServerFn({ method: "GET" }).handler(async 
   const spend = snapshot.spend;
   const conv = snapshot.conversions;
   const cpa = snapshot.cpa;
-  const currency = snapshot.currency === "USD" ? "$" : snapshot.currency === "EUR" ? "€" : " FCFA";
   const fmtMoney = (n: number) =>
-    snapshot.currency === "XOF" || snapshot.currency === "XAF"
-      ? `${Math.round(n).toLocaleString("fr-FR")} FCFA`
-      : `${currency}${n.toFixed(0)}`;
+    `$${Math.round(n).toLocaleString("en-US")}`;
 
   const activeCampaigns = snapshot.campaigns.filter((c) => c.status === "ACTIVE").length;
 

@@ -27,7 +27,7 @@ function UsagePage() {
     if (flag === "close" && !u.metrics.some((m) => m.used > m.quota * 0.85 && m.used <= m.quota)) return false;
     if (flag === "over" && !u.metrics.some((m) => m.used > m.quota)) return false;
     if (flag === "abuse" && u.anomalies.length === 0) return false;
-    if (flag === "cost" && u.monthlyCostXOF <= u.planCostXOF) return false;
+    if (flag === "cost" && u.monthlyCostUsd * 100 <= u.planCostUsdCents) return false;
     return true;
   }), [usage, orgs, q, flag]);
 
@@ -37,7 +37,7 @@ function UsagePage() {
       if (u.metrics.some((m) => m.used > m.quota * 0.85 && m.used <= m.quota)) t.close++;
       if (u.metrics.some((m) => m.used > m.quota)) t.over++;
       if (u.anomalies.length > 0) t.abuse++;
-      if (u.monthlyCostXOF > u.planCostXOF) t.costOver++;
+      if (u.monthlyCostUsd * 100 > u.planCostUsdCents) t.costOver++;
     });
     return t;
   }, [usage]);
@@ -99,7 +99,7 @@ function UsagePage() {
           const org = orgs[u.orgId];
           const ov = overrides[u.orgId];
           const metrics = metric === "all" ? u.metrics : u.metrics.filter((m) => m.id === metric);
-          const costOver = u.monthlyCostXOF > u.planCostXOF;
+          const costOver = u.monthlyCostUsd * 100 > u.planCostUsdCents;
           return (
             <div key={u.orgId} className={`rounded-2xl border p-4 ${costOver ? "border-rose-500/25 bg-rose-500/[0.04]" : "border-white/10 bg-white/[0.03]"}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -108,8 +108,8 @@ function UsagePage() {
                   <p className="text-[12.5px] text-white/60">{planLabel(org.plan)} · {org.country} · {org.workspaces} workspaces</p>
                 </div>
                 <div className="text-right text-[12.5px]">
-                  <p className="text-white/50">Coût mensuel réel</p>
-                  <p className={`font-medium ${costOver ? "text-rose-300" : "text-white/90"}`}>{fmtMoney(u.monthlyCostXOF)} <span className="text-white/40">/ {fmtMoney(u.planCostXOF)}</span></p>
+                  <p className="text-white/50">Coût IA mensuel (DeepSeek)</p>
+                  <p className={`font-medium ${costOver ? "text-rose-300" : "text-white/90"}`}>{fmtMoney(u.monthlyCostUsd)} <span className="text-white/40">/ {fmtMoney(u.planCostUsdCents, "plan")}</span></p>
                 </div>
               </div>
 

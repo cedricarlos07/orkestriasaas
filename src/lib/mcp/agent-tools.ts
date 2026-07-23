@@ -28,6 +28,7 @@ import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 import { routeReadSnapshot, routeResearch } from "@/lib/mcp/execution-router";
 import { ADLOOP_CONNECTION_ID, isAdloopHealthy, syntheticAdloopConnection } from "@/lib/mcp/adloop-org";
 import type { UnifiedAccountSnapshot } from "@/lib/unified-ad-schema";
+import { isLlmConfigured, llmChatCompletion } from "@/lib/llm/client";
 
 export type AgentToolContext = ApiKeyContext;
 
@@ -973,14 +974,10 @@ const createTools: AgentTool[] = [
       const language = str(args.language) ?? "fr";
       const count = Math.min(Math.max(num(args.variants) ?? 3, 1), 5);
 
-      const apiKey = process.env.OPENAI_API_KEY?.trim();
-      if (apiKey) {
-        const res = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({
-            model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-            response_format: { type: "json_object" },
+      if (isLlmConfigured()) {
+        try {
+          const text = await llmChatCompletion({
+            jsonMode: true,
             messages: [
               {
                 role: "system",
@@ -991,15 +988,10 @@ const createTools: AgentTool[] = [
                 content: `Produit: ${product}. Audience: ${audience}. Ton: ${tone}. Plateforme: ${str(args.platform) ?? "meta_ads"}. Génère ${count} variantes.`,
               },
             ],
-          }),
-        });
-        if (res.ok) {
-          const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-          try {
-            return JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
-          } catch {
-            // fall through to templates
-          }
+          });
+          return JSON.parse(text);
+        } catch {
+          // fall through to templates
         }
       }
 

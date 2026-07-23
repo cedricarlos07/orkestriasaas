@@ -85,7 +85,7 @@ export function buildAuditSummary(schema: UnifiedAdSchema): AuditSummary {
       conversions: acc.conversions + a.conversions,
       currency: a.currency || acc.currency,
     }),
-    { spend: 0, conversions: 0, currency: "XOF" },
+    { spend: 0, conversions: 0, currency: "USD" },
   );
 
   const cpa = totals.conversions > 0 ? totals.spend / totals.conversions : null;

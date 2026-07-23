@@ -38,7 +38,7 @@ function SystemPage() {
 
       <Section title="Limites globales" icon={AlertTriangle}>
         <Grid>
-          <Num label="Budget publicitaire max (XOF/j)" v={s.maxDailyBudgetXOF} onChange={(v) => upd("maxDailyBudgetXOF", v)} />
+          <Num label="Budget publicitaire max (USD/j)" v={s.maxDailyBudgetUsd} onChange={(v) => upd("maxDailyBudgetUsd", v)} />
           <Num label="Augmentation max (%)" v={s.maxIncreasePct} onChange={(v) => upd("maxIncreasePct", v)} />
           <Num label="Durée max d'un run (min)" v={s.maxRunDurationMin} onChange={(v) => upd("maxRunDurationMin", v)} />
           <Num label="Itérations max" v={s.maxIterations} onChange={(v) => upd("maxIterations", v)} />

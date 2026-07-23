@@ -74,7 +74,7 @@ function OrgsList() {
                 <td><StatusPill s={o.status} /></td>
                 <td className="text-white/70">{o.members}</td>
                 <td className="text-white/70">{o.adAccounts}</td>
-                <td className="text-white/80">{fmtMoney(o.adSpend, o.currency)}</td>
+                <td className="text-white/80">{fmtMoney(o.adSpend)}</td>
                 <td className="text-white/70">{fmtNum(Math.round(o.aiSpend))}</td>
                 <td className="text-white/50">{fmtRelative(o.createdAt)}</td>
                 <td className="text-white/50">{fmtRelative(o.lastActive)}</td>

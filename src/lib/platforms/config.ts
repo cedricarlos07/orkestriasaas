@@ -40,6 +40,4 @@ export function isWriteEnabled(): boolean {
   return process.env.MCP_WRITE_ENABLED === "true";
 }
 
-export function requireOpenAiKey(): string {
-  return requireEnv("OPENAI_API_KEY");
-}
+export { requireLlmApiKey as requireOpenAiKey, isLlmConfigured as isLlmConfigured } from "@/lib/llm/client";

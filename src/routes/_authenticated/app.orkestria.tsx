@@ -101,7 +101,7 @@ const INTENT_META: Record<IntentKey, { label: string; icon: typeof BarChart3; sc
     label: "Lancement de campagne",
     icon: Rocket,
     scopes: ["Notoriété", "Trafic", "Conversions / ventes"],
-    detailPh: "Ex : nouveau menu, budget 5 000 FCFA/j, Dakar",
+    detailPh: "Ex : nouveau menu, budget $50/j, Dakar",
     grad: "from-[#ff3d78] to-[#9e1e4a]",
   },
 };

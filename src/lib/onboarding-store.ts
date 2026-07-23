@@ -26,7 +26,7 @@ export const defaultData: OnboardingData = {
     password: "",
     country: "Côte d'Ivoire",
     language: "Français",
-    currency: "FCFA",
+    currency: "USD",
   },
   pitch: "",
   sector: null,

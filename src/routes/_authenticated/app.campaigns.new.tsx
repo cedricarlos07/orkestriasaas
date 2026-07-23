@@ -133,11 +133,11 @@ type Question = {
 };
 
 const QUESTIONS: Question[] = [
-  { key: "price", prompt: "Parfait. Quel est le prix de ce menu ?", suggestions: ["3 500 FCFA", "5 000 FCFA", "7 500 FCFA"], placeholder: "Ex : 4 500 FCFA" },
+  { key: "price", prompt: "Parfait. Quel est le prix de ce menu ?", suggestions: ["$5", "$8", "$12"], placeholder: "Ex : $9" },
   { key: "zone", prompt: "Où livrez-vous ? (ville ou quartiers)", suggestions: ["Cocody", "Marcory + Zone 4", "Tout Abidjan"], placeholder: "Cocody, Marcory…" },
   { key: "capacity", prompt: "Combien de commandes pouvez-vous traiter par jour ?", suggestions: ["20 / jour", "50 / jour", "100+ / jour"], placeholder: "Ex : 40" },
   { key: "channel", prompt: "Les clients doivent-ils commander sur WhatsApp ou sur votre site ?", suggestions: ["WhatsApp", "Site web", "Les deux"] },
-  { key: "budget", prompt: "Quel budget total sur combien de jours ?", suggestions: ["150 000 FCFA · 7 jours", "250 000 FCFA · 14 jours", "500 000 FCFA · 30 jours"], placeholder: "Ex : 250 000 FCFA · 14 jours" },
+  { key: "budget", prompt: "Quel budget total sur combien de jours ?", suggestions: ["$250 · 7 jours", "$400 · 14 jours", "$800 · 30 jours"], placeholder: "Ex : $400 · 14 jours" },
 ];
 
 function ChatFlow({
@@ -240,7 +240,7 @@ function ChatFlow({
   const currentPlaceholder = useMemo(() => {
     if (phase === "intro") return "Ex : Lance une campagne pour mon nouveau menu";
     if (phase === "questions") return QUESTIONS[qIdx].placeholder ?? "Votre réponse";
-    if (phase === "plan") return "Ex : Mets seulement 150 000 FCFA et concentre-toi sur Cocody";
+    if (phase === "plan") return "Ex : Mets seulement $250 et concentre-toi sur Cocody";
     return "";
   }, [phase, qIdx]);
 
@@ -374,25 +374,27 @@ type Plan = {
 
 function buildPlan(brief: Brief, adjust?: string): Plan {
   const isCocody = /cocody/i.test(adjust ?? brief.zone ?? "");
-  const reducedBudget = /150\s*000/.test(adjust ?? "");
+  const reducedBudget = /\$?\s*250/.test(adjust ?? "");
   const moreTikTok = /tiktok/i.test(adjust ?? "");
 
-  const total = reducedBudget ? 150000 : 250000;
+  const total = reducedBudget ? 250 : 400;
   const meta = moreTikTok ? 0.4 : 0.6;
   const tiktok = moreTikTok ? 0.45 : 0.28;
   const google = 1 - meta - tiktok;
 
+  const fmt = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
+
   return {
     goal: brief.goal ?? "100 conversations WhatsApp",
     duration: reducedBudget ? "10 jours" : "14 jours",
-    budget: `${total.toLocaleString("fr-FR")} FCFA`,
+    budget: fmt(total),
     split: [
-      { channel: "Meta", amount: `${Math.round(total * meta).toLocaleString("fr-FR")} FCFA`, share: meta * 100 },
-      { channel: "TikTok", amount: `${Math.round(total * tiktok).toLocaleString("fr-FR")} FCFA`, share: tiktok * 100 },
-      { channel: "Google", amount: `${Math.round(total * google).toLocaleString("fr-FR")} FCFA`, share: google * 100 },
+      { channel: "Meta", amount: fmt(total * meta), share: meta * 100 },
+      { channel: "TikTok", amount: fmt(total * tiktok), share: tiktok * 100 },
+      { channel: "Google", amount: fmt(total * google), share: google * 100 },
     ],
     creatives: ["2 vidéos verticales", "2 affiches", "1 carrousel"],
-    protection: `Arrêter une publicité après 20 000 FCFA dépensés sans résultat${isCocody ? " · zone limitée à Cocody" : ""}`,
+    protection: `Arrêter une publicité après $30 dépensés sans résultat${isCocody ? " · zone limitée à Cocody" : ""}`,
     estimate: reducedBudget ? "55 à 75 conversations WhatsApp" : "90 à 130 conversations WhatsApp",
   };
 }
@@ -735,7 +737,7 @@ function TipsCard() {
         <p className="text-[12px] font-medium uppercase tracking-wider text-[#ff8a3d]">Astuce</p>
       </div>
       <p className="relative mt-2 text-[13px] leading-relaxed text-white/90">
-        Parlez naturellement : « mets 150 000 FCFA sur Cocody » ou « double le budget TikTok ». Je recalcule le plan et je vous explique l'impact attendu.
+        Parlez naturellement : « mets $250 sur Cocody » ou « double le budget TikTok ». Je recalcule le plan et je vous explique l'impact attendu.
       </p>
     </div>
   );

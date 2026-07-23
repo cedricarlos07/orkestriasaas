@@ -156,7 +156,7 @@ export const userProfiles = pgTable("user_profiles", {
   size: text("size"),
   country: text("country"),
   language: text("language").default("fr"),
-  currency: text("currency").default("XOF"),
+  currency: text("currency").default("USD"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -170,7 +170,7 @@ export const organizationMetadata = pgTable("organization_metadata", {
   status: text("status").default("active"),
   sector: text("sector"),
   country: text("country"),
-  currency: text("currency").default("XOF"),
+  currency: text("currency").default("USD"),
   timezone: text("timezone").default("Africa/Abidjan"),
   language: text("language").default("fr"),
   health: text("health").default("ok"),
@@ -428,7 +428,7 @@ export const invoices = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
-    currency: text("currency").default("XOF"),
+    currency: text("currency").default("USD"),
     status: text("status").default("en_attente"),
     method: text("method"),
     issuedAt: timestamp("issued_at").defaultNow().notNull(),
@@ -524,7 +524,7 @@ export const modelRoutes = pgTable("model_routes", {
 export const aiLimits = pgTable("ai_limits", {
   id: text("id").primaryKey().default("default"),
   dailyGlobalUsd: numeric("daily_global_usd", { precision: 10, scale: 2 }).default("500"),
-  perOrgUsd: numeric("per_org_usd", { precision: 10, scale: 2 }).default("50"),
+  perOrgUsd: numeric("per_org_usd", { precision: 10, scale: 2 }).default("8"),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 

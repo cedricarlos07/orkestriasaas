@@ -12,19 +12,9 @@ import {
   systemSettings,
   user,
 } from "./schema/index";
+import { AI_PLATFORM_LIMITS, plansForDbSeed } from "@/lib/pricing/plans";
 
 config({ path: ".env.local" });
-
-const PLANS_SEED = [
-  { id: "solo", name: "Solo", audience: "annonceur", priceMonthly: 9000, priceYearly: 90000, quotas: { runsPerMonth: 30 } },
-  { id: "business", name: "Business", audience: "annonceur", priceMonthly: 29000, priceYearly: 290000, quotas: { runsPerMonth: 200 } },
-  { id: "growth", name: "Growth", audience: "annonceur", priceMonthly: 59000, priceYearly: 590000, quotas: { runsPerMonth: 1000 } },
-  { id: "autopilot", name: "Autopilot", audience: "annonceur", priceMonthly: 119000, priceYearly: 1190000, quotas: { runsPerMonth: -1 } },
-  { id: "agency_start", name: "Agency Start", audience: "agence", priceMonthly: 79000, priceYearly: 790000, quotas: { runsPerMonth: 500 } },
-  { id: "agency_growth", name: "Agency Growth", audience: "agence", priceMonthly: 189000, priceYearly: 1890000, quotas: { runsPerMonth: 3000 } },
-  { id: "agency_scale", name: "Agency Scale", audience: "agence", priceMonthly: 389000, priceYearly: 3890000, quotas: { runsPerMonth: -1 } },
-  { id: "enterprise", name: "Enterprise", audience: "enterprise", priceMonthly: 990000, priceYearly: 9900000, quotas: { runsPerMonth: -1 } },
-];
 
 const MCP_SEED = [
   { serviceId: "meta_mcp", label: "Meta MCP", status: "ok", latency: 120, uptime: "99.9", errorRate: "0.1", calls24h: 4200 },
@@ -36,9 +26,21 @@ const MCP_SEED = [
 async function seed() {
   console.log("Seeding Orkestria database...");
 
-  for (const p of PLANS_SEED) {
+  for (const p of plansForDbSeed()) {
     const ex = await db.select().from(plans).where(eq(plans.id, p.id)).limit(1);
     if (!ex[0]) await db.insert(plans).values(p);
+    else {
+      await db
+        .update(plans)
+        .set({
+          name: p.name,
+          audience: p.audience,
+          priceMonthly: p.priceMonthly,
+          priceYearly: p.priceYearly,
+          quotas: p.quotas,
+        })
+        .where(eq(plans.id, p.id));
+    }
   }
 
   for (const m of MCP_SEED) {
@@ -72,10 +74,17 @@ async function seed() {
   }
 
   const gp = await db.select().from(globalPolicies).where(eq(globalPolicies.id, "default")).limit(1);
-  if (!gp[0]) await db.insert(globalPolicies).values({ id: "default", data: { maxDailySpend: 500000 }, updatedAt: new Date() });
+  if (!gp[0]) await db.insert(globalPolicies).values({ id: "default", data: { maxDailySpendUsd: 500 }, updatedAt: new Date() });
 
   const ai = await db.select().from(aiLimits).where(eq(aiLimits.id, "default")).limit(1);
-  if (!ai[0]) await db.insert(aiLimits).values({ id: "default", dailyGlobalUsd: "500", perOrgUsd: "50", updatedAt: new Date() });
+  if (!ai[0]) {
+    await db.insert(aiLimits).values({
+      id: "default",
+      dailyGlobalUsd: String(AI_PLATFORM_LIMITS.dailyGlobalUsd),
+      perOrgUsd: String(AI_PLATFORM_LIMITS.defaultPerOrgUsd),
+      updatedAt: new Date(),
+    });
+  }
 
   const ss = await db.select().from(systemSettings).where(eq(systemSettings.id, "default")).limit(1);
   if (!ss[0]) await db.insert(systemSettings).values({ id: "default", data: { maintenance: false }, updatedAt: new Date() });
@@ -94,7 +103,6 @@ async function seed() {
     });
   }
 
-  // Promote seed super admin if user exists
   const admins = ["admin@orkestria.io", "super@orkestria.io"];
   for (const email of admins) {
     const rows = await db.select().from(user).where(eq(user.email, email)).limit(1);

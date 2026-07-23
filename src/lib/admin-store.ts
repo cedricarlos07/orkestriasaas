@@ -15,13 +15,13 @@ import {
   listSupportTickets as fetchTickets,
   getAiLimits as fetchAiLimits,
 } from "@/functions/admin";
+import { ORKESTRIA_PLANS, type PlanId as PricingPlanId } from "@/lib/pricing/plans";
+export { fmtMoney, BILLING_CURRENCY } from "@/lib/pricing/money";
 
 export type OrgType = "entreprise" | "agence" | "groupe";
 export type OrgStatus = "active" | "essai" | "suspendue" | "impayée";
 export type RiskLevel = "faible" | "moyen" | "élevé";
-export type PlanId =
-  | "solo" | "business" | "growth" | "autopilot"
-  | "agency_start" | "agency_growth" | "agency_scale" | "enterprise";
+export type PlanId = PricingPlanId;
 
 export type Organization = {
   id: string; name: string; type: OrgType; country: string; plan: PlanId; status: OrgStatus;
@@ -94,16 +94,22 @@ function pad(n: number, size = 4) { return n.toString().padStart(size, "0"); }
 function daysAgo(d: number) { return new Date(Date.now() - d * 864e5).toISOString(); }
 function fmtDate(d: number) { return new Date(Date.now() + d * 864e5).toISOString(); }
 
-export const PLANS: Plan[] = [
-  { id: "solo", name: "Solo", audience: "annonceur", priceMonthly: 9000, priceYearly: 90000, orgs: 1, workspaces: 1, adAccounts: 1, users: 1, runsPerMonth: 30, historyDays: 30, automations: "aucune", autonomy: "conseil", support: "communauté" },
-  { id: "business", name: "Business", audience: "annonceur", priceMonthly: 29000, priceYearly: 290000, orgs: 1, workspaces: 2, adAccounts: 3, users: 3, runsPerMonth: 200, historyDays: 90, automations: "basique", autonomy: "assistée", support: "email 48h" },
-  { id: "growth", name: "Growth", audience: "annonceur", priceMonthly: 59000, priceYearly: 590000, orgs: 1, workspaces: 5, adAccounts: 8, users: 8, runsPerMonth: 1000, historyDays: 180, automations: "avancée", autonomy: "supervisée", support: "email 24h" },
-  { id: "autopilot", name: "Autopilot", audience: "annonceur", priceMonthly: 119000, priceYearly: 1190000, orgs: 1, workspaces: 10, adAccounts: 15, users: 15, runsPerMonth: "illimité", historyDays: 365, automations: "complète", autonomy: "autopilot", support: "chat prioritaire" },
-  { id: "agency_start", name: "Agency Start", audience: "agence", priceMonthly: 79000, priceYearly: 790000, orgs: 5, workspaces: 10, adAccounts: 15, users: 5, runsPerMonth: 500, historyDays: 180, automations: "basique", autonomy: "assistée", support: "email 24h" },
-  { id: "agency_growth", name: "Agency Growth", audience: "agence", priceMonthly: 189000, priceYearly: 1890000, orgs: 15, workspaces: 30, adAccounts: 45, users: 15, runsPerMonth: 3000, historyDays: 365, automations: "avancée", autonomy: "supervisée", support: "chat 12h" },
-  { id: "agency_scale", name: "Agency Scale", audience: "agence", priceMonthly: 389000, priceYearly: 3890000, orgs: 40, workspaces: "illimité", adAccounts: "illimité", users: 40, runsPerMonth: "illimité", historyDays: 730, automations: "complète", autonomy: "autopilot", support: "chat 4h + CSM" },
-  { id: "enterprise", name: "Enterprise", audience: "enterprise", priceMonthly: 990000, priceYearly: 9900000, orgs: "illimité", workspaces: "illimité", adAccounts: "illimité", users: "illimité", runsPerMonth: "illimité", historyDays: 1095, automations: "complète", autonomy: "autopilot", support: "SLA dédié 24/7" },
-];
+export const PLANS: Plan[] = ORKESTRIA_PLANS.map((p) => ({
+  id: p.id,
+  name: p.name,
+  audience: p.audience,
+  priceMonthly: p.priceMonthlyCents,
+  priceYearly: p.priceYearlyCents,
+  orgs: p.orgs,
+  workspaces: p.workspaces,
+  adAccounts: p.quotas.adAccounts >= 999 ? "illimité" : p.quotas.adAccounts,
+  users: p.quotas.users < 0 ? "illimité" : p.quotas.users,
+  runsPerMonth: p.quotas.runsPerMonth < 0 ? "illimité" : p.quotas.runsPerMonth,
+  historyDays: p.historyDays,
+  automations: p.automations,
+  autonomy: p.autonomy,
+  support: p.support,
+}));
 
 const ORG_NAMES = [
   "Velvet Studio", "Baobab Retail", "Tera Foods", "MamaCosmetics", "Kaay Delivery",
@@ -129,12 +135,12 @@ function buildOrgs(): Organization[] {
       country: pick(COUNTRIES, i), plan, status,
       members: 2 + ((i * 7) % 40),
       adAccounts: 1 + ((i * 3) % 12),
-      adSpend: 250_000 + ((i * 137_000) % 8_500_000),
-      aiSpend: 12 + ((i * 17) % 640),
+      adSpend: 800 + ((i * 1370) % 85_000),
+      aiSpend: 0.5 + ((i * 0.17) % 6.4),
       createdAt: daysAgo(30 + i * 11),
       lastActive: daysAgo((i * 3) % 14),
       risk, sector: pick(SECTORS, i),
-      currency: i % 4 === 0 ? "EUR" : "XOF",
+      currency: "USD",
       timezone: "Africa/Dakar", language: "fr",
       renewsAt: fmtDate(3 + ((i * 5) % 60)),
       accountManager: pick(MANAGERS, i),
@@ -353,7 +359,7 @@ export type AgentRun = {
   decisions: string[]; approvals: string[]; errors: string[]; verifications: string[];
 };
 const RUN_GOALS = [
-  "100 commandes ce mois-ci", "Réduire CPA sous 3500 XOF", "Lancer campagne Ramadan",
+  "100 commandes ce mois-ci", "Réduire CPA sous $35", "Lancer campagne Ramadan",
   "Audit performance juillet", "Réallocation budget Meta→Google", "Test créa vidéo 15 s",
   "Booster leads WhatsApp", "Pause campagnes non rentables",
 ];
@@ -424,8 +430,8 @@ function buildAdActions(): AdAction[] {
       id: `act_${pad(i + 1, 5)}`, orgId: org.id, platform: pick(platforms, i),
       account: `acc_${1000 + i}`, campaign: `Campagne #${100 + i}`,
       category: cat,
-      before: cat === "modification_budget" ? "80 000 XOF/j" : cat === "pause" ? "active" : "n/a",
-      after: cat === "modification_budget" ? "112 000 XOF/j" : cat === "pause" ? "pause" : "créée",
+      before: cat === "modification_budget" ? "$120/j" : cat === "pause" ? "active" : "n/a",
+      after: cat === "modification_budget" ? "$170/j" : cat === "pause" ? "pause" : "créée",
       amount: cat.includes("budget") ? 30_000 + (i * 5000) % 400_000 : undefined,
       initiator: i % 3 === 0 ? "Agent Orkestria" : `${pick(FIRST, i)} ${pick(LAST, i)}`,
       policy: pick(["Assistant", "Autopilot prudent", "Autopilot avancé", "Conseiller"], i),
@@ -495,9 +501,9 @@ export const POLICY_TEMPLATES: PolicyTemplate[] = [
   { id: "autopilot_avance", name: "Autopilot avancé", description: "Réallocation limitée, remplacement créations, optimisation continue.", features: ["Réallocation ≤ 25%", "Remplacement créations", "Optimisation continue"], caps: "Actions sensibles avec approbation" },
 ];
 export type GlobalPolicy = {
-  maxDailyBudgetXOF: number;
+  maxDailyBudgetUsd: number;
   forbiddenActions: string[];
-  monthlySpendCapXOF: number;
+  monthlySpendCapUsd: number;
   alwaysApprove: string[];
   countryRules: { country: string; rule: string }[];
   regulatedSectors: string[];
@@ -505,21 +511,31 @@ export type GlobalPolicy = {
 };
 const POLICY_KEY = "orkestria.admin.policy";
 const DEFAULT_POLICY: GlobalPolicy = {
-  maxDailyBudgetXOF: 500_000,
+  maxDailyBudgetUsd: 500,
   forbiddenActions: ["Audiences politiques", "Ciblage < 18 ans", "Substances réglementées"],
-  monthlySpendCapXOF: 25_000_000,
+  monthlySpendCapUsd: 25_000,
   alwaysApprove: ["Modification budget > 20%", "Création nouvelle campagne", "Changement audience principale"],
   countryRules: [
     { country: "Sénégal", rule: "Bloquer catégorie paris sportifs sans licence" },
     { country: "France", rule: "RGPD strict, opt-in obligatoire" },
   ],
   regulatedSectors: ["Santé", "Finance", "Alcool", "Jeux d'argent"],
-  rollbackRules: ["Rollback auto si CPA x2 en 24 h", "Rollback manuel obligatoire pour budgets > 200 000 XOF"],
+  rollbackRules: ["Rollback auto si CPA x2 en 24 h", "Rollback manuel obligatoire pour budgets > $300/j"],
 };
 export function getGlobalPolicy(): GlobalPolicy {
   if (!isBrowser()) return DEFAULT_POLICY;
   const raw = localStorage.getItem(POLICY_KEY);
-  return raw ? { ...DEFAULT_POLICY, ...JSON.parse(raw) } : DEFAULT_POLICY;
+  if (!raw) return DEFAULT_POLICY;
+  const parsed = JSON.parse(raw) as Partial<GlobalPolicy> & {
+    maxDailyBudgetXOF?: number;
+    monthlySpendCapXOF?: number;
+  };
+  return {
+    ...DEFAULT_POLICY,
+    ...parsed,
+    maxDailyBudgetUsd: parsed.maxDailyBudgetUsd ?? parsed.maxDailyBudgetXOF ?? DEFAULT_POLICY.maxDailyBudgetUsd,
+    monthlySpendCapUsd: parsed.monthlySpendCapUsd ?? parsed.monthlySpendCapXOF ?? DEFAULT_POLICY.monthlySpendCapUsd,
+  };
 }
 export function saveGlobalPolicy(p: GlobalPolicy) { if (isBrowser()) localStorage.setItem(POLICY_KEY, JSON.stringify(p)); }
 
@@ -563,7 +579,7 @@ export function getMCPStatuses(): MCPStatus[] {
 
 export function getIncidents(): Incident[] {
   return [
-    { id: "inc_01", kind: "cap_dépassé", severity: "critique", message: "Velvet Studio — campagne « Ventes Éclair » a franchi le plafond quotidien de 250 000 XOF.", orgId: "org_0001", at: daysAgo(0.1) },
+    { id: "inc_01", kind: "cap_dépassé", severity: "critique", message: "Velvet Studio — campagne « Ventes Éclair » a franchi le plafond quotidien de $380.", orgId: "org_0001", at: daysAgo(0.1) },
     { id: "inc_02", kind: "action_non_confirmée", severity: "warn", message: "Baobab Retail — 3 actions financières exécutées sans double confirmation.", orgId: "org_0002", at: daysAgo(0.3) },
     { id: "inc_03", kind: "mcp_erreurs", severity: "critique", message: "Google Ads Write MCP — taux d'erreur > 8 % sur les 15 dernières minutes.", at: daysAgo(0.05) },
     { id: "inc_04", kind: "org_suspecte", severity: "warn", message: "Sokhna Boutique — 12 comptes publicitaires ajoutés en 4 h.", orgId: "org_0021", at: daysAgo(0.8) },
@@ -645,11 +661,7 @@ export function isSuperAdmin(email?: string | null): boolean {
 export function grantDemoSuperAdmin() { if (isBrowser()) localStorage.setItem(OVERRIDE_KEY, "1"); }
 export function revokeDemoSuperAdmin() { if (isBrowser()) localStorage.removeItem(OVERRIDE_KEY); }
 
-export function fmtMoney(v: number, currency = "XOF") {
-  if (currency === "XOF") return `${Math.round(v).toLocaleString("fr-FR")} FCFA`;
-  return `${Math.round(v).toLocaleString("fr-FR")} ${currency}`;
-}
-export function fmtNum(v: number) { return v.toLocaleString("fr-FR"); }
+export function fmtNum(v: number) { return v.toLocaleString("en-US"); }
 export function fmtPct(v: number, digits = 1) { return `${(v * 100).toFixed(digits)} %`; }
 export function fmtDateShort(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
@@ -674,7 +686,7 @@ export type UsageMetric = {
 };
 export type OrgUsage = {
   orgId: string; metrics: UsageMetric[];
-  monthlyCostXOF: number; planCostXOF: number; anomalies: string[];
+  monthlyCostUsd: number; planCostUsdCents: number; anomalies: string[];
 };
 const METRIC_DEFS: { id: UsageMetricId; label: string; unit: string }[] = [
   { id: "connected_accounts", label: "Comptes connectés", unit: "comptes" },
@@ -711,8 +723,8 @@ function buildUsage(): OrgUsage[] {
     });
     if (i % 9 === 0) anomalies.push("Boucle agentique excessive détectée");
     if (i % 11 === 0) anomalies.push("Automatisation trop fréquente");
-    const monthlyCostXOF = 8_000 + ((i * 4137) % 260_000);
-    return { orgId: org.id, metrics, monthlyCostXOF, planCostXOF: plan.priceMonthly, anomalies };
+    const monthlyCostUsd = 1.2 + ((i * 0.4137) % 26);
+    return { orgId: org.id, metrics, monthlyCostUsd, planCostUsdCents: plan.priceMonthly, anomalies };
   });
 }
 let _usage: OrgUsage[] | null = null;
@@ -871,7 +883,7 @@ const DEFAULT_SKILLS: Skill[] = [
       { version: "v3.2", model: "économique", deployedPct: 100, successRate: 0.94, avgLatencyMs: 3200, createdAt: daysAgo(4), note: "Prompt affiné", active: true },
       { version: "v3.1", model: "économique", deployedPct: 0, successRate: 0.91, avgLatencyMs: 3400, createdAt: daysAgo(20), note: "", active: false },
     ],
-    tests: [{ name: "audit standard XOF", status: "ok" }, { name: "audit multi-comptes", status: "ok" }],
+    tests: [{ name: "audit standard USD", status: "ok" }, { name: "audit multi-comptes", status: "ok" }],
   },
   { id: "creation_campagne", name: "Création de campagne", description: "Prépare une campagne complète avec ciblage et créations.", enabled: true,
     systemPrompt: "Assistant média Orkestria. Prépare une campagne conforme aux policies actives.", outputSchema: "{ campaign, adsets:[], creatives:[] }",
@@ -1008,22 +1020,22 @@ export type IncidentStatus = "détecté" | "classifié" | "kill_switch" | "commu
 export type PlatformIncident = {
   id: string; title: string; severity: IncidentSev; status: IncidentStatus;
   startedAt: string; resolvedAt?: string; services: string[]; orgIdsAffected: string[];
-  actionsExecuted: number; potentialSpendXOF: number; cause: string; resolution: string;
+  actionsExecuted: number; potentialSpendUsd: number; cause: string; resolution: string;
   preventive: string[]; postMortem?: string;
 };
 const INC_KEY = "orkestria.admin.incidents";
 const DEFAULT_INCIDENTS: PlatformIncident[] = [
   { id: "INC-2026-014", title: "Google Ads Write MCP dégradé", severity: "SEV-2", status: "en_correction",
     startedAt: daysAgo(0.1), services: ["google_ads_write_mcp"], orgIdsAffected: ["org_0001", "org_0002", "org_0007"],
-    actionsExecuted: 42, potentialSpendXOF: 1_240_000, cause: "Timeout upstream Google API.", resolution: "Retry exponentiel activé.",
+    actionsExecuted: 42, potentialSpendUsd: 1_890, cause: "Timeout upstream Google API.", resolution: "Retry exponentiel activé.",
     preventive: ["Circuit breaker MCP", "Alertes P95 latence"] },
   { id: "INC-2026-013", title: "Charge anormale queues", severity: "SEV-3", status: "résolu",
     startedAt: daysAgo(2), resolvedAt: daysAgo(1.8), services: ["queues", "workers"], orgIdsAffected: ["org_0004"],
-    actionsExecuted: 8, potentialSpendXOF: 0, cause: "Batch export mal dimensionné.", resolution: "Batch limité à 500 items.",
+    actionsExecuted: 8, potentialSpendUsd: 0, cause: "Batch export mal dimensionné.", resolution: "Batch limité à 500 items.",
     preventive: ["Cap taille batch"], postMortem: "Rapport publié." },
   { id: "INC-2026-012", title: "Meta OAuth clients déconnectés", severity: "SEV-1", status: "résolu",
     startedAt: daysAgo(6), resolvedAt: daysAgo(5.7), services: ["meta_mcp"], orgIdsAffected: ["org_0003", "org_0009", "org_0010", "org_0017"],
-    actionsExecuted: 0, potentialSpendXOF: 480_000, cause: "Rotation clé Meta.", resolution: "Reconnexions initiées.",
+    actionsExecuted: 0, potentialSpendUsd: 730, cause: "Rotation clé Meta.", resolution: "Reconnexions initiées.",
     preventive: ["Monitoring expiration tokens", "Reconnexion silencieuse"] , postMortem: "RCA publié." },
 ];
 export function getPlatformIncidents(): PlatformIncident[] {
@@ -1065,7 +1077,7 @@ export function getSecretMetas(): SecretMeta[] {
     { id: "sec_meta_03", name: "TIKTOK_APP_SECRET", provider: "TikTok", env: "prod", createdAt: daysAgo(90), lastRotatedAt: daysAgo(30), status: "actif", owner: "Ismaël N." },
     { id: "sec_meta_04", name: "WHATSAPP_API_TOKEN", provider: "WhatsApp Cloud", env: "prod", createdAt: daysAgo(60), lastRotatedAt: daysAgo(10), status: "actif", owner: "Fatou Sy" },
     { id: "sec_meta_05", name: "STRIPE_SECRET_KEY", provider: "Stripe", env: "prod", createdAt: daysAgo(300), lastRotatedAt: daysAgo(60), status: "actif", owner: "Léa Martin" },
-    { id: "sec_meta_06", name: "OPENAI_API_KEY", provider: "OpenAI", env: "staging", createdAt: daysAgo(20), lastRotatedAt: daysAgo(20), status: "actif", owner: "Yaya Kanté" },
+    { id: "sec_meta_06", name: "DEEPSEEK_API_KEY", provider: "DeepSeek", env: "staging", createdAt: daysAgo(20), lastRotatedAt: daysAgo(20), status: "actif", owner: "Yaya Kanté" },
   ];
 }
 
@@ -1102,7 +1114,7 @@ export type SystemSettings = {
   platformName: string; domains: string[]; supportEmail: string;
   timezone: string; currencies: string[]; languages: string[];
   termsUrl: string; privacyUrl: string;
-  maxDailyBudgetXOF: number; maxIncreasePct: number; maxRunDurationMin: number;
+  maxDailyBudgetUsd: number; maxIncreasePct: number; maxRunDurationMin: number;
   maxIterations: number; maxFileMB: number; maxVideoSec: number; maxAccountsPerPlan: number;
   maintenanceMode: boolean; banner: string; signupsDisabled: boolean;
   blockedCountries: string[]; writeActionsSuspended: boolean;
@@ -1110,9 +1122,9 @@ export type SystemSettings = {
 const SETTINGS_KEY = "orkestria.admin.settings";
 const DEFAULT_SETTINGS: SystemSettings = {
   platformName: "Orkestria", domains: ["orkestria.io", "app.orkestria.io"], supportEmail: "support@orkestria.io",
-  timezone: "Africa/Dakar", currencies: ["XOF", "EUR", "USD"], languages: ["fr", "en"],
+  timezone: "Africa/Dakar", currencies: ["USD"], languages: ["fr", "en"],
   termsUrl: "/terms", privacyUrl: "/privacy",
-  maxDailyBudgetXOF: 500_000, maxIncreasePct: 25, maxRunDurationMin: 15,
+  maxDailyBudgetUsd: 500, maxIncreasePct: 25, maxRunDurationMin: 15,
   maxIterations: 12, maxFileMB: 50, maxVideoSec: 90, maxAccountsPerPlan: 15,
   maintenanceMode: false, banner: "", signupsDisabled: false,
   blockedCountries: [], writeActionsSuspended: false,
@@ -1156,7 +1168,7 @@ export function getFinanceReport() {
   const revenueByPlan = PLANS.map((p) => {
     const count = orgs.filter((o) => o.plan === p.id && o.status === "active").length;
     const revenue = count * p.priceMonthly;
-    const costPerOrg = Math.round(p.priceMonthly * 0.24); // ~76% marge
+    const costPerOrg = Math.round(p.priceMonthly * 0.12); // ~88% marge (DeepSeek)
     const totalCost = count * costPerOrg;
     const margin = revenue > 0 ? (revenue - totalCost) / revenue : 0;
     return { plan: p, count, revenue, avgRevenue: p.priceMonthly, avgCost: costPerOrg, margin };
@@ -1168,9 +1180,9 @@ export function getFinanceReport() {
   return {
     mrr, arr,
     revenueByPlan, revenueByCountry,
-    grossMargin: 0.76, aiCostsUSD: 2280, infraCostsUSD: 1420,
-    refundsXOF: 340_000, unpaidXOF: 1_120_000,
-    ltvXOF: 890_000, cacXOF: 145_000, churn: 0.048, arpuXOF: 62_500,
+    grossMargin: 0.88, aiCostsUSD: 420, infraCostsUSD: 1420,
+    refundsUsdCents: 34_000, unpaidUsdCents: 112_000,
+    ltvUsdCents: 89_000, cacUsdCents: 22_100, churn: 0.048, arpuUsdCents: 8900,
   };
 }
 
@@ -1221,7 +1233,7 @@ export async function refreshAdminFromServer() {
       org: orgs.find((o) => o.id === r.organizationId)?.name ?? "—",
       goal: r.goal,
       state: r.state as RunState,
-      model: "gpt-4o",
+      model: "deepseek-v4-flash",
       costUsd: Number(r.costUsd ?? 0),
       startedAt: r.createdAt.toISOString(),
       durationSec: Math.floor((Date.now() - r.createdAt.getTime()) / 1000),
