@@ -23,7 +23,7 @@ function TermsPage() {
         <p className="mt-4 text-[15px] text-ink/70">Version en vigueur au 19 juillet 2026</p>
 
         <Section title="1. Objet">
-          <p>Les présentes conditions régissent l'accès et l'utilisation d'Orkestria, plateforme publicitaire agentique éditée par KAMALOKA AI TECHNOLOGIES LLC (dirigée par ALLE OSSEY ANGE CEDRIC, siège à Abidjan, Côte d'Ivoire), accessible sur orkestria.one. En créant un compte, vous acceptez ces conditions sans réserve.</p>
+          <p>Les présentes conditions régissent l'accès et l'utilisation d'Orkestria, plateforme publicitaire agentique éditée par KAMALOKA AI TECHNOLOGIES LLC (dirigée par ALLE OSSEY ANGE CEDRIC, siège à Abidjan, Côte d'Ivoire), accessible sur orkestria.top. En créant un compte, vous acceptez ces conditions sans réserve.</p>
         </Section>
 
         <Section title="2. Description du service">
@@ -89,7 +89,7 @@ function TermsPage() {
         </Section>
 
         <Section title="15. Éditeur">
-          <p><b>KAMALOKA AI TECHNOLOGIES LLC</b> — Dirigée par ALLE OSSEY ANGE CEDRIC.<br />Siège : Abidjan, Côte d'Ivoire.<br />Site : orkestria.one · Contact : <a className="text-[#ff6c02] hover:underline" href="mailto:hello@orkestria.one">hello@orkestria.one</a></p>
+          <p><b>KAMALOKA AI TECHNOLOGIES LLC</b> — Dirigée par ALLE OSSEY ANGE CEDRIC.<br />Siège : Abidjan, Côte d'Ivoire.<br />Site : orkestria.top · Contact : <a className="text-[#ff6c02] hover:underline" href="mailto:hello@orkestria.top">hello@orkestria.top</a></p>
         </Section>
 
         <div className="mt-16 flex flex-wrap gap-3">

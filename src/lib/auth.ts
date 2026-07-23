@@ -63,8 +63,6 @@ export const auth = betterAuth({
     baseURL,
     "https://orkestria.top",
     "https://www.orkestria.top",
-    "https://orkestria.one",
-    "https://www.orkestria.one",
     ...extraOrigins,
   ],
   secret: process.env.BETTER_AUTH_SECRET,

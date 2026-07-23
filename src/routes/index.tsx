@@ -59,12 +59,12 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "Orkestria — Publicité IA pour Meta, Google et TikTok" },
       { property: "og:description", content: "Lancez, pilotez et optimisez vos campagnes publicitaires depuis une simple conversation." },
       { property: "og:type", content: "website" },
-      { property: "og:url", content: "https://orkestria.one/" },
+      { property: "og:url", content: "https://orkestria.top/" },
       { property: "og:locale", content: "fr_FR" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "keywords", content: "publicité IA, Meta Ads, Google Ads, TikTok Ads, agent IA marketing, automatisation publicitaire, gestionnaire de pubs, campagnes automatisées, orkestria" },
     ],
-    links: [{ rel: "canonical", href: "https://orkestria.one/" }],
+    links: [{ rel: "canonical", href: "https://orkestria.top/" }],
     scripts: [
       {
         type: "application/ld+json",
@@ -1680,12 +1680,12 @@ function Footer() {
             <Link to="/terms" className="hover:text-ink">Conditions</Link>
             <Link to="/cookies" className="hover:text-ink">Cookies</Link>
             <Link to="/contact" className="hover:text-ink">Contact</Link>
-            <a href="mailto:hello@orkestria.one" className="hover:text-ink">hello@orkestria.one</a>
+            <a href="mailto:hello@orkestria.top" className="hover:text-ink">hello@orkestria.top</a>
           </div>
         </div>
         <div className="mt-6 flex flex-col gap-1 border-t border-line/60 pt-6 text-[12px] text-ink-soft md:flex-row md:items-center md:justify-between">
           <p>© {new Date().getFullYear()} Orkestria — Une plateforme éditée par KAMALOKA AI TECHNOLOGIES LLC.</p>
-          <p className="text-ink-soft/80">Abidjan, Côte d'Ivoire · orkestria.one</p>
+          <p className="text-ink-soft/80">Abidjan, Côte d'Ivoire · orkestria.top</p>
         </div>
       </div>
     </footer>

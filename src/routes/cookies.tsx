@@ -26,7 +26,7 @@ function CookiesPage() {
         <p className="mt-4 text-[15px] text-ink/70">Dernière mise à jour : 19 juillet 2026</p>
 
         <Section title="1. C'est quoi, un cookie ?">
-          <p>Un cookie est un petit fichier déposé par un site sur votre appareil. Il permet, par exemple, de garder votre session ouverte, de mémoriser vos préférences, ou de mesurer l'audience du site. Cette page décrit précisément ceux utilisés par orkestria.one et l'application Orkestria.</p>
+          <p>Un cookie est un petit fichier déposé par un site sur votre appareil. Il permet, par exemple, de garder votre session ouverte, de mémoriser vos préférences, ou de mesurer l'audience du site. Cette page décrit précisément ceux utilisés par orkestria.top et l'application Orkestria.</p>
         </Section>
 
         <Section title="2. Vos choix, à tout moment">
@@ -97,11 +97,11 @@ function CookiesPage() {
         </Section>
 
         <Section title="6. Contact">
-          <p>Question sur les cookies ou l'exercice de vos droits : <a className="text-[#ff6c02] hover:underline" href="mailto:privacy@orkestria.one">privacy@orkestria.one</a>.</p>
+          <p>Question sur les cookies ou l'exercice de vos droits : <a className="text-[#ff6c02] hover:underline" href="mailto:privacy@orkestria.top">privacy@orkestria.top</a>.</p>
         </Section>
 
         <Section title="7. Éditeur">
-          <p><b>KAMALOKA AI TECHNOLOGIES LLC</b> — Dirigée par ALLE OSSEY ANGE CEDRIC.<br />Siège : Abidjan, Côte d'Ivoire.<br />Site : orkestria.one</p>
+          <p><b>KAMALOKA AI TECHNOLOGIES LLC</b> — Dirigée par ALLE OSSEY ANGE CEDRIC.<br />Siège : Abidjan, Côte d'Ivoire.<br />Site : orkestria.top</p>
         </Section>
 
         <div className="mt-16 flex flex-wrap gap-3">

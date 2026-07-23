@@ -23,7 +23,7 @@ function PrivacyPage() {
         <p className="mt-4 text-[15px] text-ink/70">Dernière mise à jour : 19 juillet 2026</p>
 
         <Section title="1. À propos de ce document">
-          <p>Cette politique explique quelles informations Orkestria collecte lorsque vous utilisez notre plateforme, pourquoi nous les utilisons, avec qui elles sont partagées et comment vous pouvez exercer vos droits. Elle s'applique à orkestria.one, à l'application web et aux intégrations publicitaires connectées (Meta Ads, Google Ads, TikTok Ads).</p>
+          <p>Cette politique explique quelles informations Orkestria collecte lorsque vous utilisez notre plateforme, pourquoi nous les utilisons, avec qui elles sont partagées et comment vous pouvez exercer vos droits. Elle s'applique à orkestria.top, à l'application web et aux intégrations publicitaires connectées (Meta Ads, Google Ads, TikTok Ads).</p>
         </Section>
 
         <Section title="2. Responsable de traitement">
@@ -87,7 +87,7 @@ function PrivacyPage() {
             <li><b>Retrait du consentement</b> : à tout moment, sans que cela affecte les traitements passés.</li>
             <li><b>Directives post-mortem</b> : définir le sort de vos données après votre décès.</li>
           </ul>
-          <p><b>Comment exercer vos droits.</b> Écrivez à <a className="text-[#ff6c02] hover:underline" href="mailto:privacy@orkestria.one">privacy@orkestria.one</a> depuis l'adresse associée à votre compte, ou utilisez le formulaire de la page <Link to="/contact" className="text-[#ff6c02] hover:underline">contact</Link>. Nous répondons sous 30 jours maximum. Une pièce d'identité peut être demandée en cas de doute raisonnable sur votre identité. La suppression de compte est également accessible directement depuis les paramètres de l'application.</p>
+          <p><b>Comment exercer vos droits.</b> Écrivez à <a className="text-[#ff6c02] hover:underline" href="mailto:privacy@orkestria.top">privacy@orkestria.top</a> depuis l'adresse associée à votre compte, ou utilisez le formulaire de la page <Link to="/contact" className="text-[#ff6c02] hover:underline">contact</Link>. Nous répondons sous 30 jours maximum. Une pièce d'identité peut être demandée en cas de doute raisonnable sur votre identité. La suppression de compte est également accessible directement depuis les paramètres de l'application.</p>
           <p><b>Réclamation.</b> Si vous estimez que vos droits ne sont pas respectés, vous pouvez saisir l'autorité de protection des données compétente : l'ARTCI en Côte d'Ivoire (siège de l'éditeur), ou l'autorité de contrôle de votre pays de résidence (CNIL en France, APD en Belgique, etc.).</p>
         </Section>
 
@@ -100,7 +100,7 @@ function PrivacyPage() {
         </Section>
 
         <Section title="13. Éditeur du site">
-          <p><b>KAMALOKA AI TECHNOLOGIES LLC</b> — Dirigée par ALLE OSSEY ANGE CEDRIC.<br />Siège : Abidjan, Côte d'Ivoire.<br />Site : orkestria.one · Contact : <a className="text-[#ff6c02] hover:underline" href="mailto:hello@orkestria.one">hello@orkestria.one</a></p>
+          <p><b>KAMALOKA AI TECHNOLOGIES LLC</b> — Dirigée par ALLE OSSEY ANGE CEDRIC.<br />Siège : Abidjan, Côte d'Ivoire.<br />Site : orkestria.top · Contact : <a className="text-[#ff6c02] hover:underline" href="mailto:hello@orkestria.top">hello@orkestria.top</a></p>
         </Section>
 
         <div className="mt-16 flex flex-wrap gap-3">

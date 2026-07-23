@@ -1,5 +1,5 @@
 // Programmatic SEO data — sectors, platforms, cities.
-export const SITE_URL = "https://orkestria.one";
+export const SITE_URL = "https://orkestria.top";
 
 export type Sector = {
   slug: string;

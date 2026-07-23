@@ -163,7 +163,7 @@ function ContactPage() {
                 Choisir un créneau <ArrowRight className="h-4 w-4" />
               </button>
             </div>
-            <InfoCard icon={<Mail className="h-5 w-5" />} title="E-mail" lines={["hello@orkestria.one", "Réponse sous 24 h ouvrées"]} />
+            <InfoCard icon={<Mail className="h-5 w-5" />} title="E-mail" lines={["hello@orkestria.top", "Réponse sous 24 h ouvrées"]} />
             <InfoCard icon={<MessageSquare className="h-5 w-5" />} title="Chat produit" lines={["Depuis l'application", "Lundi → vendredi, 9 h – 19 h"]} />
             <InfoCard icon={<Phone className="h-5 w-5" />} title="Plan Agence & Entreprise" lines={["Rendez-vous téléphonique dédié", "Écrivez-nous pour planifier"]} />
             <InfoCard icon={<MapPin className="h-5 w-5" />} title="Éditeur" lines={["KAMALOKA AI TECHNOLOGIES LLC", "Dirigée par ALLE OSSEY ANGE CEDRIC", "Siège : Abidjan, Côte d'Ivoire"]} />
