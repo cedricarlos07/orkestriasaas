@@ -4,6 +4,7 @@ export type LlmChatOptions = {
   messages: LlmMessage[];
   maxTokens?: number;
   jsonMode?: boolean;
+  /** When true, enable DeepSeek thinking mode (slower / costlier). Default: disabled. */
   thinking?: boolean;
 };
 
@@ -35,6 +36,8 @@ export async function llmChatCompletion(opts: LlmChatOptions): Promise<string> {
     model: llmModel(opts.thinking),
     messages: opts.messages,
     max_tokens: opts.maxTokens ?? 800,
+    // DeepSeek V4 defaults thinking=enabled; disable for fast chat/créas unless requested.
+    thinking: { type: opts.thinking ? "enabled" : "disabled" },
   };
   if (opts.jsonMode) body.response_format = { type: "json_object" };
 
@@ -51,8 +54,11 @@ export async function llmChatCompletion(opts: LlmChatOptions): Promise<string> {
     throw new Error(`LLM API error: ${await res.text()}`);
   }
 
-  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const text = data.choices?.[0]?.message?.content;
-  if (!text?.trim()) throw new Error("Réponse LLM vide");
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string; reasoning_content?: string } }[];
+  };
+  const msg = data.choices?.[0]?.message;
+  const text = (msg?.content ?? msg?.reasoning_content ?? "").trim();
+  if (!text) throw new Error("Réponse LLM vide");
   return text;
 }
