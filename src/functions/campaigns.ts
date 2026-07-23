@@ -14,15 +14,24 @@ import {
 } from "@/lib/platforms/meta-api";
 import { classifyRisk } from "@/lib/mcp/action-pipeline";
 
-function parseFcfaAmount(raw: string | undefined): number {
+/** Parse a USD (or major-unit) total from UI strings like "$250 · 7 jours" or "$400". */
+function parseBudgetTotal(raw: string | undefined): number {
   if (!raw) return 0;
-  return parseInt(raw.replace(/[^\d]/g, ""), 10) || 0;
+  const head = raw.split(/[·•|/]/)[0] ?? raw;
+  const m = head.replace(/,/g, "").match(/(\d+(?:\.\d+)?)/);
+  return m ? Number(m[1]) : 0;
 }
 
 function parseDurationDays(raw: string | undefined): number {
   if (!raw) return 14;
-  const m = raw.match(/(\d+)/);
+  const m = raw.match(/(\d+)\s*j/i) ?? raw.match(/(\d+)/);
   return m ? Math.max(1, parseInt(m[1], 10)) : 14;
+}
+
+/** Daily budget in major currency units. Meta min ~$1 — never invent a $1000 floor. */
+function dailyBudgetFromTotal(total: number, days: number): number {
+  if (total <= 0) throw new Error("Budget invalide — indiquez un montant (ex. $250 · 7 jours).");
+  return Math.max(1, Math.round((total / days) * 100) / 100);
 }
 
 function mapMetaStatus(status: string): string {
@@ -143,9 +152,9 @@ export const launchCampaign = createServerFn({ method: "POST" })
       throw new Error("Connectez Meta Ads avant de lancer une campagne.");
     }
 
-    const total = parseFcfaAmount(data.budget);
+    const total = parseBudgetTotal(data.budget);
     const days = parseDurationDays(data.duration);
-    const dailyBudget = Math.max(1000, Math.round(total / days));
+    const dailyBudget = dailyBudgetFromTotal(total, days);
 
     const actionId = uid("act");
     const risk = classifyRisk("create_campaign");

@@ -5,7 +5,7 @@ import { buildAdkitEnv, adkitVerify } from "@/lib/mcp/adkit-bridge";
 import { getOrgGoogleCustomerId, isAdloopServerConfigured } from "@/lib/mcp/adloop-org";
 import { probeAdloopHealth } from "@/lib/mcp/clients/adloop";
 import { probeUseproxyHealth } from "@/lib/mcp/clients/useproxy";
-import { resolveMetaPageId } from "@/lib/mcp/meta-org";
+import { resolveMetaPageId, syncOrgMetaPageFromToken } from "@/lib/mcp/meta-org";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 
 export type StackSetupStatus = {
@@ -29,7 +29,10 @@ export type StackSetupStatus = {
     useproxyError?: string;
     url: string;
   };
+  /** Meta campaigns can launch when Meta OAuth + Page are ready (adkit preferred but not blocking). */
   readyForCampaign: boolean;
+  readyForMeta: boolean;
+  readyForGoogle: boolean;
   missingSteps: string[];
 };
 
@@ -37,33 +40,49 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
   const rows = await db.select().from(connections).where(eq(connections.organizationId, orgId));
   const metaConn = rows.find((r) => r.connector === "meta_ads" && r.status === "connectée");
   const googleConn = rows.find((r) => r.connector === "google_ads" && r.status === "connectée");
-  const pageId = await resolveMetaPageId(orgId, null);
+  let pageId = await resolveMetaPageId(orgId, null);
   const customerId = await getOrgGoogleCustomerId(orgId);
 
   const missingSteps: string[] = [];
 
   let adkitVerify: StackSetupStatus["meta"]["adkitVerify"] = "skipped";
   let adkitError: string | undefined;
-  if (metaConn) {
+  if (metaConn?.encryptedTokens) {
     try {
       const tokens = await ensureFreshTokens(metaConn.id, orgId, "meta_ads");
-      const env = buildAdkitEnv({
-        accessToken: tokens.accessToken,
-        accountId: tokens.accountId ?? metaConn.externalAccount ?? "",
-        pageId: pageId ?? undefined,
-        allowSpend: false,
-      });
-      await adkitVerify(env);
-      adkitVerify = "ok";
+      if (!pageId) {
+        const synced = await syncOrgMetaPageFromToken(
+          orgId,
+          tokens.accessToken,
+          tokens.accountId ?? metaConn.externalAccount ?? undefined,
+        ).catch(() => null);
+        if (synced) pageId = synced.pageId;
+      }
+      try {
+        const env = buildAdkitEnv({
+          accessToken: tokens.accessToken,
+          accountId: tokens.accountId ?? metaConn.externalAccount ?? "",
+          pageId: pageId ?? undefined,
+          allowSpend: false,
+        });
+        await adkitVerify(env);
+        adkitVerify = "ok";
+      } catch (e) {
+        adkitVerify = "error";
+        adkitError = e instanceof Error ? e.message : "Vérification automatisation Meta échouée";
+      }
     } catch (e) {
       adkitVerify = "error";
-      adkitError = e instanceof Error ? e.message : "adkit verify failed";
+      adkitError = e instanceof Error ? e.message : "Token Meta invalide";
+      missingSteps.push("Reconnecter Meta Ads (jeton invalide)");
     }
   } else {
-    missingSteps.push("Connecter Meta Ads (OAuth)");
+    missingSteps.push("Connecter Meta Ads");
   }
 
-  if (!pageId) missingSteps.push("Choisir une Page Facebook (Connexions → Meta)");
+  if (metaConn && !pageId) {
+    missingSteps.push("Aucune Page Facebook détectée — reconnectez Meta ou choisissez une Page");
+  }
 
   const adloopConfigured = isAdloopServerConfigured();
   let adloopHealth: StackSetupStatus["google"]["adloopHealth"] = "skipped";
@@ -74,10 +93,7 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
     else {
       adloopHealth = "error";
       adloopError = probe.error;
-      missingSteps.push("AdLoop self-hosted — exécutez adloop init sur le serveur");
     }
-  } else {
-    missingSteps.push("AdLoop self-hosted désactivé (ADLOOP_ENABLED=false)");
   }
 
   const useproxyConfigured = Boolean(
@@ -92,20 +108,16 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
       useproxyHealth = "error";
       useproxyError = probe.error;
     }
-  } else {
-    missingSteps.push("Bearer useproxy (OAuth admin — research concurrents, optionnel)");
   }
 
-  const readyForCampaign =
-    Boolean(metaConn) &&
-    Boolean(pageId) &&
-    adkitVerify === "ok" &&
-    adloopHealth === "ok" &&
-    missingSteps.filter((s) => !s.includes("useproxy")).length === 0;
+  const readyForMeta = Boolean(metaConn?.encryptedTokens) && Boolean(pageId);
+  const readyForGoogle = adloopConfigured && adloopHealth === "ok";
+  /** Campaign launch in product is Meta-first — do not block on Google/AdLoop. */
+  const readyForCampaign = readyForMeta;
 
   return {
     meta: {
-      oauthConnected: Boolean(metaConn),
+      oauthConnected: Boolean(metaConn?.encryptedTokens),
       account: metaConn?.externalAccount ?? null,
       pageId,
       adkitVerify,
@@ -125,6 +137,8 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
       url: process.env.USEPROXY_MCP_URL ?? "https://mcp.useproxy.dev/mcp",
     },
     readyForCampaign,
+    readyForMeta,
+    readyForGoogle,
     missingSteps,
   };
 }

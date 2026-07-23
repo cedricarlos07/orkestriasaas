@@ -105,8 +105,8 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
       `**AdLoop Google :** ${stack.google.adloopHealth}${stack.google.adloopError ? ` (${stack.google.adloopError})` : ""}${stack.google.oauthConnected ? " · OAuth lié" : ""}`,
       `**Research useproxy :** ${stack.research.useproxyConfigured ? stack.research.useproxyHealth : "clé serveur manquante"}`,
       "",
-      stack.readyForCampaign
-        ? "Prêt pour lancer des campagnes Meta (dry-run → PAUSED → activation)."
+      stack.readyForMeta || stack.readyForCampaign
+        ? "Prêt pour lancer des campagnes Meta (création en pause → activation explicite)."
         : `Étapes restantes :\n${stack.missingSteps.map((s) => `• ${s}`).join("\n")}`,
       "",
       "→ Connexions : /app/connections",
@@ -135,19 +135,19 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
   if (intent === "campaign") {
     const { getStackSetupStatus } = await import("@/lib/mcp/setup-status");
     const stack = await getStackSetupStatus(input.orgId);
-    if (!stack.readyForCampaign) {
+    if (!stack.readyForMeta && !stack.readyForCampaign) {
       const steps = stack.missingSteps.length
         ? stack.missingSteps.map((s, i) => `${i + 1}. ${s}`).join("\n")
-        : "1. Connecter Meta\n2. Enregistrer Page Facebook ID\n3. Vérifier adkit";
+        : "1. Connecter Meta Ads\n2. Choisir une Page Facebook";
       return {
-        reply: `Avant de lancer une campagne, complétez la configuration V1 :\n\n${steps}\n\n→ **Connexions** : /app/connections\n\nUne fois prêt, le flux sera : research concurrents (optionnel) → brief Meta en dry-run (adkit, tout PAUSED) → votre validation → activation explicite (dépense).`,
+        reply: `Avant de lancer une campagne Meta, complétez :\n\n${steps}\n\n→ **Connexions** : /app/connections\n\nEnsuite : brief → création en pause → votre validation → activation (dépense).`,
         toolsUsed: ["validate_setup"],
         runId: input.runId,
       };
     }
     return {
       reply:
-        "Configuration OK. Décrivez votre campagne Meta : objectif (trafic/leads), budget journalier, pays cibles, message et headline. Je commencerai par un **dry-run adkit** (rien ne dépense) avant toute création réelle.",
+        "Configuration Meta OK. Décrivez votre campagne : objectif (trafic/leads), budget journalier, pays cibles, message et headline. Je créerai d'abord en **pause** (aucune dépense) avant toute activation.",
       toolsUsed: [],
       runId: input.runId,
     };

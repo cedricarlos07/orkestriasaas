@@ -99,10 +99,10 @@ function Today() {
       {setup && !setup.readyForCampaign && (
         <div className="rounded-2xl border border-line/70 bg-white p-5">
           <h2 className="flex items-center gap-2 font-display text-[16px] font-semibold text-ink">
-            <AlertCircle className="h-4 w-4 text-[#ff6c02]" /> Configuration V1
+            <AlertCircle className="h-4 w-4 text-[#ff6c02]" /> Configuration Meta
           </h2>
           <p className="mt-1 text-[13px] text-ink-soft">
-            Complétez ces étapes pour lancer des campagnes Meta via adkit (dry-run → PAUSED → activation).
+            Complétez ces étapes pour lancer des campagnes Meta (création en pause → activation).
           </p>
           <ul className="mt-3 space-y-1.5 text-[13px] text-ink">
             {setup.missingSteps.length ? (
@@ -113,7 +113,7 @@ function Today() {
                 </li>
               ))
             ) : (
-              <li>Vérifiez adkit et Meta dans Connexions.</li>
+              <li>Connectez Meta Ads dans Connexions.</li>
             )}
           </ul>
           <Link to="/app/connections" className="btn-primary mt-4 inline-flex text-[13px]">
@@ -125,9 +125,9 @@ function Today() {
       {setup?.readyForCampaign && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-[13px] text-emerald-900">
           <CheckCircle2 className="mr-1 inline h-4 w-4" />
-          Stack V1 prête — Meta + adkit configurés.
-          {setup.google.adloopHealth === "ok" && " Google via AdLoop self-hosted."}
-          {setup.research.useproxyHealth === "ok" && " Research concurrents actif."}
+          Meta prêt pour les campagnes.
+          {setup.google.adloopHealth === "ok" && " Google Ads disponible."}
+          {setup.research.useproxyHealth === "ok" && " Recherche concurrents active."}
         </div>
       )}
 

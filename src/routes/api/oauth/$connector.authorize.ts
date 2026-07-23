@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CONNECTORS, getBaseUrl, type ConnectorId } from "@/lib/oauth/connectors";
 import { getAuthorizeRedirectAsync } from "@/lib/oauth/service";
+import { returnToSetCookie, sanitizeReturnTo } from "@/lib/oauth/return-to";
 import { auth } from "@/lib/auth";
 import { getActiveOrgId } from "@/functions/context";
 
@@ -18,9 +19,16 @@ export const Route = createFileRoute("/api/oauth/$connector/authorize")({
           return Response.redirect(`${getBaseUrl()}/auth?redirect=${encodeURIComponent(request.url)}`);
         }
 
+        const reqUrl = new URL(request.url);
+        const returnTo = sanitizeReturnTo(reqUrl.searchParams.get("returnTo"));
+
         const orgId = await getActiveOrgId(session);
         const url = await getAuthorizeRedirectAsync(connector, orgId, session.user.id);
-        return Response.redirect(url);
+
+        const headers = new Headers();
+        headers.set("Location", url);
+        headers.append("Set-Cookie", returnToSetCookie(returnTo));
+        return new Response(null, { status: 302, headers });
       },
     },
   },

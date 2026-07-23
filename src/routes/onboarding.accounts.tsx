@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Loader2 } from "lucide-react";
 import { StepHeader } from "@/components/onboarding/StepHeader";
@@ -9,10 +10,21 @@ export const Route = createFileRoute("/onboarding/accounts")({ component: Step }
 
 function Step() {
   const { data, setField } = useOnboarding();
+  const [oauthBanner, setOauthBanner] = useState<string | null>(null);
   const { data: accounts = [], isLoading, error } = useQuery({
     queryKey: ["ad-accounts"],
     queryFn: () => listAdAccounts(),
   });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("connected");
+    const err = params.get("error");
+    if (connected || err) {
+      window.history.replaceState({}, "", "/onboarding/accounts");
+      setOauthBanner(err ? `Connexion échouée : ${err}` : "Compte connecté — sélectionnez-le ci-dessous.");
+    }
+  }, []);
 
   const toggle = async (accountKey: string, connectionId: string, accountId: string, accountName: string) => {
     const selected = data.selectedAccounts.includes(accountKey)
@@ -31,6 +43,17 @@ function Step() {
         title="Sélectionnez les comptes à rattacher"
         desc="Comptes récupérés via OAuth depuis vos plateformes connectées."
       />
+      {oauthBanner ? (
+        <p
+          className={`mb-4 rounded-xl px-4 py-3 text-[13px] ${
+            oauthBanner.startsWith("Connexion échouée")
+              ? "border border-rose-200 bg-rose-50 text-rose-800"
+              : "border border-emerald-200 bg-emerald-50 text-emerald-900"
+          }`}
+        >
+          {oauthBanner}
+        </p>
+      ) : null}
       {isLoading ? (
         <div className="flex items-center gap-2 py-8 text-[13px] text-ink-soft">
           <Loader2 className="h-4 w-4 animate-spin" /> Chargement des comptes publicitaires…

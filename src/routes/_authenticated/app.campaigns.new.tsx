@@ -8,7 +8,7 @@ import {
 import { printHtmlAsPdf } from "@/lib/print-pdf";
 import { useCampaigns } from "@/lib/campaigns-store";
 import { useNotifications } from "@/lib/notifications-store";
-import { launchCampaign } from "@/functions/campaigns";
+import { launchCampaign, updateCampaignStatus } from "@/functions/campaigns";
 
 export const Route = createFileRoute("/_authenticated/app/campaigns/new")({
   head: () => ({ meta: [{ title: "Nouvelle campagne — Orkestria" }, { name: "robots", content: "noindex" }] }),
@@ -36,6 +36,7 @@ function NewCampaign() {
   const [step, setStep] = useState<"chat" | "preview" | "execute" | "done">("chat");
   const [brief, setBrief] = useState<Brief>({});
   const [plan, setPlan] = useState<null | Plan>(null);
+  const [launchedCampaignId, setLaunchedCampaignId] = useState<string | null>(null);
 
   return (
     <div className="mx-auto max-w-[1280px]">
@@ -71,9 +72,16 @@ function NewCampaign() {
             <Preview plan={plan} onEdit={() => setStep("chat")} onApprove={() => setStep("execute")} />
           )}
           {step === "execute" && plan && (
-            <Execute brief={brief} plan={plan} onDone={() => setStep("done")} />
+            <Execute
+              brief={brief}
+              plan={plan}
+              onDone={(campaignId) => {
+                setLaunchedCampaignId(campaignId);
+                setStep("done");
+              }}
+            />
           )}
-          {step === "done" && <Done />}
+          {step === "done" && <Done campaignId={launchedCampaignId} />}
         </div>
 
         <aside className="space-y-4">
@@ -579,7 +587,7 @@ function Execute({
 }: {
   brief: Brief;
   plan: Plan;
-  onDone: () => void;
+  onDone: (campaignId: string) => void;
 }) {
   const { push } = useNotifications();
   const { syncMeta } = useCampaigns();
@@ -600,11 +608,18 @@ function Execute({
         setStepIndex(1);
         const name = brief.product ?? plan.goal.slice(0, 80) ?? "Campagne Orkestria";
         setStepIndex(2);
+        // Prefer total from brief ("$250 · 7 jours") when present — safer parse on server
+        const budgetRaw = brief.budget?.includes("·") || brief.budget?.includes("jours")
+          ? brief.budget
+          : plan.budget;
+        const durationRaw = brief.budget?.match(/(\d+)\s*jours?/i)?.[0]
+          ?? brief.duration
+          ?? plan.duration;
         const result = await launchCampaign({
           data: {
             name,
-            budget: plan.budget,
-            duration: plan.duration,
+            budget: budgetRaw ?? plan.budget,
+            duration: durationRaw ?? plan.duration,
             zone: brief.zone,
           },
         });
@@ -615,9 +630,9 @@ function Execute({
         push({
           kind: "status",
           title: "Campagne Meta créée",
-          body: result.message ?? "Campagne en pause sur Meta Ads.",
+          body: `${result.message ?? "Campagne en pause."} Budget journalier : $${result.dailyBudget}.`,
         });
-        setTimeout(onDone, 600);
+        setTimeout(() => onDone(result.campaign.id), 600);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Échec de création");
       }
@@ -656,9 +671,42 @@ function Execute({
 }
 
 /* --------------------------------- Done --------------------------------- */
-function Done() {
+function Done({ campaignId }: { campaignId: string | null }) {
   const nav = useNavigate();
+  const { push } = useNotifications();
   const [mode, setMode] = useState<"draft" | "paused" | "live">("paused");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const confirm = async () => {
+    if (!campaignId) {
+      nav({ to: "/app/campaigns" });
+      return;
+    }
+    if (mode === "paused") {
+      nav({ to: "/app/campaigns" });
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await updateCampaignStatus({ data: { id: campaignId, status: mode === "live" ? "live" : "draft" } });
+      push({
+        kind: "status",
+        title: mode === "live" ? "Campagne activée" : "Campagne en brouillon",
+        body:
+          mode === "live"
+            ? "La campagne est active sur Meta Ads et peut dépenser."
+            : "Statut mis à jour. Vous pourrez l'activer plus tard.",
+      });
+      nav({ to: "/app/campaigns" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Impossible de mettre à jour le statut");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="rounded-2xl border border-line/70 bg-white p-6">
       <div className="flex items-center gap-3">
@@ -666,19 +714,22 @@ function Done() {
           <Check className="h-4 w-4" />
         </span>
         <div>
-          <h2 className="font-display text-[20px] font-semibold text-ink">Campagnes prêtes</h2>
-          <p className="text-[13px] text-ink-soft">Par défaut, elles restent en pause jusqu'à votre validation finale.</p>
+          <h2 className="font-display text-[20px] font-semibold text-ink">Campagne Meta créée</h2>
+          <p className="text-[13px] text-ink-soft">
+            Elle est en pause par défaut. Choisissez si vous voulez l&apos;activer maintenant (dépense réelle).
+          </p>
         </div>
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-3">
         {[
-          { id: "draft", i: Wand2, t: "Garder en brouillon", d: "Je continue de peaufiner." },
+          { id: "draft", i: Wand2, t: "Garder en brouillon", d: "Pas de diffusion Meta." },
           { id: "paused", i: Pause, t: "Laisser en pause", d: "Recommandé — vous décidez quand lancer." },
-          { id: "live", i: PlayCircle, t: "Activer maintenant", d: "Diffusion immédiate." },
+          { id: "live", i: PlayCircle, t: "Activer maintenant", d: "Diffusion Meta réelle (dépense)." },
         ].map((o) => (
           <button
             key={o.id}
+            type="button"
             onClick={() => setMode(o.id as typeof mode)}
             className={`rounded-2xl border p-4 text-left transition ${
               mode === o.id ? "border-[#ff6c02] bg-[#fff6ee]" : "border-line hover:border-ink/40"
@@ -691,9 +742,25 @@ function Done() {
         ))}
       </div>
 
+      {error ? (
+        <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-700">{error}</p>
+      ) : null}
+
       <div className="mt-6 flex flex-wrap gap-2">
-        <button onClick={() => nav({ to: "/app/campaigns" })} className="btn-primary">Voir mes campagnes</button>
-        <button onClick={() => nav({ to: "/app" })} className="chip-ghost bg-surface-2">Retour à l'accueil</button>
+        <button type="button" disabled={busy} onClick={() => void confirm()} className="btn-primary">
+          {busy ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Mise à jour…
+            </>
+          ) : mode === "live" ? (
+            "Confirmer l'activation"
+          ) : (
+            "Voir mes campagnes"
+          )}
+        </button>
+        <button type="button" onClick={() => nav({ to: "/app" })} className="chip-ghost bg-surface-2">
+          Retour à l&apos;accueil
+        </button>
       </div>
     </div>
   );

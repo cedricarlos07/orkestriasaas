@@ -63,7 +63,8 @@ function SetupPage() {
         data: { appRole: role, company: company.trim(), sector, size },
       });
       await createOrganizationForUser({ data: { name: company.trim() } });
-      navigate({ to: role === "agency" ? "/app/agency" : "/app" });
+      // Canonical path: basics → connect platforms → (agency hub or app)
+      navigate({ to: "/onboarding/connect" });
     } finally {
       setSaving(false);
     }
