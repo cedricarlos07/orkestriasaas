@@ -468,16 +468,28 @@
 .anim-slide-r { animation: slideInRight 420ms cubic-bezier(.2,.7,.2,1) both; }
 .anim-pulse-dot { animation: softPulse 1.8s ease-in-out infinite; }
 
-/* Stagger helpers */
-.stagger > * { opacity: 0; animation: fadeInUp 520ms cubic-bezier(.2,.7,.2,1) both; }
-.stagger > *:nth-child(1) { animation-delay: 40ms; }
-.stagger > *:nth-child(2) { animation-delay: 100ms; }
-.stagger > *:nth-child(3) { animation-delay: 160ms; }
-.stagger > *:nth-child(4) { animation-delay: 220ms; }
-.stagger > *:nth-child(5) { animation-delay: 280ms; }
-.stagger > *:nth-child(6) { animation-delay: 340ms; }
-.stagger > *:nth-child(7) { animation-delay: 400ms; }
-.stagger > *:nth-child(8) { animation-delay: 460ms; }
+/* Stagger once on enter */
+.stagger > * { animation: fadeInUp 420ms cubic-bezier(.2,.7,.2,1) both; }
+.stagger > *:nth-child(1) { animation-delay: 30ms; }
+.stagger > *:nth-child(2) { animation-delay: 60ms; }
+.stagger > *:nth-child(3) { animation-delay: 90ms; }
+.stagger > *:nth-child(4) { animation-delay: 120ms; }
+.stagger > *:nth-child(5) { animation-delay: 150ms; }
+.stagger > *:nth-child(6) { animation-delay: 180ms; }
+.stagger > *:nth-child(7) { animation-delay: 210ms; }
+.stagger > *:nth-child(8) { animation-delay: 240ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger > *,
+  .anim-fade-up,
+  .anim-pop,
+  .anim-slide-r,
+  .anim-pulse-dot {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
 
 /* KPI trend badges */
 @utility kpi-badge {

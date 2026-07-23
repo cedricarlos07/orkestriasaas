@@ -133,7 +133,7 @@ function Today() {
         </div>
       )}
 
-      <section className="stagger grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         {dashLoading ? (
           <div className="col-span-full flex items-center gap-2 text-[13px] text-ink-soft">
             <Loader2 className="h-4 w-4 animate-spin" /> Chargement des métriques…
@@ -152,7 +152,7 @@ function Today() {
               key={s.key}
               className={`card-hover relative overflow-hidden rounded-2xl border border-white/60 bg-gradient-to-br ${style.grad} p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_24px_-16px_rgba(20,20,20,0.25)] sm:p-4`}
             >
-              <div className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-full bg-white/40 blur-xl anim-pulse-dot" />
+              <div className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-full bg-white/40 blur-xl" />
               <div className="relative flex items-center justify-between gap-1.5">
                 <div className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink/70">
                   <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/80 ${style.ic} ring-1 ${style.ring} shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]`}>

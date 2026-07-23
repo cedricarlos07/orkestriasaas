@@ -176,22 +176,17 @@ function AppLayout() {
                         }`}
                       >
                         {active && !collapsed && (
-                          <span className="absolute -left-3 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-[#ff6c02] animate-[navRail_320ms_ease-out]" />
+                          <span className="absolute -left-3 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-[#ff6c02]" />
                         )}
                         <span
-                          className={`relative flex h-7 w-7 items-center justify-center rounded-lg transition-all duration-300 ${
+                          className={`relative flex h-7 w-7 items-center justify-center rounded-lg transition-colors duration-200 ${
                             active
-                              ? "bg-gradient-to-br from-[#ff8a2b] to-[#ff5e00] text-white shadow-[0_6px_16px_-6px_rgba(255,108,2,0.75)] ring-1 ring-white/25 animate-[navIconPop_360ms_cubic-bezier(0.34,1.56,0.64,1)]"
+                              ? "bg-gradient-to-br from-[#ff8a2b] to-[#ff5e00] text-white shadow-[0_6px_16px_-6px_rgba(255,108,2,0.75)] ring-1 ring-white/25"
                               : "text-ink-soft group-hover:bg-surface-2 group-hover:text-ink"
                           }`}
                         >
-                          {active && (
-                            <span className="pointer-events-none absolute inset-0 rounded-lg bg-[#ff6c02]/40 blur-md animate-[navGlow_2.4s_ease-in-out_infinite]" />
-                          )}
                           <Icon
-                            className={`relative h-[15px] w-[15px] shrink-0 transition-transform duration-300 ${
-                              active ? "drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]" : "group-hover:scale-110"
-                            }`}
+                            className="relative h-[15px] w-[15px] shrink-0"
                             strokeWidth={active ? 2.4 : 2}
                           />
                         </span>
