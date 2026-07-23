@@ -1,9 +1,19 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, Users2, ShieldCheck, CreditCard, BellRing, Save, UserPlus, Check, KeyRound, Smartphone, Mail, MessageSquare, Sparkles, Monitor, ExternalLink, Loader2 } from "lucide-react";
-import { getProfile } from "@/functions/profiles";
-import { getBillingStatus, openBillingPortal, startCheckout } from "@/functions/billing";
+import {
+  Building2,
+  CreditCard,
+  Gauge,
+  Save,
+  Sparkles,
+  ExternalLink,
+  Loader2,
+  ArrowUpRight,
+} from "lucide-react";
+import { getProfile, saveUserProfile } from "@/functions/profiles";
+import { getBillingStatus, getUsageQuotas, openBillingPortal, startCheckout } from "@/functions/billing";
+import { listLinkedAdAccounts } from "@/functions/ad-accounts";
 import { authClient } from "@/lib/auth-client";
 import { formatPriceCents } from "@/lib/pricing/money";
 import type { PlanId } from "@/lib/pricing/plans";
@@ -11,59 +21,63 @@ import type { PlanId } from "@/lib/pricing/plans";
 export const Route = createFileRoute("/_authenticated/app/settings")({ component: Settings });
 
 const TABS = [
-  { label: "Entreprise", icon: Building2 },
-  { label: "Membres", icon: Users2 },
-  { label: "Sécurité", icon: ShieldCheck },
-  { label: "Facturation", icon: CreditCard },
-  { label: "Notifications", icon: BellRing },
+  { id: "company", label: "Entreprise", icon: Building2 },
+  { id: "usage", label: "Mon usage", icon: Gauge },
+  { id: "billing", label: "Facturation", icon: CreditCard },
 ] as const;
 
+type TabId = (typeof TABS)[number]["id"];
+
 function Settings() {
-  const [tab, setTab] = useState(0);
-  const { data: profile } = useQuery({ queryKey: ["profile"], queryFn: () => getProfile() });
+  const [tab, setTab] = useState<TabId>("company");
+  const { data: profile, refetch: refetchProfile } = useQuery({ queryKey: ["profile"], queryFn: () => getProfile() });
   const { data: session } = authClient.useSession();
-  const companyFields: [string, string][] = [
-    ["Nom de l'entreprise", profile?.company ?? "—"],
-    ["Secteur", profile?.sector ?? "—"],
-    ["Pays", profile?.country ?? "Côte d'Ivoire"],
-    ["Devise", profile?.currency ?? "USD"],
-    ["Site web", "—"],
-  ];
-  const owner = {
-    n: session?.user?.name || profile?.company || "Vous",
-    e: session?.user?.email || "—",
-  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hash === "#billing") setTab("billing");
+    if (window.location.hash === "#usage") setTab("usage");
+  }, []);
+
   return (
     <div className="mx-auto max-w-[1100px] space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex items-center gap-4">
           <span className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#ff8a3c] to-[#ff6c02] text-white shadow-[0_10px_24px_-10px_rgba(255,108,2,0.7),inset_0_1px_0_rgba(255,255,255,0.35)]">
             <Sparkles className="h-5 w-5" />
-            <span className="absolute inset-0 -z-10 rounded-2xl bg-[#ff6c02]/40 blur-xl animate-[softPulse_2.4s_ease-in-out_infinite]" />
           </span>
           <div>
             <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Paramètres</p>
             <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Configuration du compte</h1>
-            <p className="text-[13px] text-ink-soft">Entreprise, équipe, sécurité, facturation et notifications.</p>
+            <p className="text-[13px] text-ink-soft">Entreprise, usage et facturation — uniquement ce qui est enregistré.</p>
           </div>
         </div>
       </header>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[240px_1fr]">
         <aside className="card-soft h-max overflow-hidden p-2">
-          <nav className="flex md:flex-col gap-1 overflow-x-auto">
-            {TABS.map((t, i) => {
+          <nav className="flex gap-1 overflow-x-auto md:flex-col">
+            {TABS.map((t) => {
               const Icon = t.icon;
-              const active = tab === i;
+              const active = tab === t.id;
               return (
                 <button
-                  key={t.label}
-                  onClick={() => setTab(i)}
-                  className={`group flex items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13px] font-medium transition ${active
-                    ? "bg-gradient-to-r from-[#fff2e5] to-white text-ink ring-1 ring-inset ring-[#ff6c02]/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
-                    : "text-ink-soft hover:bg-white/70 hover:text-ink"}`}
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={`group flex items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13px] font-medium transition ${
+                    active
+                      ? "bg-gradient-to-r from-[#fff2e5] to-white text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-inset ring-[#ff6c02]/25"
+                      : "text-ink-soft hover:bg-white/70 hover:text-ink"
+                  }`}
                 >
-                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] ${active ? "bg-gradient-to-br from-[#ff8a3c] to-[#ff6c02] text-white" : "bg-gradient-to-br from-white to-[#faf6ef] text-ink-soft ring-1 ring-line/60"}`}>
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg ${
+                      active
+                        ? "bg-gradient-to-br from-[#ff8a3c] to-[#ff6c02] text-white"
+                        : "bg-gradient-to-br from-white to-[#faf6ef] text-ink-soft ring-1 ring-line/60"
+                    }`}
+                  >
                     <Icon className="h-3.5 w-3.5" />
                   </span>
                   {t.label}
@@ -74,13 +88,17 @@ function Settings() {
         </aside>
 
         <section className="card-soft relative overflow-hidden p-6">
-          <div aria-hidden className="pointer-events-none absolute -top-20 -right-20 h-52 w-52 rounded-full bg-[#ff6c02]/10 blur-3xl" />
+          <div aria-hidden className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-[#ff6c02]/10 blur-3xl" />
           <div className="relative">
-            {tab === 0 && <Form fields={companyFields} />}
-            {tab === 1 && <Members owner={owner} />}
-            {tab === 2 && <Security />}
-            {tab === 3 && <Billing />}
-            {tab === 4 && <Notifications />}
+            {tab === "company" && (
+              <CompanyForm
+                profile={profile}
+                email={session?.user?.email}
+                onSaved={() => void refetchProfile()}
+              />
+            )}
+            {tab === "usage" && <UsagePanel onUpgrade={() => setTab("billing")} />}
+            {tab === "billing" && <Billing />}
           </div>
         </section>
       </div>
@@ -88,112 +106,163 @@ function Settings() {
   );
 }
 
-function Form({ fields }: { fields: [string, string][] }) {
+function CompanyForm({
+  profile,
+  email,
+  onSaved,
+}: {
+  profile: Awaited<ReturnType<typeof getProfile>> | undefined;
+  email?: string;
+  onSaved: () => void;
+}) {
+  const [company, setCompany] = useState(profile?.company ?? "");
+  const [sector, setSector] = useState(profile?.sector ?? "");
+  const [country, setCountry] = useState(profile?.country ?? "");
+  const [msg, setMsg] = useState<string | null>(null);
+  const save = useMutation({
+    mutationFn: () =>
+      saveUserProfile({
+        data: {
+          appRole: profile?.appRole ?? "client",
+          company: company.trim() || "Mon entreprise",
+          sector: sector.trim() || undefined,
+          country: country.trim() || undefined,
+        },
+      }),
+    onSuccess: () => {
+      setMsg("Enregistré.");
+      onSaved();
+    },
+    onError: (e) => setMsg(e instanceof Error ? e.message : "Erreur"),
+  });
+
+  useEffect(() => {
+    setCompany(profile?.company ?? "");
+    setSector(profile?.sector ?? "");
+    setCountry(profile?.country ?? "");
+  }, [profile?.company, profile?.sector, profile?.country]);
+
   return (
     <div className="space-y-4">
-      {fields.map(([k, v]) => (
-        <div key={k} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-6">
-          <label className="w-56 text-[13px] font-medium text-ink">{k}</label>
-          <input defaultValue={v} className="flex-1 rounded-xl border border-line bg-white px-3 py-2 text-[14px] text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] focus:border-[#ff6c02] focus:outline-none focus:ring-2 focus:ring-[#ff6c02]/20" />
+      <p className="text-[13px] text-ink-soft">Compte : {email ?? "—"}</p>
+      {(
+        [
+          ["Nom de l'entreprise", company, setCompany],
+          ["Secteur", sector, setSector],
+          ["Pays", country, setCountry],
+        ] as const
+      ).map(([label, value, set]) => (
+        <div key={label} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-6">
+          <label className="w-56 text-[13px] font-medium text-ink">{label}</label>
+          <input
+            value={value}
+            onChange={(e) => set(e.target.value)}
+            className="flex-1 rounded-xl border border-line bg-white px-3 py-2 text-[14px] text-ink focus:border-[#ff6c02] focus:outline-none focus:ring-2 focus:ring-[#ff6c02]/20"
+          />
         </div>
       ))}
       <div className="flex flex-wrap items-center gap-3 pt-2">
-        <button type="button" className="chip-ghost" disabled title="Persistance bientôt disponible">
-          <Save className="h-4 w-4" /> Enregistrer
+        <button type="button" className="btn-primary" disabled={save.isPending} onClick={() => save.mutate()}>
+          {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          Enregistrer
         </button>
-        <span className="text-[12px] text-ink-soft">Enregistrement entreprise bientôt disponible.</span>
+        {msg && <span className="text-[12px] text-ink-soft">{msg}</span>}
       </div>
     </div>
   );
 }
 
-type Member = { n: string; r: string; e: string };
+function UsagePanel({ onUpgrade }: { onUpgrade: () => void }) {
+  const { data: quotas, isLoading } = useQuery({ queryKey: ["usage-quotas"], queryFn: () => getUsageQuotas() });
+  const { data: linked } = useQuery({ queryKey: ["linked-ad-accounts"], queryFn: () => listLinkedAdAccounts() });
 
-function Members({ owner }: { owner: { n: string; e: string } }) {
-  const list: Member[] = [{ n: owner.n, r: "Propriétaire", e: owner.e }];
-  return (
-    <div>
-      <div className="mb-3 flex items-center justify-between">
-        <p className="font-display text-[16px] font-semibold text-ink">Équipe</p>
-        <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-medium text-ink-soft ring-1 ring-line/60">1 membre</span>
+  const gauges = useMemo(() => {
+    if (!quotas) return [];
+    const adMax = quotas.quotas.adAccounts;
+    const adUsed = linked?.accounts.length ?? 0;
+    return [
+      {
+        label: "Comptes pubs",
+        used: adUsed,
+        max: adMax,
+        unit: "",
+        hint: "liés à Orkestria",
+      },
+      {
+        label: "Crédit IA",
+        used: Number(quotas.usage.aiSpendUsdMonth.toFixed(2)),
+        max: quotas.quotas.aiBudgetUsdMonthly,
+        unit: "$",
+        hint: "consommé ce mois",
+      },
+      {
+        label: "Runs agent",
+        used: quotas.usage.runsMonth,
+        max: quotas.quotas.runsPerMonth,
+        unit: "",
+        hint: "ce mois",
+      },
+    ];
+  }, [quotas, linked]);
+
+  const anyFull = gauges.some((g) => g.max >= 0 && g.used >= g.max);
+
+  if (isLoading || !quotas) {
+    return (
+      <div className="flex items-center gap-2 text-[14px] text-ink-soft">
+        <Loader2 className="h-4 w-4 animate-spin" /> Chargement de l&apos;usage…
       </div>
-      <ul className="divide-y divide-line/60 rounded-xl border border-line/60 bg-gradient-to-b from-white to-[#faf6ef] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-        {list.map((m) => (
-          <li key={m.e} className="flex items-center justify-between gap-3 px-4 py-3">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff8a3c] to-[#ff6c02] text-[12px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">
-                {m.n.split(" ").map((p) => p[0]).join("").slice(0, 2)}
-              </span>
-              <div>
-                <p className="text-[14px] font-medium text-ink">{m.n}</p>
-                <p className="text-[12px] text-ink-soft">{m.e}</p>
-              </div>
-            </div>
-            <span className="rounded-full bg-gradient-to-r from-[#ff8a3c] to-[#ff6c02] px-2.5 py-1 text-[11px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">{m.r}</span>
-          </li>
-        ))}
-      </ul>
-      <button type="button" disabled className="mt-4 chip-ghost" title="Bientôt">
-        <UserPlus className="h-4 w-4" /> Inviter un membre
-      </button>
-      <p className="mt-2 text-[12px] text-ink-soft">Les invitations d&apos;équipe seront disponibles prochainement.</p>
-    </div>
-  );
-}
+    );
+  }
 
-function Security() {
-  const [twoFA, setTwoFA] = useState(false);
-  const [alerts, setAlerts] = useState(true);
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-line/60 bg-gradient-to-br from-white to-[#faf6ef] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-sky-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"><KeyRound className="h-4 w-4" /></span>
-            <div>
-              <p className="text-[14px] font-medium text-ink">Mot de passe</p>
-              <p className="text-[12px] text-ink-soft">Géré depuis votre compte Orkestria.</p>
-            </div>
-          </div>
-          <button className="chip-ghost" type="button" disabled title="Bientôt">Modifier</button>
-        </div>
+      <div>
+        <p className="font-display text-[16px] font-semibold text-ink">Mon usage</p>
+        <p className="mt-1 text-[13px] text-ink-soft">
+          Plan {quotas.planId.replace(/_/g, " ")} · chiffres réels de votre organisation.
+        </p>
       </div>
-
-      <div className="rounded-2xl border border-line/60 bg-gradient-to-br from-white to-[#faf6ef] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"><ShieldCheck className="h-4 w-4" /></span>
-            <div>
-              <p className="text-[14px] font-medium text-ink">Authentification à deux facteurs</p>
-              <p className="text-[12px] text-ink-soft">Pas encore branchée — préférence locale uniquement.</p>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {gauges.map((g) => {
+          const pct = g.max < 0 ? 0 : Math.min(100, Math.round((g.used / Math.max(g.max, 1)) * 100));
+          const full = g.max >= 0 && g.used >= g.max;
+          return (
+            <div key={g.label} className="rounded-2xl border border-line/60 bg-white/80 p-4">
+              <p className="text-[11px] uppercase tracking-wider text-ink-soft">{g.label}</p>
+              <p className="mt-1 font-display text-[22px] font-semibold text-ink">
+                {g.unit}
+                {g.used}
+                <span className="text-[13px] font-normal text-ink-soft">
+                  {" "}
+                  / {g.max < 0 ? "∞" : `${g.unit}${g.max}`}
+                </span>
+              </p>
+              <p className="mt-0.5 text-[11px] text-ink-soft">{g.hint}</p>
+              {g.max >= 0 && (
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                  <div
+                    className={`h-full rounded-full ${full ? "bg-rose-500" : "bg-[#ff6c02]"}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              )}
             </div>
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            <SwitchToggle on={twoFA} onChange={() => setTwoFA((v) => !v)} />
-            <span className="text-[10px] text-ink-soft">Aperçu · non enregistré</span>
-          </div>
-        </div>
+          );
+        })}
       </div>
-
-      <div className="rounded-2xl border border-line/60 bg-gradient-to-br from-white to-[#faf6ef] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="font-display text-[14px] font-semibold text-ink">Sessions actives</p>
-          <SwitchToggle on={alerts} onChange={() => setAlerts((v) => !v)} label="Alertes de connexion" />
-        </div>
-        <p className="text-[13px] text-ink-soft">Session actuelle uniquement — le listing multi-appareils n’est pas encore disponible.</p>
-        <ul className="mt-3 divide-y divide-line/60">
-          <li className="flex items-center justify-between gap-3 py-2.5">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-ink-soft ring-1 ring-line/60"><Monitor className="h-4 w-4" /></span>
-              <div>
-                <p className="text-[13px] font-medium text-ink">Cet appareil</p>
-                <p className="text-[11px] text-ink-soft">Session en cours</p>
-              </div>
-            </div>
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">Actif</span>
-          </li>
-        </ul>
-      </div>
+      {anyFull && (
+        <button type="button" className="btn-primary" onClick={onUpgrade}>
+          Passer au plan supérieur <ArrowUpRight className="h-4 w-4" />
+        </button>
+      )}
+      <p className="text-[12px] text-ink-soft">
+        Gérer les comptes pubs dans{" "}
+        <Link to="/app/connections" className="font-medium text-[#ff6c02] hover:underline">
+          Connexions
+        </Link>
+        .
+      </p>
     </div>
   );
 }
@@ -236,25 +305,20 @@ function Billing() {
   const plans = data.catalog.filter((p) => p.audience !== "enterprise" || p.id === "enterprise");
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-2xl border border-line/60 bg-gradient-to-br from-white to-[#faf6ef] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+    <div id="billing" className="space-y-5">
+      <div className="rounded-2xl border border-line/60 bg-gradient-to-br from-white to-[#faf6ef] p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Abonnement actuel</p>
             <p className="mt-1 font-display text-[22px] font-semibold text-ink">{data.planName}</p>
             <p className="mt-1 text-[13px] text-ink-soft">
               Statut : <span className="font-medium text-ink">{data.status}</span>
-              {data.billingInterval ? ` · facturation ${data.billingInterval === "year" ? "annuelle" : "mensuelle"}` : ""}
+              {data.billingInterval ? ` · ${data.billingInterval === "year" ? "annuel" : "mensuel"}` : ""}
               {" · USD"}
             </p>
           </div>
           {data.stripeCustomerId && (
-            <button
-              type="button"
-              className="btn-dark"
-              disabled={portal.isPending}
-              onClick={() => portal.mutate()}
-            >
+            <button type="button" className="btn-dark" disabled={portal.isPending} onClick={() => portal.mutate()}>
               {portal.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
               Gérer dans Stripe
             </button>
@@ -267,45 +331,6 @@ function Billing() {
           <p className="mt-3 text-[13px] text-rose-600">
             {(checkout.error || portal.error)?.message ?? "Erreur Stripe"}
           </p>
-        )}
-        {data.quotas && (
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[
-              {
-                label: "Runs / mois",
-                used: data.quotas.usage.runsMonth,
-                max: data.quotas.quotas.runsPerMonth,
-              },
-              {
-                label: "MCP / mois",
-                used: data.quotas.usage.mcpCallsMonth,
-                max: data.quotas.quotas.mcpCallsPerMonth,
-              },
-              {
-                label: "IA / jour",
-                used: data.quotas.usage.llmCallsDay,
-                max: data.quotas.quotas.llmCallsPerDay,
-              },
-              {
-                label: "Budget IA $",
-                used: Number(data.quotas.usage.aiSpendUsdMonth.toFixed(2)),
-                max: data.quotas.quotas.aiBudgetUsdMonthly,
-              },
-            ].map((m) => (
-              <div key={m.label} className="rounded-xl bg-white/80 px-3 py-2 ring-1 ring-black/5">
-                <p className="text-[11px] uppercase tracking-wider text-ink-soft">{m.label}</p>
-                <p className="mt-0.5 text-[13px] font-semibold text-ink">
-                  {m.used}
-                  <span className="font-normal text-ink-soft">
-                    {" "}/ {m.max < 0 ? "∞" : m.max}
-                  </span>
-                </p>
-                <p className="text-[10px] text-ink-soft">
-                  {data.quotas!.quotas.apiPerMinute}/min · {data.quotas!.quotas.apiPerHour}/h
-                </p>
-              </div>
-            ))}
-          </div>
         )}
       </div>
 
@@ -346,6 +371,10 @@ function Billing() {
                   </span>
                 )}
               </div>
+              <p className="mt-1 text-[12px] text-ink-soft">
+                Jusqu&apos;à {p.quotas.adAccounts < 0 ? "∞" : p.quotas.adAccounts} comptes pubs · crédit IA $
+                {p.quotas.aiBudgetUsdMonthly}
+              </p>
               <p className="mt-2 font-display text-[24px] font-semibold text-ink">
                 {formatPriceCents(cents)}
                 <span className="text-[12px] font-normal text-ink-soft">
@@ -369,61 +398,5 @@ function Billing() {
         })}
       </div>
     </div>
-  );
-}
-
-function Notifications() {
-  const [prefs, setPrefs] = useState({
-    guardianEmail: true,
-    guardianSMS: false,
-    weekly: true,
-    approvals: true,
-    launches: true,
-    tips: false,
-  });
-  type Key = keyof typeof prefs;
-  const set = (k: Key) => setPrefs((p) => ({ ...p, [k]: !p[k] }));
-  const rows: { key: Key; icon: React.ElementType; title: string; sub: string; tint: string }[] = [
-    { key: "guardianEmail", icon: Mail, title: "Alertes Guardian (e-mail)", sub: "Anomalies, tracking cassé, budget qui dérape.", tint: "from-sky-400 to-sky-600" },
-    { key: "guardianSMS", icon: MessageSquare, title: "Alertes urgentes (SMS)", sub: "Uniquement les incidents critiques.", tint: "from-rose-400 to-rose-600" },
-    { key: "weekly", icon: BellRing, title: "Rapport hebdomadaire", sub: "Résumé livré chaque lundi 09h.", tint: "from-violet-400 to-violet-600" },
-    { key: "approvals", icon: Check, title: "Approbations à traiter", sub: "Quand un client ou un manager attend votre validation.", tint: "from-amber-400 to-amber-600" },
-    { key: "launches", icon: Sparkles, title: "Campagnes prêtes à publier", sub: "Notification dès qu'un brief est finalisé.", tint: "from-emerald-400 to-emerald-600" },
-    { key: "tips", icon: Sparkles, title: "Conseils Orkestria", sub: "Idées d'optimisation contextuelles.", tint: "from-slate-500 to-slate-700" },
-  ];
-  return (
-    <div className="space-y-3">
-      <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
-        Aperçu des préférences — pas encore enregistrées sur le serveur.
-      </p>
-      {rows.map((r) => (
-        <div key={r.key} className="flex items-center justify-between gap-3 rounded-2xl border border-line/60 bg-gradient-to-br from-white to-[#faf6ef] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-          <div className="flex items-start gap-3">
-            <span className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br ${r.tint} text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]`}><r.icon className="h-4 w-4" /></span>
-            <div>
-              <p className="text-[14px] font-medium text-ink">{r.title}</p>
-              <p className="text-[12px] text-ink-soft">{r.sub}</p>
-            </div>
-          </div>
-          <SwitchToggle on={prefs[r.key]} onChange={() => set(r.key)} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SwitchToggle({ on, onChange, label }: { on: boolean; onChange: () => void; label?: string }) {
-  return (
-    <label className="inline-flex items-center gap-2">
-      {label && <span className="text-[12px] text-ink-soft">{label}</span>}
-      <button
-        role="switch"
-        aria-checked={on}
-        onClick={onChange}
-        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full ring-1 transition ${on ? "bg-gradient-to-r from-[#ff8a3c] to-[#ff6c02] ring-[#ff6c02]/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]" : "bg-surface-2 ring-line/60"}`}
-      >
-        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.25)] transition ${on ? "translate-x-4" : "translate-x-0.5"}`} />
-      </button>
-    </label>
   );
 }

@@ -120,6 +120,16 @@ export const completeOnboarding = createServerFn({ method: "POST" })
     const orgMember = await db.select().from(member).where(eq(member.userId, session.user.id)).limit(1);
     const orgId = orgMember[0]?.organizationId;
     if (orgId) {
+      const control = String((obData.control as string) ?? "assistant");
+      const policyPatch =
+        control === "advisor"
+          ? { defaultMode: "dry_run" as const, autonomyEnabled: false }
+          : control === "autopilot"
+            ? { defaultMode: "live" as const, autonomyEnabled: true }
+            : { defaultMode: "approval" as const, autonomyEnabled: false };
+      const { updateOrgPolicy } = await import("@/lib/mcp/policy-engine");
+      await updateOrgPolicy(orgId, policyPatch);
+
       const now = new Date();
       const entries: { key: string; value: Record<string, unknown> }[] = [
         { key: "pitch", value: { text: (obData.pitch as string) ?? "" } },
@@ -132,6 +142,7 @@ export const completeOnboarding = createServerFn({ method: "POST" })
             city: (obData.city as string) ?? null,
           },
         },
+        { key: "control_mode", value: { control, ...policyPatch } },
       ];
       for (const entry of entries) {
         const existing = await db

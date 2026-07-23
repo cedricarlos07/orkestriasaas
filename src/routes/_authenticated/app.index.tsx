@@ -40,6 +40,8 @@ function Today() {
     results: Target,
     cpa: Coins,
     campaigns: Megaphone,
+    accounts: Plug,
+    credits: Sparkles,
     account: Plug,
     issues: ShieldAlert,
   };
@@ -79,7 +81,7 @@ function Today() {
           <h1 className="mt-1 font-display text-[28px] font-semibold text-ink">Aujourd'hui</h1>
           <p className="mt-1 max-w-[560px] text-[13px] text-ink-soft">
             {dashboard?.metaConnected
-              ? `Données Meta · ${dashboard.company}. ${approvals.length} action${approvals.length > 1 ? "s" : ""} en attente.`
+              ? `Données Meta · ${dashboard.company}.${dashboard.pendingApprovalsHint ? ` ${dashboard.pendingApprovalsHint}` : ""} ${approvals.length} action${approvals.length > 1 ? "s" : ""} en attente.`
               : dashboard?.pendingApprovalsHint ?? "Connectez Meta Ads pour piloter vos campagnes."}
           </p>
         </div>
@@ -143,7 +145,7 @@ function Today() {
           const TrendIcon = s.trend === "up" ? TrendingUp : s.trend === "down" ? TrendingDown : Minus;
           const badgeCls = s.trend === "up" ? "kpi-up" : s.trend === "down" ? "kpi-down" : "kpi-flat";
           const trendLabel =
-            s.trend === "up" ? "Amélioration" : s.trend === "down" ? "À traiter" : null;
+            s.trend === "up" ? "En hausse" : s.trend === "down" ? "À vérifier" : null;
           const showBadge = s.trend !== "flat" || (Boolean(s.delta) && s.delta !== "—");
           return (
             <div

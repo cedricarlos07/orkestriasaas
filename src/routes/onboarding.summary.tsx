@@ -6,8 +6,11 @@ import { completeOnboarding, saveOnboardingSession } from "@/functions/organizat
 import { runMultichannelAuditFn } from "@/functions/audits";
 import { useEffect, useState } from "react";
 import type { AuditSummary } from "@/lib/unified-ad-schema";
+import type { CachedAudit } from "./onboarding.audit";
 
 export const Route = createFileRoute("/onboarding/summary")({ component: Step });
+
+const CACHE_KEY = "orkestria:onboarding-audit";
 
 function Step() {
   const { data } = useOnboarding();
@@ -18,10 +21,29 @@ function Step() {
   const [auditError, setAuditError] = useState<string | null>(null);
 
   useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const cached = JSON.parse(raw) as CachedAudit;
+        if (cached?.summary && Date.now() - cached.at < 15 * 60_000) {
+          setSummary(cached.summary);
+          setAuditLoading(false);
+          return;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+
     void runMultichannelAuditFn({ data: { period: "30 derniers jours" } })
       .then((res) => {
         setSummary(res.summary);
         setAuditError(null);
+        try {
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify({ summary: res.summary, at: Date.now() }));
+        } catch {
+          /* ignore */
+        }
       })
       .catch((e) => {
         setSummary(null);

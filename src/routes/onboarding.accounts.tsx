@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, Loader2 } from "lucide-react";
 import { StepHeader } from "@/components/onboarding/StepHeader";
 import { useOnboarding } from "@/lib/onboarding-store";
-import { listAdAccounts, selectAdAccount } from "@/functions/ad-accounts";
+import { listAdAccounts, selectAdAccount, type AdAccountView } from "@/functions/ad-accounts";
 
 export const Route = createFileRoute("/onboarding/accounts")({ component: Step });
 
@@ -26,13 +26,20 @@ function Step() {
     }
   }, []);
 
-  const toggle = async (accountKey: string, connectionId: string, accountId: string, accountName: string) => {
-    const selected = data.selectedAccounts.includes(accountKey)
+  const toggle = async (
+    accountKey: string,
+    connectionId: string,
+    accountId: string,
+    accountName: string,
+    connector: AdAccountView["connector"],
+  ) => {
+    const wasSelected = data.selectedAccounts.includes(accountKey);
+    const selected = wasSelected
       ? data.selectedAccounts.filter((x) => x !== accountKey)
       : [...data.selectedAccounts, accountKey];
     setField("selectedAccounts", selected);
-    if (!data.selectedAccounts.includes(accountKey)) {
-      await selectAdAccount({ data: { connectionId, accountId, accountName } });
+    if (!wasSelected) {
+      await selectAdAccount({ data: { connectionId, accountId, accountName, connector, link: true } });
     }
   };
 
@@ -70,12 +77,11 @@ function Step() {
         <div className="card-soft divide-y divide-line/60 overflow-hidden !p-0">
           {accounts.map((a) => {
             const active = data.selectedAccounts.includes(a.id);
-            const [, accountId] = a.id.split(":");
             return (
               <button
                 key={a.id}
                 type="button"
-                onClick={() => void toggle(a.id, a.connectionId, accountId, a.name)}
+                onClick={() => void toggle(a.id, a.connectionId, a.accountId, a.name, a.connector)}
                 className={`relative z-10 flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition ${active ? "bg-[#fff5ea]" : "hover:bg-white/60"}`}
               >
                 <div>

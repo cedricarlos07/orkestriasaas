@@ -74,6 +74,7 @@ import { Route as AuthenticatedAppLeadsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedAppMcpRouteImport } from './routes/_authenticated/app.mcp'
 import { Route as AuthenticatedAppOrkestriaRouteImport } from './routes/_authenticated/app.orkestria'
 import { Route as AuthenticatedAppReportsRouteImport } from './routes/_authenticated/app.reports'
+import { Route as AuthenticatedAppRoadmapRouteImport } from './routes/_authenticated/app.roadmap'
 import { Route as AuthenticatedAppRunsRouteImport } from './routes/_authenticated/app.runs'
 import { Route as AuthenticatedAppSettingsRouteImport } from './routes/_authenticated/app.settings'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -423,6 +424,11 @@ const AuthenticatedAppReportsRoute = AuthenticatedAppReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => AuthenticatedAppRoute,
 } as any)
+const AuthenticatedAppRoadmapRoute = AuthenticatedAppRoadmapRouteImport.update({
+  id: '/roadmap',
+  path: '/roadmap',
+  getParentRoute: () => AuthenticatedAppRoute,
+} as any)
 const AuthenticatedAppRunsRoute = AuthenticatedAppRunsRouteImport.update({
   id: '/runs',
   path: '/runs',
@@ -588,6 +594,7 @@ export interface FileRoutesByFullPath {
   '/app/mcp': typeof AuthenticatedAppMcpRoute
   '/app/orkestria': typeof AuthenticatedAppOrkestriaRoute
   '/app/reports': typeof AuthenticatedAppReportsRoute
+  '/app/roadmap': typeof AuthenticatedAppRoadmapRoute
   '/app/runs': typeof AuthenticatedAppRunsRouteWithChildren
   '/app/settings': typeof AuthenticatedAppSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -668,6 +675,7 @@ export interface FileRoutesByTo {
   '/app/mcp': typeof AuthenticatedAppMcpRoute
   '/app/orkestria': typeof AuthenticatedAppOrkestriaRoute
   '/app/reports': typeof AuthenticatedAppReportsRoute
+  '/app/roadmap': typeof AuthenticatedAppRoadmapRoute
   '/app/runs': typeof AuthenticatedAppRunsRouteWithChildren
   '/app/settings': typeof AuthenticatedAppSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -755,6 +763,7 @@ export interface FileRoutesById {
   '/_authenticated/app/mcp': typeof AuthenticatedAppMcpRoute
   '/_authenticated/app/orkestria': typeof AuthenticatedAppOrkestriaRoute
   '/_authenticated/app/reports': typeof AuthenticatedAppReportsRoute
+  '/_authenticated/app/roadmap': typeof AuthenticatedAppRoadmapRoute
   '/_authenticated/app/runs': typeof AuthenticatedAppRunsRouteWithChildren
   '/_authenticated/app/settings': typeof AuthenticatedAppSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -841,6 +850,7 @@ export interface FileRouteTypes {
     | '/app/mcp'
     | '/app/orkestria'
     | '/app/reports'
+    | '/app/roadmap'
     | '/app/runs'
     | '/app/settings'
     | '/api/auth/$'
@@ -921,6 +931,7 @@ export interface FileRouteTypes {
     | '/app/mcp'
     | '/app/orkestria'
     | '/app/reports'
+    | '/app/roadmap'
     | '/app/runs'
     | '/app/settings'
     | '/api/auth/$'
@@ -1007,6 +1018,7 @@ export interface FileRouteTypes {
     | '/_authenticated/app/mcp'
     | '/_authenticated/app/orkestria'
     | '/_authenticated/app/reports'
+    | '/_authenticated/app/roadmap'
     | '/_authenticated/app/runs'
     | '/_authenticated/app/settings'
     | '/api/auth/$'
@@ -1517,6 +1529,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAppReportsRouteImport
       parentRoute: typeof AuthenticatedAppRoute
     }
+    '/_authenticated/app/roadmap': {
+      id: '/_authenticated/app/roadmap'
+      path: '/roadmap'
+      fullPath: '/app/roadmap'
+      preLoaderRoute: typeof AuthenticatedAppRoadmapRouteImport
+      parentRoute: typeof AuthenticatedAppRoute
+    }
     '/_authenticated/app/runs': {
       id: '/_authenticated/app/runs'
       path: '/runs'
@@ -1802,6 +1821,7 @@ interface AuthenticatedAppRouteChildren {
   AuthenticatedAppMcpRoute: typeof AuthenticatedAppMcpRoute
   AuthenticatedAppOrkestriaRoute: typeof AuthenticatedAppOrkestriaRoute
   AuthenticatedAppReportsRoute: typeof AuthenticatedAppReportsRoute
+  AuthenticatedAppRoadmapRoute: typeof AuthenticatedAppRoadmapRoute
   AuthenticatedAppRunsRoute: typeof AuthenticatedAppRunsRouteWithChildren
   AuthenticatedAppSettingsRoute: typeof AuthenticatedAppSettingsRoute
   AuthenticatedAppIndexRoute: typeof AuthenticatedAppIndexRoute
@@ -1818,6 +1838,7 @@ const AuthenticatedAppRouteChildren: AuthenticatedAppRouteChildren = {
   AuthenticatedAppMcpRoute: AuthenticatedAppMcpRoute,
   AuthenticatedAppOrkestriaRoute: AuthenticatedAppOrkestriaRoute,
   AuthenticatedAppReportsRoute: AuthenticatedAppReportsRoute,
+  AuthenticatedAppRoadmapRoute: AuthenticatedAppRoadmapRoute,
   AuthenticatedAppRunsRoute: AuthenticatedAppRunsRouteWithChildren,
   AuthenticatedAppSettingsRoute: AuthenticatedAppSettingsRoute,
   AuthenticatedAppIndexRoute: AuthenticatedAppIndexRoute,

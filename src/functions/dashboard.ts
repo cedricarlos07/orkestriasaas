@@ -1,8 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
+import { and, eq } from "drizzle-orm";
 import { ensureSession } from "@/lib/auth.functions";
 import { getActiveOrgId, getUserProfile } from "./context";
 import { getMetaConnection } from "@/lib/platforms/meta-connection";
 import { fetchMetaAdsSnapshot } from "@/lib/platforms/meta-api";
+import { getQuotaStatus } from "@/lib/quotas/enforce";
+import { db } from "@/db";
+import { businessMemory } from "@/db/schema/index";
 
 export type DashboardKpi = {
   key: string;
@@ -26,7 +30,7 @@ export const getDashboardKpis = createServerFn({ method: "GET" }).handler(async 
   const orgId = await getActiveOrgId(session);
   const profile = await getUserProfile(session.user.id);
   const company = profile?.company ?? session.user.name ?? "votre entreprise";
-  const greeting = session.user.name ? `Bonjour ${session.user.name.split(" ")[0]} 👋` : "Bonjour 👋";
+  const greeting = session.user.name ? `Bonjour ${session.user.name.split(" ")[0]}` : "Bonjour";
 
   const empty = (hint: string): DashboardData => ({
     greeting,
@@ -36,10 +40,28 @@ export const getDashboardKpis = createServerFn({ method: "GET" }).handler(async 
     pendingApprovalsHint: hint,
   });
 
-  const meta = await getMetaConnection(orgId).catch(() => null);
+  const [meta, quotas, linkedRow] = await Promise.all([
+    getMetaConnection(orgId).catch(() => null),
+    getQuotaStatus(orgId).catch(() => null),
+    db
+      .select()
+      .from(businessMemory)
+      .where(and(eq(businessMemory.organizationId, orgId), eq(businessMemory.key, "linked_ad_accounts")))
+      .limit(1)
+      .catch(() => []),
+  ]);
+
   if (!meta) {
     return empty("Connectez Meta Ads pour voir vos performances réelles.");
   }
+
+  const adAccountLimit = quotas?.quotas.adAccounts ?? 1;
+  const linkedList = Array.isArray((linkedRow[0]?.value as { accounts?: unknown })?.accounts)
+    ? ((linkedRow[0]!.value as { accounts: unknown[] }).accounts)
+    : [];
+  const linkedAds = Math.max(linkedList.length, meta.tokens.accountId ? 1 : 0);
+  const aiLeft = quotas?.remaining.aiBudgetUsd;
+  const aiMax = quotas?.quotas.aiBudgetUsdMonthly ?? 0;
 
   let snapshot: Awaited<ReturnType<typeof fetchMetaAdsSnapshot>>;
   try {
@@ -55,34 +77,32 @@ export const getDashboardKpis = createServerFn({ method: "GET" }).handler(async 
       metaConnected: true,
       kpis: [
         {
-          key: "account",
-          label: "Compte",
-          value: (meta.tokens.accountName ?? meta.conn.externalAccount ?? "Lié").slice(0, 20),
+          key: "accounts",
+          label: "Comptes pubs",
+          value: adAccountLimit < 0 ? `${linkedAds}` : `${linkedAds} / ${adAccountLimit}`,
           delta: "—",
           trend: "flat",
-          deltaLabel: "connexion OK",
+          deltaLabel: "liés à Orkestria",
+        },
+        {
+          key: "credits",
+          label: "Crédit IA",
+          value: aiLeft == null ? "Illimité" : `$${aiLeft.toFixed(0)}`,
+          delta: "—",
+          trend: "flat",
+          deltaLabel: aiMax > 0 ? `restant ce mois (max $${aiMax})` : "selon votre plan",
         },
       ],
-      pendingApprovalsHint: "Les KPIs détaillés seront disponibles dès que Meta renverra les statistiques.",
+      pendingApprovalsHint: "Les chiffres Meta arriveront dès que le compte répond.",
     };
   }
 
   const spend = snapshot.spend;
   const conv = snapshot.conversions;
   const cpa = snapshot.cpa;
-  const fmtMoney = (n: number) =>
-    `$${Math.round(n).toLocaleString("en-US")}`;
-
+  const fmtMoney = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
   const activeCampaigns = snapshot.campaigns.filter((c) => c.status === "ACTIVE").length;
-
-  const accountLabel =
-    snapshot.accountName && !/^\d+$/.test(snapshot.accountName)
-      ? snapshot.accountName
-      : meta.tokens.accountName && !/^\d+$/.test(meta.tokens.accountName)
-        ? meta.tokens.accountName
-        : meta.conn.externalAccount && !/^\d+$/.test(meta.conn.externalAccount)
-          ? meta.conn.externalAccount
-          : "Compte lié";
+  const totalCampaigns = snapshot.campaigns.length;
 
   return {
     greeting,
@@ -91,56 +111,59 @@ export const getDashboardKpis = createServerFn({ method: "GET" }).handler(async 
     kpis: [
       {
         key: "spend",
-        label: "Dépenses",
+        label: "Dépenses pub",
         value: fmtMoney(spend),
         delta: "—",
         trend: "flat",
-        deltaLabel: "30 derniers jours",
+        deltaLabel: "sur les 30 derniers jours",
       },
       {
         key: "results",
-        label: "Conversions",
+        label: "Résultats",
         value: String(conv),
         delta: "—",
         trend: "flat",
-        deltaLabel: "30 derniers jours",
+        deltaLabel: "ventes ou actions suivies",
       },
       {
         key: "cpa",
-        label: "CPA",
+        label: "Coût/résultat",
         value: cpa != null ? fmtMoney(cpa) : "—",
         delta: "—",
         trend: "flat",
-        deltaLabel: "par conversion",
+        deltaLabel: conv > 0 ? "dépense ÷ résultats" : "pas encore de résultat",
       },
       {
         key: "campaigns",
-        label: "Actives",
+        label: "Campagnes",
         value: String(activeCampaigns),
-        delta: String(snapshot.campaigns.length),
+        delta: "—",
         trend: "flat",
-        deltaLabel: `sur ${snapshot.campaigns.length} au total`,
-      },
-      {
-        key: "account",
-        label: "Compte",
-        value: accountLabel.slice(0, 20),
-        delta: snapshot.currency || "USD",
-        trend: "flat",
-        deltaLabel: "devise du compte",
-      },
-      {
-        key: "issues",
-        label: "Alertes",
-        value: String(snapshot.issues.length),
-        delta: String(snapshot.opportunities.length),
-        trend: snapshot.issues.length ? "down" : "flat",
         deltaLabel:
-          snapshot.opportunities.length > 0
-            ? `${snapshot.opportunities.length} opportunité${snapshot.opportunities.length > 1 ? "s" : ""}`
-            : "aucune opportunité",
+          totalCampaigns === 0
+            ? "aucune sur le compte"
+            : `${activeCampaigns} en cours · ${totalCampaigns} au total`,
+      },
+      {
+        key: "accounts",
+        label: "Comptes pubs",
+        value: adAccountLimit < 0 ? `${linkedAds}` : `${linkedAds} / ${adAccountLimit}`,
+        delta: "—",
+        trend: "flat",
+        deltaLabel: adAccountLimit < 0 ? "selon votre plan" : "utilisés / autorisés",
+      },
+      {
+        key: "credits",
+        label: "Crédit IA",
+        value: aiLeft == null ? "Illimité" : `$${Math.max(0, aiLeft).toFixed(0)}`,
+        delta: "—",
+        trend: "flat",
+        deltaLabel: aiMax > 0 ? `restant ce mois · plafond $${aiMax}` : "restant ce mois",
       },
     ],
-    pendingApprovalsHint: "",
+    pendingApprovalsHint:
+      snapshot.issues.length > 0
+        ? `${snapshot.issues.length} point${snapshot.issues.length > 1 ? "s" : ""} à vérifier sur Meta.`
+        : "",
   };
 });

@@ -16,6 +16,8 @@ import { useConnections } from "@/lib/connections-store";
 import { getGoogleSetupStatus } from "@/functions/adloop";
 import { getMetaSetupStatus, setMetaPage } from "@/functions/meta-settings";
 import { getResearchStackStatus } from "@/functions/stack-status";
+import { listAdAccounts, listLinkedAdAccounts, selectAdAccount, unlinkAdAccount } from "@/functions/ad-accounts";
+import { Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/app/connections")({ component: Connections });
 
@@ -59,8 +61,33 @@ function Connections() {
     retry: 1,
   });
 
+  const metaConn = byConnector("meta_ads");
+  const metaLinked =
+    (metaConn?.status === "connectée" && metaConn?.via === "oauth") ||
+    Boolean(metaSetup?.oauthConnected);
+
+  const {
+    data: metaAccounts = [],
+    isLoading: metaAccountsLoading,
+    refetch: refetchMetaAccounts,
+  } = useQuery({
+    queryKey: ["ad-accounts"],
+    queryFn: () => listAdAccounts(),
+    enabled: metaLinked,
+    staleTime: 30_000,
+  });
+
+  const { data: linked, refetch: refetchLinked } = useQuery({
+    queryKey: ["linked-ad-accounts"],
+    queryFn: () => listLinkedAdAccounts(),
+    staleTime: 15_000,
+  });
+
   const [savingPage, setSavingPage] = useState(false);
   const [oauthBanner, setOauthBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [accountBusy, setAccountBusy] = useState<string | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
+
   const setPageMut = useMutation({
     mutationFn: (pageId: string) => setMetaPage({ data: { pageId } }),
     onSuccess: async () => {
@@ -68,6 +95,59 @@ function Connections() {
       await refetchMeta();
     },
   });
+
+  const metaOnly = metaAccounts.filter((a) => a.connector === "meta_ads");
+
+  const handleLinkAccount = async (a: (typeof metaAccounts)[0], link: boolean) => {
+    setAccountBusy(a.accountId);
+    setAccountError(null);
+    try {
+      if (link) {
+        await selectAdAccount({
+          data: {
+            connectionId: a.connectionId,
+            accountId: a.accountId,
+            accountName: a.name,
+            connector: a.connector,
+            link: true,
+          },
+        });
+      } else {
+        await unlinkAdAccount({ data: { accountId: a.accountId } });
+      }
+      await Promise.all([
+        refetchLinked(),
+        refetchMetaAccounts(),
+        qc.invalidateQueries({ queryKey: ["dashboard-kpis"] }),
+        qc.invalidateQueries({ queryKey: ["usage-quotas"] }),
+      ]);
+    } catch (e) {
+      setAccountError(e instanceof Error ? e.message : "Impossible de mettre à jour le compte");
+    } finally {
+      setAccountBusy(null);
+    }
+  };
+
+  const handleSetActive = async (a: (typeof metaAccounts)[0]) => {
+    setAccountBusy(a.accountId);
+    setAccountError(null);
+    try {
+      await selectAdAccount({
+        data: {
+          connectionId: a.connectionId,
+          accountId: a.accountId,
+          accountName: a.name,
+          connector: a.connector,
+          link: true,
+        },
+      });
+      await Promise.all([refetchLinked(), qc.invalidateQueries({ queryKey: ["dashboard-kpis"] })]);
+    } catch (e) {
+      setAccountError(e instanceof Error ? e.message : "Impossible d'activer le compte");
+    } finally {
+      setAccountBusy(null);
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -84,15 +164,13 @@ function Connections() {
       void qc.invalidateQueries({ queryKey: ["connection-catalog"] });
       void qc.invalidateQueries({ queryKey: ["dashboard-kpis"] });
       void qc.invalidateQueries({ queryKey: ["setup-status"] });
+      void qc.invalidateQueries({ queryKey: ["ad-accounts"] });
+      void qc.invalidateQueries({ queryKey: ["linked-ad-accounts"] });
       void refetchMeta();
       void refetchGoogle();
     }
   }, [qc, refetchMeta, refetchGoogle]);
 
-  const metaConn = byConnector("meta_ads");
-  const metaLinked =
-    (metaConn?.status === "connectée" && metaConn?.via === "oauth") ||
-    Boolean(metaSetup?.oauthConnected);
   const metaPageLabel =
     metaSetup?.pageName ??
     metaSetup?.availablePages?.find(
@@ -247,6 +325,91 @@ function Connections() {
                     );
                   })}
                 </div>
+              </div>
+            )}
+            {metaLinked && (
+              <div className="space-y-2 border-t border-line/50 pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[12px] font-medium text-ink">Comptes publicitaires Meta</p>
+                  <span className="text-[11px] text-ink-soft">
+                    {linked?.accounts.length ?? 0}
+                    {linked && linked.limit >= 0 ? ` / ${linked.limit}` : ""} liés
+                  </span>
+                </div>
+                <p className="text-[12px] text-ink-soft">
+                  Cochez les comptes à rattacher (limite de votre plan). Le compte actif sert aux campagnes et à l’agent.
+                </p>
+                {accountError && (
+                  <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+                    {accountError}{" "}
+                    <Link to="/app/settings" hash="billing" className="font-medium underline">
+                      Passer au plan supérieur
+                    </Link>
+                  </p>
+                )}
+                {metaAccountsLoading ? (
+                  <p className="flex items-center gap-2 text-[12px] text-ink-soft">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement des comptes…
+                  </p>
+                ) : metaOnly.length === 0 ? (
+                  <p className="text-[12px] text-ink-soft">Aucun compte Meta visible avec ce token OAuth.</p>
+                ) : (
+                  <ul className="divide-y divide-line/50 rounded-xl border border-line/60 bg-[#faf6ef]/40">
+                    {metaOnly.map((a) => {
+                      const isLinked = linked?.accounts.some((l) => l.accountId === a.accountId);
+                      const isActive = linked?.activeAccountId === a.accountId;
+                      const atLimit =
+                        linked &&
+                        linked.limit >= 0 &&
+                        linked.accounts.length >= linked.limit &&
+                        !isLinked;
+                      return (
+                        <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-medium text-ink">{a.name}</p>
+                            <p className="text-[11px] text-ink-soft">
+                              {a.masked} · {a.currency}
+                              {isActive ? " · actif" : ""}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {isLinked && !isActive && (
+                              <button
+                                type="button"
+                                className="chip-ghost text-[11px]"
+                                disabled={accountBusy === a.accountId}
+                                onClick={() => void handleSetActive(a)}
+                              >
+                                Activer
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className={
+                                isLinked
+                                  ? "inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200"
+                                  : "chip-ghost text-[11px]"
+                              }
+                              disabled={accountBusy === a.accountId || Boolean(atLimit && !isLinked)}
+                              title={atLimit ? "Limite du plan atteinte" : undefined}
+                              onClick={() => void handleLinkAccount(a, !isLinked)}
+                            >
+                              {accountBusy === a.accountId ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : isLinked ? (
+                                <>
+                                  <CheckCircle2 className="h-3 w-3" /> Lié
+                                </>
+                              ) : (
+                                "Lier"
+                              )}
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
             )}
           </div>
