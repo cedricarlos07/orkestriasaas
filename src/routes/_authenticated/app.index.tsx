@@ -142,27 +142,33 @@ function Today() {
           const style = kpiStyles[idx % kpiStyles.length];
           const TrendIcon = s.trend === "up" ? TrendingUp : s.trend === "down" ? TrendingDown : Minus;
           const badgeCls = s.trend === "up" ? "kpi-up" : s.trend === "down" ? "kpi-down" : "kpi-flat";
-          const trendLabel = s.trend === "up" ? "Amélioration" : s.trend === "down" ? "Baisse" : "Stable";
+          const trendLabel =
+            s.trend === "up" ? "Amélioration" : s.trend === "down" ? "À traiter" : null;
+          const showBadge = s.trend !== "flat" || (Boolean(s.delta) && s.delta !== "—");
           return (
             <div
               key={s.key}
-              className={`card-hover relative overflow-hidden rounded-2xl border border-white/60 bg-gradient-to-br ${style.grad} p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_24px_-16px_rgba(20,20,20,0.25)]`}
+              className={`card-hover relative overflow-hidden rounded-2xl border border-white/60 bg-gradient-to-br ${style.grad} p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_24px_-16px_rgba(20,20,20,0.25)] sm:p-4`}
             >
               <div className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-full bg-white/40 blur-xl anim-pulse-dot" />
-              <div className="relative flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-ink/70">
-                  <span className={`flex h-6 w-6 items-center justify-center rounded-md bg-white/80 ${style.ic} ring-1 ${style.ring} shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]`}>
+              <div className="relative flex items-center justify-between gap-1.5">
+                <div className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink/70">
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/80 ${style.ic} ring-1 ${style.ring} shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]`}>
                     <Icon className="h-3.5 w-3.5" />
                   </span>
-                  {s.label}
+                  <span className="truncate" title={s.label}>{s.label}</span>
                 </div>
-                <span className={`kpi-badge ${badgeCls}`} title={trendLabel}>
-                  <TrendIcon className="h-2.5 w-2.5" strokeWidth={3} />
-                  {s.delta}
-                </span>
+                {showBadge && (
+                  <span className={`kpi-badge shrink-0 ${badgeCls}`} title={trendLabel ?? s.deltaLabel}>
+                    <TrendIcon className="h-2.5 w-2.5" strokeWidth={3} />
+                    {s.delta}
+                  </span>
+                )}
               </div>
-              <p className="relative mt-2 font-display text-[18px] font-semibold text-ink">{s.value}</p>
-              <p className="relative mt-0.5 text-[11px] text-ink-soft">{s.deltaLabel} · {trendLabel}</p>
+              <p className="relative mt-2 truncate font-display text-[18px] font-semibold text-ink" title={s.value}>{s.value}</p>
+              <p className="relative mt-0.5 truncate text-[11px] text-ink-soft" title={s.deltaLabel}>
+                {s.deltaLabel}{trendLabel ? ` · ${trendLabel}` : ""}
+              </p>
             </div>
           );
         })

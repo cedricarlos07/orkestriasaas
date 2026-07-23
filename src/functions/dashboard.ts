@@ -75,6 +75,15 @@ export const getDashboardKpis = createServerFn({ method: "GET" }).handler(async 
 
   const activeCampaigns = snapshot.campaigns.filter((c) => c.status === "ACTIVE").length;
 
+  const accountLabel =
+    snapshot.accountName && !/^\d+$/.test(snapshot.accountName)
+      ? snapshot.accountName
+      : meta.tokens.accountName && !/^\d+$/.test(meta.tokens.accountName)
+        ? meta.tokens.accountName
+        : meta.conn.externalAccount && !/^\d+$/.test(meta.conn.externalAccount)
+          ? meta.conn.externalAccount
+          : "Compte lié";
+
   return {
     greeting,
     company,
@@ -82,51 +91,54 @@ export const getDashboardKpis = createServerFn({ method: "GET" }).handler(async 
     kpis: [
       {
         key: "spend",
-        label: "Dépense (30j)",
+        label: "Dépenses",
         value: fmtMoney(spend),
         delta: "—",
         trend: "flat",
-        deltaLabel: "Meta Ads",
+        deltaLabel: "30 derniers jours",
       },
       {
         key: "results",
         label: "Conversions",
         value: String(conv),
         delta: "—",
-        trend: conv > 0 ? "up" : "flat",
-        deltaLabel: "30 jours",
+        trend: "flat",
+        deltaLabel: "30 derniers jours",
       },
       {
         key: "cpa",
-        label: "Coût / résultat",
+        label: "CPA",
         value: cpa != null ? fmtMoney(cpa) : "—",
         delta: "—",
         trend: "flat",
-        deltaLabel: "Meta",
+        deltaLabel: "par conversion",
       },
       {
         key: "campaigns",
-        label: "Campagnes actives",
+        label: "Actives",
         value: String(activeCampaigns),
         delta: String(snapshot.campaigns.length),
         trend: "flat",
-        deltaLabel: "total compte",
+        deltaLabel: `sur ${snapshot.campaigns.length} au total`,
       },
       {
         key: "account",
         label: "Compte",
-        value: snapshot.accountName.slice(0, 18),
-        delta: snapshot.currency,
+        value: accountLabel.slice(0, 20),
+        delta: snapshot.currency || "USD",
         trend: "flat",
-        deltaLabel: "devise",
+        deltaLabel: "devise du compte",
       },
       {
         key: "issues",
-        label: "Alertes audit",
+        label: "Alertes",
         value: String(snapshot.issues.length),
         delta: String(snapshot.opportunities.length),
-        trend: snapshot.issues.length ? "down" : "up",
-        deltaLabel: "opportunités",
+        trend: snapshot.issues.length ? "down" : "flat",
+        deltaLabel:
+          snapshot.opportunities.length > 0
+            ? `${snapshot.opportunities.length} opportunité${snapshot.opportunities.length > 1 ? "s" : ""}`
+            : "aucune opportunité",
       },
     ],
     pendingApprovalsHint: "",
