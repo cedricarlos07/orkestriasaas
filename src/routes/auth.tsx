@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Mail, Lock, User, Sparkles, Check, Eye, EyeOff, AlertCircle, Loader2, ArrowLeft } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
@@ -38,6 +38,7 @@ function safePostAuthPath(raw?: string | null): string | null {
 function AuthPage() {
   const navigate = useNavigate();
   const { redirect: redirectParam } = Route.useSearch();
+  const { data: session, isPending: sessionPending } = authClient.useSession();
   const { data: platformConfig } = useQuery({
     queryKey: ["platform-config"],
     queryFn: () => getOAuthAvailability(),
@@ -53,6 +54,26 @@ function AuthPage() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState<null | "google" | "facebook" | "submit">(null);
   const [resetToken, setResetToken] = useState<string | null>(null);
+
+  // Already signed in → never show login as a "disconnect".
+  useEffect(() => {
+    if (sessionPending || !session?.user) return;
+    let cancelled = false;
+    void (async () => {
+      const dest = safePostAuthPath(redirectParam);
+      if (dest) {
+        window.location.assign(dest);
+        return;
+      }
+      const p = await getProfile();
+      if (cancelled) return;
+      navigate({ to: !p ? "/setup" : p.appRole === "agency" ? "/app/agency" : "/app", replace: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionPending, session?.user, redirectParam, navigate]);
+
   const set = (k: string, v: string) => {
     setForm({ ...form, [k]: v });
     setErrors((e) => ({ ...e, [k]: "" }));

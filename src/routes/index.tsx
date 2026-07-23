@@ -167,10 +167,21 @@ function useSmartCta() {
     queryFn: () => getProfile(),
     enabled: !!session?.user,
   });
-  if (isPending || (session?.user && profileLoading)) return "/auth";
-  if (!session) return "/auth";
+  // While session/profile hydrate, keep users in-app — never bounce to /auth.
+  if (isPending || (session?.user && profileLoading)) return "/app";
+  if (!session?.user) return "/auth";
   if (!profile) return "/setup";
-  return "/app";
+  return profile.appRole === "agency" ? "/app/agency" : "/app";
+}
+
+function useLandingAuth() {
+  const { data: session, isPending } = authClient.useSession();
+  const dest = useSmartCta();
+  return {
+    isPending,
+    isLoggedIn: Boolean(session?.user),
+    dest,
+  };
 }
 
 function scrollToId(id: string) {
@@ -350,6 +361,7 @@ function Logo() {
 
 function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { isLoggedIn, dest } = useLandingAuth();
   useEffect(() => {
     if (!mobileOpen) return;
     const prev = document.body.style.overflow;
@@ -369,10 +381,25 @@ function Header() {
           <button onClick={() => openContact()} className="hover:opacity-70">Contact</button>
         </nav>
         <div className="flex items-center gap-3 md:gap-4">
-          <Link to="/auth" className="hidden text-[15px] text-ink hover:opacity-70 md:inline">Connexion</Link>
-          <div className="hidden md:inline-flex">
-            <SmartCta variant="dark">Créer un compte</SmartCta>
-          </div>
+          {isLoggedIn ? (
+            <>
+              <Link to={dest} className="hidden text-[15px] text-ink hover:opacity-70 md:inline">
+                Mon espace
+              </Link>
+              <div className="hidden md:inline-flex">
+                <SmartCta variant="dark">Ouvrir l'app</SmartCta>
+              </div>
+            </>
+          ) : (
+            <>
+              <Link to="/auth" className="hidden text-[15px] text-ink hover:opacity-70 md:inline">
+                Connexion
+              </Link>
+              <div className="hidden md:inline-flex">
+                <SmartCta variant="dark">Créer un compte</SmartCta>
+              </div>
+            </>
+          )}
           <button
             className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/80 text-ink ring-1 ring-black/10 backdrop-blur md:hidden"
             onClick={() => setMobileOpen(true)}
@@ -418,7 +445,8 @@ const PRODUCT_GROUPS: { title: string; items: { icon: React.ElementType; label: 
 ];
 
 function MobileMenu({ onClose, onJump }: { onClose: () => void; onJump: (id: string) => void }) {
-  const [openGroup, setOpenGroup] = useState<string | null>("Capacités");
+  const [openGroup, setOpenGroup] = useState<string | null>("La plateforme");
+  const { isLoggedIn, dest } = useLandingAuth();
   return (
     <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
@@ -472,15 +500,27 @@ function MobileMenu({ onClose, onJump }: { onClose: () => void; onJump: (id: str
             <a href="#pricing" onClick={(e) => { e.preventDefault(); onJump("pricing"); }} className="block rounded-xl px-2 py-3 text-[15px] text-ink">Tarifs</a>
             <a href="#faq" onClick={(e) => { e.preventDefault(); onJump("faq"); }} className="block rounded-xl px-2 py-3 text-[15px] text-ink">FAQ</a>
             <button onClick={() => { onClose(); openContact(); }} className="block w-full rounded-xl px-2 py-3 text-left text-[15px] text-ink">Contact</button>
-            <Link to="/auth" onClick={onClose} className="block rounded-xl px-2 py-3 text-[15px] text-ink">Connexion</Link>
+            {isLoggedIn ? (
+              <Link to={dest} onClick={onClose} className="block rounded-xl px-2 py-3 text-[15px] text-ink">Mon espace</Link>
+            ) : (
+              <Link to="/auth" onClick={onClose} className="block rounded-xl px-2 py-3 text-[15px] text-ink">Connexion</Link>
+            )}
           </div>
 
           <div className="mt-3 rounded-2xl bg-gradient-to-r from-[#fff3e8] to-white p-4 ring-1 ring-black/5">
-            <div className="text-[14px] font-semibold text-ink">Essayez Orkestria gratuitement</div>
-            <div className="text-[12px] text-ink/60">Configurez votre premier agent en quelques minutes.</div>
+            <div className="text-[14px] font-semibold text-ink">
+              {isLoggedIn ? "Reprenez là où vous en étiez" : "Essayez Orkestria gratuitement"}
+            </div>
+            <div className="text-[12px] text-ink/60">
+              {isLoggedIn ? "Votre espace et vos campagnes vous attendent." : "Configurez votre premier agent en quelques minutes."}
+            </div>
             <div className="mt-3">
               <SmartCta variant="primary" className="w-full justify-center">
-                Commencer <ArrowRight className="ml-1 inline h-4 w-4" />
+                {isLoggedIn ? (
+                  <>Ouvrir l'app <ArrowRight className="ml-1 inline h-4 w-4" /></>
+                ) : (
+                  <>Commencer <ArrowRight className="ml-1 inline h-4 w-4" /></>
+                )}
               </SmartCta>
             </div>
           </div>
