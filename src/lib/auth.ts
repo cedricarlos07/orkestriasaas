@@ -5,6 +5,7 @@ import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { db } from "@/db";
 import * as schema from "@/db/schema/index";
 import { ac, adminRoles, orgAc, orgRoles } from "@/lib/auth/permissions";
+import { sendPasswordResetEmail } from "@/lib/email/smtp";
 
 const baseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:8080";
 
@@ -20,6 +21,17 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+    sendResetPassword: async ({ user, url }) => {
+      const result = await sendPasswordResetEmail({
+        to: user.email,
+        name: user.name,
+        url,
+      });
+      if (!result.ok) {
+        console.error("[auth] reset password email failed:", result.reason);
+        throw new Error("Impossible d'envoyer l'e-mail de réinitialisation.");
+      }
+    },
   },
   user: {
     additionalFields: {

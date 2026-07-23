@@ -46,6 +46,14 @@ const KEYS = [
   "GOOGLE_ANALYTICS_CLIENT_SECRET",
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
+  "SMTP_HOST",
+  "SMTP_PORT",
+  "SMTP_SECURE",
+  "SMTP_USER",
+  "SMTP_PASSWORD",
+  "SMTP_FROM",
+  "SMTP_REPLY_TO",
+  "SMTP_NOTIFY_TO",
 ];
 
 function parseEnv(content) {

@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { desc } from "drizzle-orm";
 import { db } from "@/db";
 import { contactSubmissions } from "@/db/schema/index";
+import { sendContactNotifyEmail } from "@/lib/email/smtp";
 import { uid } from "./utils";
 
 export const submitContact = createServerFn({ method: "POST" })
@@ -25,6 +26,13 @@ export const submitContact = createServerFn({ method: "POST" })
       createdAt: new Date(),
     };
     await db.insert(contactSubmissions).values(row);
+    // Best-effort notify — never fail the form if SMTP is down.
+    void sendContactNotifyEmail({
+      topic: data.topic,
+      name: data.name,
+      email: data.email,
+      message: data.message,
+    }).catch((err) => console.error("[contact] notify email failed:", err));
     return row;
   });
 
