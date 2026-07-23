@@ -195,7 +195,19 @@ function writeTool(
             message: "dry_run=false with mode=dry_run is a no-op. Use mode=live or mode=approval.",
           };
         }
-        mode = requested ?? (policy.defaultMode === "approval" ? "approval" : "live");
+        if (policy.defaultMode === "dry_run") {
+          return {
+            status: "blocked",
+            message:
+              "Workspace policy is dry_run. An org admin must set_policy(defaultMode=approval|live) before confirming writes.",
+          };
+        }
+        // Never skip the approval queue when org policy requires it.
+        if (policy.defaultMode === "approval") {
+          mode = "approval";
+        } else {
+          mode = requested === "approval" ? "approval" : "live";
+        }
         if (mode === "live") requireScope(ctx, "write");
       }
 
@@ -1408,7 +1420,18 @@ const governTools: AgentTool[] = [
             message: "dry_run=false with mode=dry_run is a no-op. Use mode=live or mode=approval.",
           };
         }
-        mode = requested ?? (policy.defaultMode === "approval" ? "approval" : "live");
+        if (policy.defaultMode === "dry_run") {
+          return {
+            status: "blocked",
+            message:
+              "Workspace policy is dry_run. An org admin must set_policy(defaultMode=approval|live) before confirming writes.",
+          };
+        }
+        if (policy.defaultMode === "approval") {
+          mode = "approval";
+        } else {
+          mode = requested === "approval" ? "approval" : "live";
+        }
         if (mode === "live") requireScope(ctx, "write");
       }
 

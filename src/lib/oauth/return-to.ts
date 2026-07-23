@@ -17,11 +17,13 @@ export function sanitizeReturnTo(raw: string | null | undefined, fallback = "/ap
 
 export function returnToSetCookie(returnTo: string): string {
   const safe = sanitizeReturnTo(returnTo);
-  return `${COOKIE}=${encodeURIComponent(safe)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE}`;
+  const secure = process.env.NODE_ENV === "production" || Boolean(process.env.BETTER_AUTH_URL?.startsWith("https"));
+  return `${COOKIE}=${encodeURIComponent(safe)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE}${secure ? "; Secure" : ""}`;
 }
 
 export function returnToClearCookie(): string {
-  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+  const secure = process.env.NODE_ENV === "production" || Boolean(process.env.BETTER_AUTH_URL?.startsWith("https"));
+  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`;
 }
 
 export function readReturnToCookie(cookieHeader: string | null): string | null {

@@ -292,3 +292,27 @@ export const listSubscriptions = createServerFn({ method: "GET" }).handler(async
   await ensureSuperAdmin();
   return db.select().from(subscriptions);
 });
+
+/** Persist write block / suspension on organization_metadata (not localStorage). */
+export const setOrganizationWriteBlock = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: { organizationId: string; writeBlocked: boolean; status?: string }) => data,
+  )
+  .handler(async ({ data }) => {
+    const session = await ensureSuperAdmin();
+    const patch: {
+      writeBlocked: boolean;
+      status?: string;
+      updatedAt: Date;
+    } = {
+      writeBlocked: data.writeBlocked,
+      updatedAt: new Date(),
+    };
+    if (data.status) patch.status = data.status;
+    await db
+      .update(organizationMetadata)
+      .set(patch)
+      .where(eq(organizationMetadata.organizationId, data.organizationId));
+    await logAdmin("org.write_block", data.organizationId, data, session.user.id);
+    return { ok: true };
+  });

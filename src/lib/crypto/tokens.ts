@@ -4,7 +4,14 @@ const ALGO = "aes-256-gcm";
 const IV_LEN = 12;
 
 function getKey(): Buffer {
-  const secret = process.env.TOKEN_ENCRYPTION_KEY ?? process.env.BETTER_AUTH_SECRET;
+  const dedicated = process.env.TOKEN_ENCRYPTION_KEY?.trim();
+  const fallback = process.env.BETTER_AUTH_SECRET?.trim();
+  if (!dedicated && process.env.NODE_ENV === "production") {
+    console.error(
+      "[security] TOKEN_ENCRYPTION_KEY manquant — fallback BETTER_AUTH_SECRET (à corriger).",
+    );
+  }
+  const secret = dedicated || fallback;
   if (!secret) throw new Error("TOKEN_ENCRYPTION_KEY or BETTER_AUTH_SECRET required");
   return scryptSync(secret, "orkestria-tokens", 32);
 }

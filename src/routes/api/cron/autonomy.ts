@@ -26,7 +26,8 @@ async function handle(request: Request): Promise<Response> {
   const auth = request.headers.get("authorization") ?? "";
   const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   const urlSecret = new URL(request.url).searchParams.get("secret") ?? "";
-  if (bearer !== expected && urlSecret !== expected) {
+  const allowQuerySecret = process.env.NODE_ENV !== "production";
+  if (bearer !== expected && !(allowQuerySecret && urlSecret === expected)) {
     return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
       status: 401,
       headers: { "Content-Type": "application/json" },

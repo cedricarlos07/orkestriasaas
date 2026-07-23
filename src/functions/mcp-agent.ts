@@ -11,9 +11,16 @@ import {
   updateOrgPolicy,
   type ExecutionMode,
 } from "@/lib/mcp/policy-engine";
-import { getActiveOrgId } from "./context";
+import { getActiveOrgId, requireOrgAdmin } from "./context";
 
 // ─── API keys ─────────────────────────────────────────────────────────────────
+
+const ALLOWED_KEY_SCOPES: ApiKeyScope[] = ["read", "write"];
+
+function sanitizeKeyScopes(scopes: ApiKeyScope[]): ApiKeyScope[] {
+  const cleaned = scopes.filter((s) => ALLOWED_KEY_SCOPES.includes(s));
+  return cleaned.length ? cleaned : (["read"] as ApiKeyScope[]);
+}
 
 export const listMcpApiKeys = createServerFn({ method: "GET" }).handler(async () => {
   const session = await ensureSession();
@@ -35,7 +42,8 @@ export const createMcpApiKey = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const session = await ensureSession();
     const orgId = await getActiveOrgId(session);
-    const scopes = data.scopes.length ? data.scopes : (["read"] as ApiKeyScope[]);
+    await requireOrgAdmin(session, orgId);
+    const scopes = sanitizeKeyScopes(data.scopes);
     return createApiKey({
       organizationId: orgId,
       userId: session.user.id,
@@ -49,6 +57,7 @@ export const revokeMcpApiKey = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const session = await ensureSession();
     const orgId = await getActiveOrgId(session);
+    await requireOrgAdmin(session, orgId);
     await revokeApiKey(orgId, data.keyId);
     return { ok: true };
   });
@@ -75,6 +84,7 @@ export const updateMcpPolicy = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const session = await ensureSession();
     const orgId = await getActiveOrgId(session);
+    await requireOrgAdmin(session, orgId);
     return updateOrgPolicy(orgId, data);
   });
 

@@ -218,6 +218,9 @@ export async function upsertConnection(
 
 export async function handleOAuthCallback(connector: ConnectorId, code: string, state: string) {
   const row = await consumeOAuthState(state);
+  if (row.connector && row.connector !== connector) {
+    throw new Error("État OAuth ne correspond pas au connecteur");
+  }
   const orgId = row.organizationId;
   const tokens = await exchangeCode(connector, code, state);
   const account = await resolvePrimaryAccount(connector, tokens);

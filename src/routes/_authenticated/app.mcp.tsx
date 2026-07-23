@@ -93,7 +93,7 @@ function KeysTab() {
 
   const create = useMutation({
     mutationFn: () =>
-      createMcpApiKey({ data: { name, scopes: scopes as ("read" | "write" | "admin")[] } }),
+      createMcpApiKey({ data: { name, scopes: scopes as ("read" | "write")[] } }),
     onSuccess: (res) => {
       setNewKey(res.key);
       setName("");
@@ -146,7 +146,7 @@ function KeysTab() {
             className="w-64 rounded-xl border border-line/70 bg-white px-3 py-2 text-[13px] text-ink outline-none focus:border-[#ff6c02]"
           />
           <div className="flex gap-2">
-            {["read", "write", "admin"].map((s) => (
+            {["read", "write"].map((s) => (
               <button
                 key={s}
                 type="button"

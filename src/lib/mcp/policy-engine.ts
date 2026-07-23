@@ -463,8 +463,31 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
   const start = Date.now();
   const policy = await getOrgPolicy(input.orgId);
   const diff = buildDiff(input);
-
   const mode: ExecutionMode = input.mode ?? policy.defaultMode;
+
+  const { assertAdWritesAllowed, assertOrgNotWriteBlocked } = await import(
+    "@/lib/mcp/write-gate"
+  );
+  try {
+    if (mode === "dry_run") {
+      await assertOrgNotWriteBlocked(input.orgId);
+    } else {
+      await assertAdWritesAllowed(input.orgId);
+    }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Écritures refusées";
+    await logRun({
+      orgId: input.orgId,
+      apiKeyId: input.apiKeyId,
+      connector: input.connector,
+      tool: input.action,
+      mode,
+      status: "blocked",
+      params: diff,
+      error: message,
+    });
+    return { status: "blocked", mode, diff, message };
+  }
 
   // Kill switch (admin-level, per platform family)
   const ksKey = `${input.connector.replace(/_ads$/, "")}_write`;

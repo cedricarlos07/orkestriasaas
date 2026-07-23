@@ -14,6 +14,9 @@ import {
 } from "@/lib/platforms/meta-api";
 import { classifyRisk } from "@/lib/mcp/action-pipeline";
 import { countriesFromZone } from "@/lib/geo/countries-from-zone";
+import { assertAdWritesAllowed } from "@/lib/mcp/write-gate";
+import { enforceQuotas, recordUsage } from "@/lib/quotas/enforce";
+import { requireOrgAdmin } from "./context";
 
 /** Parse a USD (or major-unit) total from UI strings like "$250 · 7 jours" or "$400". */
 function parseBudgetTotal(raw: string | undefined): number {
@@ -148,6 +151,9 @@ export const launchCampaign = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const session = await ensureSession();
     const orgId = await getActiveOrgId(session);
+    await requireOrgAdmin(session, orgId);
+    await assertAdWritesAllowed(orgId);
+    await enforceQuotas({ orgId, kind: "write", tool: "launch_campaign" });
     const meta = await getMetaConnection(orgId);
     if (!meta) {
       throw new Error("Connectez Meta Ads avant de lancer une campagne.");
@@ -211,6 +217,7 @@ export const launchCampaign = createServerFn({ method: "POST" })
       updatedAt: now,
     };
     await db.insert(campaigns).values(row);
+    await recordUsage({ orgId, kind: "write", meta: { tool: "launch_campaign" } });
 
     return {
       campaign: row,
@@ -231,13 +238,26 @@ export const updateCampaignStatus = createServerFn({ method: "POST" })
     const campaign = rows[0];
     if (!campaign || campaign.organizationId !== orgId) throw new Error("Not found");
 
-    if (campaign.externalId && campaign.connector === "meta_ads" && !campaign.externalId.startsWith("draft:")) {
+    const touchesMeta =
+      Boolean(campaign.externalId) &&
+      campaign.connector === "meta_ads" &&
+      !campaign.externalId!.startsWith("draft:");
+
+    if (touchesMeta || data.status === "live") {
+      await requireOrgAdmin(session, orgId);
+      await assertAdWritesAllowed(orgId);
+      if (data.status === "live") {
+        await enforceQuotas({ orgId, kind: "write", tool: "activate_campaign" });
+      }
+    }
+
+    if (touchesMeta) {
       const meta = await getMetaConnection(orgId);
       if (meta) {
         if (data.status === "paused" || data.status === "draft") {
-          await pauseMetaCampaign(meta.tokens.accessToken, campaign.externalId);
+          await pauseMetaCampaign(meta.tokens.accessToken, campaign.externalId!);
         } else if (data.status === "live") {
-          await resumeMetaCampaign(meta.tokens.accessToken, campaign.externalId);
+          await resumeMetaCampaign(meta.tokens.accessToken, campaign.externalId!);
         }
       }
     }
@@ -246,6 +266,10 @@ export const updateCampaignStatus = createServerFn({ method: "POST" })
       .update(campaigns)
       .set({ status: data.status, updatedAt: new Date() })
       .where(eq(campaigns.id, data.id));
+
+    if (data.status === "live") {
+      await recordUsage({ orgId, kind: "write", meta: { tool: "activate_campaign" } });
+    }
 
     const updated = await db.select().from(campaigns).where(eq(campaigns.id, data.id)).limit(1);
     return updated[0]!;

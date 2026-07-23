@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { notifications } from "@/db/schema/index";
 import { ensureSession } from "@/lib/auth.functions";
@@ -21,10 +21,13 @@ export const markNotificationRead = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const session = await ensureSession();
     const orgId = await getActiveOrgId(session);
-    await db.update(notifications).set({ read: true }).where(eq(notifications.id, data.id));
-    const rows = await db.select().from(notifications).where(eq(notifications.id, data.id)).limit(1);
-    if (!rows[0] || rows[0].organizationId !== orgId) throw new Error("Not found");
-    return rows[0];
+    const updated = await db
+      .update(notifications)
+      .set({ read: true })
+      .where(and(eq(notifications.id, data.id), eq(notifications.organizationId, orgId)))
+      .returning();
+    if (!updated[0]) throw new Error("Not found");
+    return updated[0];
   });
 
 export const markAllNotificationsRead = createServerFn({ method: "POST" }).handler(async () => {

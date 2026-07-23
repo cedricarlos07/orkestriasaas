@@ -4,6 +4,7 @@ import {
   getOrganization, PLANS, updateOrganization, logAudit, getUsers, getConnections, connectorLabel,
   fmtMoney, fmtNum, fmtRelative, planLabel, type Organization,
 } from "@/lib/admin-store";
+import { setOrganizationWriteBlock } from "@/functions/admin";
 import { StatusPill } from "./admin.index";
 import {
   ArrowLeft, Ban, Play, Repeat, ShieldOff, ShieldCheck, Lock, Unplug, FileSearch,
@@ -38,6 +39,13 @@ function OrgDetail() {
   const run = (action: string, patch: Partial<Organization>, need = true) => {
     const exec = (reason: string) => {
       updateOrganization(org.id, patch);
+      void setOrganizationWriteBlock({
+        data: {
+          organizationId: org.id,
+          writeBlocked: patch.writeBlocked ?? org.writeBlocked,
+          status: patch.status,
+        },
+      }).catch((e) => console.error(e));
       logAudit({ actor: "super_admin", action, target: org.name, reason });
       setReasonModal(null);
       setTick((t) => t + 1);
