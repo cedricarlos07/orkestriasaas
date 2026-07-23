@@ -1380,7 +1380,7 @@ function Pricing() {
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         {PLANS.map((p) => {
           const isSelected = selected === p.id;
           return (
@@ -1436,29 +1436,11 @@ function Pricing() {
                     </li>
                   ))}
                 </ul>
-                {p.id === "agency_start" ? (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openContact({
-                        topic: "Plan Agence",
-                        step: "Tarifs",
-                        goal: "Agence",
-                        message: "Bonjour, je souhaite en savoir plus sur le plan Agence.",
-                      });
-                    }}
-                    className={(isSelected ? "btn-primary" : "btn-dark") + " mt-8 w-full justify-center"}
-                  >
+                <div onClick={(e) => e.stopPropagation()}>
+                  <SmartCta variant={isSelected ? "primary" : "dark"} className="mt-8 w-full justify-center">
                     {p.cta}
-                  </button>
-                ) : (
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <SmartCta variant={isSelected ? "primary" : "dark"} className="mt-8 w-full justify-center">
-                      {p.cta}
-                    </SmartCta>
-                  </div>
-                )}
+                  </SmartCta>
+                </div>
               </div>
             </div>
           );

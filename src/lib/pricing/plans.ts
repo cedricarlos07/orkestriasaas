@@ -253,20 +253,6 @@ export const LANDING_PLANS: LandingPlan[] = [
       { label: "Support", value: "12 h" },
     ],
   },
-  {
-    id: "agency_start",
-    name: "Agence",
-    price: formatPriceCents(12900),
-    tag: "Marque blanche",
-    text: "Portail client sous votre marque, rôles, approbations et rapports auto.",
-    features: ["5 clients · 500 runs/mois", "Portail marque blanche", "Rôles & approbations", "Support dédié"],
-    cta: "Parler à un humain",
-    kpis: [
-      { label: "Clients", value: "5" },
-      { label: "Runs", value: "500/mo" },
-      { label: "Support", value: "Dédié" },
-    ],
-  },
 ];
 
 /** Platform-wide AI spend caps (DeepSeek) */
