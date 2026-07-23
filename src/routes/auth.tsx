@@ -142,7 +142,7 @@ function AuthPage() {
       <aside className="relative hidden lg:flex flex-col justify-between overflow-hidden bg-gradient-to-br from-[#ff6c02] via-[#ff8a3d] to-[#f0d78c] p-12 text-white">
         <div className="absolute inset-0 opacity-30 bg-noise" />
         <Link to="/" className="relative flex items-center gap-2">
-          <BrandLogo className="h-8 w-auto brightness-0 invert" />
+          <BrandLogo variant="onDark" className="h-8 w-auto" />
         </Link>
 
         <div className="relative max-w-md">

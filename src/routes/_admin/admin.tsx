@@ -107,6 +107,7 @@ function AdminLayout() {
   const loc = useLocation();
   const { session } = adminRoute.useRouteContext();
   const [ready, setReady] = useState(false);
+  const [syncOk, setSyncOk] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   useEffect(() => { setMobileNav(false); }, [loc.pathname]);
@@ -118,7 +119,16 @@ function AdminLayout() {
   }, [mobileNav]);
 
   useEffect(() => {
-    void refreshAdminFromServer().then(() => setReady(true));
+    let cancelled = false;
+    void refreshAdminFromServer().then((ok) => {
+      if (!cancelled) {
+        setReady(true);
+        setSyncOk(ok);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const isActive = (to: string, end?: boolean) =>
@@ -135,7 +145,7 @@ function AdminLayout() {
           <BrandLogo variant="mark" className="h-8 w-8" />
           {!collapsed && (
             <div className="min-w-0">
-              <BrandLogo className="h-5 w-auto brightness-0 invert" />
+              <BrandLogo variant="onDark" className="h-5 w-auto" />
               <p className="text-[10px] uppercase tracking-widest text-[#ff8a3d]">Super Admin</p>
             </div>
           )}
@@ -212,7 +222,7 @@ function AdminLayout() {
               <div className="flex items-center gap-2">
                 <BrandLogo variant="mark" className="h-8 w-8" />
                 <div>
-                  <BrandLogo className="h-4 w-auto brightness-0 invert" />
+                  <BrandLogo variant="onDark" className="h-4 w-auto" />
                   <p className="text-[10px] uppercase tracking-widest text-[#ff8a3d]">Super Admin</p>
                 </div>
               </div>
@@ -277,6 +287,11 @@ function AdminLayout() {
           <div className="flex-1 sm:hidden" />
           <Link to="/app" className="rounded-full border border-white/10 px-3 py-1.5 text-[12px] text-white/70 hover:bg-white/[0.05]">← <span className="hidden sm:inline">Espace client</span><span className="sm:hidden">App</span></Link>
         </header>
+        {!syncOk && (
+          <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-[12px] text-amber-100 sm:px-6">
+            Sync serveur incomplète — certaines listes peuvent être vides. Rechargez la page.
+          </div>
+        )}
         <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-8"><Outlet /></main>
       </div>
     </div>
