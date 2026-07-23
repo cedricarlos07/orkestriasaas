@@ -342,7 +342,7 @@ function Connections() {
                 {accountError && (
                   <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
                     {accountError}{" "}
-                    <Link to="/app/settings" hash="billing" className="font-medium underline">
+                    <Link to="/app/settings" className="font-medium underline">
                       Passer au plan supérieur
                     </Link>
                   </p>

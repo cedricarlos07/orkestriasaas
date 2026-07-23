@@ -1,3 +1,4 @@
+import { asMs } from "@/lib/time";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createCampaign as createCampaignFn,
@@ -29,8 +30,8 @@ function mapCampaign(c: Awaited<ReturnType<typeof listCampaigns>>[number]): Camp
     ...c,
     channel: c.channel as Campaign["channel"],
     status: c.status as CampaignStatus,
-    createdAt: c.createdAt.getTime(),
-    updatedAt: c.updatedAt.getTime(),
+    createdAt: asMs(c.createdAt),
+    updatedAt: asMs(c.updatedAt),
   };
 }
 

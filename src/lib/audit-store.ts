@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getAudit, listAudits, startAudit } from "@/functions/audits";
+import { asMs } from "@/lib/time";
 
 export type AuditFinding = { label: string; kind: "problem" | "opportunity" | string };
 export type AuditRun = {
@@ -20,8 +21,8 @@ export type AuditRun = {
 function mapAudit(a: Awaited<ReturnType<typeof listAudits>>[number]): AuditRun {
   return {
     id: a.id,
-    startedAt: a.startedAt.getTime(),
-    completedAt: a.completedAt?.getTime(),
+    startedAt: asMs(a.startedAt),
+    completedAt: a.completedAt ? asMs(a.completedAt) : undefined,
     status: a.status,
     stepIndex: a.stepIndex ?? 0,
     totalSteps: a.totalSteps ?? 5,

@@ -5,6 +5,7 @@ import {
   listThreads,
   sendChatMessage,
 } from "@/functions/chat";
+import { asMs } from "@/lib/time";
 
 export type ChatToolCall = {
   name: string;
@@ -32,13 +33,13 @@ function mapThread(t: Awaited<ReturnType<typeof listThreads>>[number]): ChatThre
   return {
     id: t.id,
     title: t.title ?? "Nouvelle conversation",
-    updatedAt: t.updatedAt.getTime(),
+    updatedAt: asMs(t.updatedAt),
     messages: t.messages.map((m) => ({
       id: m.id,
       role: m.role as "user" | "agent",
       text: m.text,
       tools: (m.tools as ChatToolCall[] | null) ?? undefined,
-      createdAt: m.createdAt.getTime(),
+      createdAt: asMs(m.createdAt),
     })),
   };
 }

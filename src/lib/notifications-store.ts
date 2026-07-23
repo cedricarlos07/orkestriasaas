@@ -4,6 +4,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "@/functions/notifications";
+import { asMs } from "@/lib/time";
 
 export type Notification = {
   id: string;
@@ -21,14 +22,15 @@ function mapNotification(n: Awaited<ReturnType<typeof listNotifications>>[number
     kind: n.kind as Notification["kind"],
     title: n.title,
     body: n.body,
-    createdAt: n.createdAt.getTime(),
+    createdAt: asMs(n.createdAt),
     read: n.read,
     emailSent: n.emailSent,
   };
 }
 
-export function timeAgo(ts: number | Date) {
-  const t = typeof ts === "number" ? ts : ts.getTime();
+export function timeAgo(ts: number | Date | string) {
+  const t = asMs(ts);
+  if (!t) return "—";
   const s = Math.floor((Date.now() - t) / 1000);
   if (s < 60) return "à l'instant";
   if (s < 3600) return `il y a ${Math.floor(s / 60)} min`;

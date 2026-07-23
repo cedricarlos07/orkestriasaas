@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { appendRunEvent, createRun, listRuns, updateRunState } from "@/functions/runs";
 import { createNotification } from "@/functions/notifications";
+import { asMs } from "@/lib/time";
 
 export type RunState =
   | "received"
@@ -79,12 +80,12 @@ function mapRun(r: Awaited<ReturnType<typeof listRuns>>[number]): AgentRun {
     skill: r.skill,
     tool: r.tool,
     state: r.state as RunState,
-    createdAt: r.createdAt.getTime(),
-    updatedAt: r.updatedAt.getTime(),
+    createdAt: asMs(r.createdAt),
+    updatedAt: asMs(r.updatedAt),
     idempotencyKey: r.idempotencyKey,
     events: r.events.map((e) => ({
       type: e.type,
-      ts: e.createdAt.getTime(),
+      ts: asMs(e.createdAt),
       ...(e.payload as Record<string, unknown>),
     })),
   };

@@ -15,7 +15,8 @@ export async function getMetaConnection(orgId: string) {
 
   const tokens = await ensureFreshTokens(conn.id, orgId, "meta_ads");
   if (!tokens.accountId) {
-    throw new Error("Sélectionnez un compte publicitaire Meta dans Connexions.");
+    // Connected OAuth but no ad account selected yet — not an error for read paths.
+    return null;
   }
 
   return { conn, tokens, via: "oauth" as const };

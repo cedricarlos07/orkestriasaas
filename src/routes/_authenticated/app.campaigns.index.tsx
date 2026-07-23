@@ -39,6 +39,8 @@ function List() {
       setSyncing(true);
       try {
         await syncMeta();
+      } catch (e) {
+        console.error("syncMeta failed", e);
       } finally {
         setSyncing(false);
       }

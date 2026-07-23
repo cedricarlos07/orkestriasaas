@@ -156,7 +156,7 @@ export const launchCampaign = createServerFn({ method: "POST" })
     await enforceQuotas({ orgId, kind: "write", tool: "launch_campaign" });
     const meta = await getMetaConnection(orgId);
     if (!meta) {
-      throw new Error("Connectez Meta Ads avant de lancer une campagne.");
+      throw new Error("Connectez Meta Ads et sélectionnez un compte publicitaire avant de lancer une campagne.");
     }
 
     const total = parseBudgetTotal(data.budget);
@@ -252,13 +252,14 @@ export const updateCampaignStatus = createServerFn({ method: "POST" })
     }
 
     if (touchesMeta) {
-      const meta = await getMetaConnection(orgId);
-      if (meta) {
-        if (data.status === "paused" || data.status === "draft") {
-          await pauseMetaCampaign(meta.tokens.accessToken, campaign.externalId!);
-        } else if (data.status === "live") {
-          await resumeMetaCampaign(meta.tokens.accessToken, campaign.externalId!);
-        }
+      const meta = await getMetaConnection(orgId).catch(() => null);
+      if (!meta) {
+        throw new Error("Sélectionnez un compte publicitaire Meta dans Connexions.");
+      }
+      if (data.status === "paused" || data.status === "draft") {
+        await pauseMetaCampaign(meta.tokens.accessToken, campaign.externalId!);
+      } else if (data.status === "live") {
+        await resumeMetaCampaign(meta.tokens.accessToken, campaign.externalId!);
       }
     }
 
