@@ -1466,7 +1466,7 @@ const MCP_CAPABILITIES = [
   { t: "Lancer", d: "Search, PMax, Meta, LinkedIn, TikTok — campagnes en pause" },
   { t: "Optimiser", d: "Budget, pause, mots-clés + négatifs, autonomie plafonnée" },
   { t: "Créer", d: "Textes, upload créatives Meta, conversions Google" },
-  { t: "Mesurer", d: "Perf, tracking diagnose, anomalies" },
+  { t: "Mesurer", d: "Perf, tracking, diagnose, anomalies" },
   { t: "Contrôler", d: "Prévisualisation, skills, policies, audit" },
 ];
 
@@ -1505,24 +1505,24 @@ function McpSection() {
   };
 
   return (
-    <section id="mcp" className="mx-auto max-w-[1240px] px-6 py-24 scroll-mt-24">
-      <div className="mb-10 max-w-2xl">
+    <section id="mcp" className="mx-auto max-w-[1240px] overflow-x-clip px-4 py-16 scroll-mt-24 sm:px-6 md:py-24">
+      <div className="mb-8 max-w-2xl md:mb-10">
         <p className="text-[13px] font-semibold uppercase tracking-wider text-[#ff6c02]">Orkestria MCP</p>
-        <h2 className="mt-2 font-display text-[40px] font-semibold leading-tight tracking-tight text-ink md:text-[52px]">
+        <h2 className="mt-2 font-display text-[28px] font-semibold leading-[1.15] tracking-tight text-ink sm:text-[40px] md:text-[52px]">
           Parlez à votre IA. Elle gère vos pubs — sans vous surprendre.
         </h2>
-        <p className="mt-4 text-[16px] text-ink-soft">
-          Connectez Cursor ou Claude à Orkestria. Demandez en français de créer, pause ou ajuster une campagne sur
-          Google, Meta, TikTok et 7 autres réseaux. Rien ne part en live sans votre feu vert.
+        <p className="mt-4 text-[15px] leading-relaxed text-ink-soft sm:text-[16px]">
+          Connectez Cursor ou Claude à Orkestria. Créez, mettez en pause ou ajustez une campagne Meta, Google ou
+          TikTok — en français. Rien ne part en live sans votre feu vert.
         </p>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        <div>
+      <div className="grid min-w-0 gap-8 lg:grid-cols-2 lg:gap-10">
+        <div className="min-w-0">
           <div
             role="tablist"
             aria-label="Mode de connexion"
-            className="relative z-10 mb-3 inline-flex rounded-full border border-line/70 bg-white p-1 shadow-sm"
+            className="relative z-10 mb-3 flex w-full max-w-md rounded-full border border-line/70 bg-white p-1 shadow-sm"
           >
             <button
               type="button"
@@ -1530,7 +1530,7 @@ function McpSection() {
               aria-selected={isLocal}
               onClick={() => setMcpTab("local")}
               className={
-                "cursor-pointer rounded-full px-4 py-2 text-[13px] font-medium transition " +
+                "flex-1 cursor-pointer rounded-full px-3 py-2 text-[13px] font-medium transition sm:px-4 " +
                 (isLocal ? "bg-ink text-white shadow-sm" : "text-ink-soft hover:text-ink")
               }
             >
@@ -1542,55 +1542,61 @@ function McpSection() {
               aria-selected={!isLocal}
               onClick={() => setMcpTab("hosted")}
               className={
-                "cursor-pointer rounded-full px-4 py-2 text-[13px] font-medium transition " +
+                "flex-1 cursor-pointer rounded-full px-3 py-2 text-[13px] font-medium transition sm:px-4 " +
                 (!isLocal ? "bg-ink text-white shadow-sm" : "text-ink-soft hover:text-ink")
               }
             >
-              En un clic (lien)
+              En un clic
             </button>
           </div>
           <p className="mb-3 text-[13px] text-ink-soft">
             {isLocal
-              ? "Installe le connecteur sur votre machine (recommandé pour Cursor)."
-              : "Branche Cursor directement sur l’URL Orkestria — rien à installer."}
+              ? "Installez le connecteur sur votre machine (recommandé pour Cursor)."
+              : "Branchez Cursor sur l’URL Orkestria — rien à installer."}
           </p>
-          <div className="relative z-10 overflow-hidden rounded-2xl bg-[#101014] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.5)]">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
-              <span className="text-[12px] text-white/50">
-                {isLocal ? "Fichier à coller dans Cursor · mcp.json" : "Lien hébergé · https://orkestria.top/api/mcp"}
+          <div className="relative z-10 min-w-0 overflow-hidden rounded-2xl bg-[#101014] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.5)]">
+            <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2.5 sm:px-4">
+              <span className="min-w-0 flex-1 truncate text-[11px] text-white/50 sm:text-[12px]">
+                {isLocal ? "Cursor · mcp.json" : "Lien · /api/mcp"}
               </span>
               <button
                 type="button"
                 onClick={() => void copy()}
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1 text-[12px] text-white/80 hover:bg-white/20"
+                className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1 text-[12px] text-white/80 hover:bg-white/20"
               >
                 {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Paperclip className="h-3 w-3" />}
                 {copied ? "Copié" : "Copier"}
               </button>
             </div>
-            <pre key={mcpTab} className="overflow-x-auto p-5 text-[13px] leading-relaxed text-emerald-100">
+            <pre
+              key={mcpTab}
+              className="overflow-x-auto p-3 text-[11px] leading-relaxed text-emerald-100 sm:p-5 sm:text-[13px]"
+            >
               {snippet}
             </pre>
           </div>
-          <p className="mt-3 text-[13px] text-ink-soft">
-            1. Créez une clé dans votre espace Orkestria · 2. Collez la config · 3. Dites à votre agent{" "}
-            <em>« vérifie mon compte Orkestria »</em>.{" "}
-            <Link to="/docs" className="font-medium text-[#ff6c02] hover:underline">
-              Guide pas à pas →
-            </Link>
-          </p>
+          <ol className="mt-4 space-y-2 text-[13px] text-ink-soft">
+            <li>1. Créez une clé API dans votre espace Orkestria</li>
+            <li>2. Collez la config dans Cursor</li>
+            <li>
+              3. Demandez à votre agent <em>« vérifie mon compte Orkestria »</em>
+            </li>
+          </ol>
+          <Link to="/docs" className="mt-3 inline-flex text-[13px] font-medium text-[#ff6c02] hover:underline">
+            Guide pas à pas →
+          </Link>
         </div>
 
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
           <div>
             <p className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-ink-soft">
-              10 réseaux publicitaires
+              Réseaux publicitaires
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
               {MCP_PLATFORMS.map((p) => (
                 <span
                   key={p.name}
-                  className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-[13px] font-medium text-ink ring-1 ring-black/5"
+                  className="inline-flex min-w-0 items-center gap-2 rounded-full bg-white px-2.5 py-1.5 text-[12px] font-medium text-ink ring-1 ring-black/5 sm:px-3 sm:text-[13px]"
                 >
                   <span
                     className="grid h-6 w-6 shrink-0 place-items-center rounded-md ring-1 ring-black/5"
@@ -1598,7 +1604,7 @@ function McpSection() {
                   >
                     <img src={p.logo} alt="" className="h-3.5 w-3.5 object-contain" loading="lazy" />
                   </span>
-                  {p.name}
+                  <span className="truncate">{p.name}</span>
                 </span>
               ))}
             </div>
@@ -1609,16 +1615,16 @@ function McpSection() {
             </p>
             <ul className="space-y-3">
               {MCP_CAPABILITIES.map((f) => (
-                <li key={f.t} className="flex items-start gap-3 text-[14px]">
-                  <span className="mt-0.5 w-[5.5rem] flex-none font-semibold text-ink">{f.t}</span>
-                  <span className="text-ink-soft">{f.d}</span>
+                <li key={f.t} className="flex flex-col gap-0.5 text-[14px] sm:flex-row sm:items-start sm:gap-3">
+                  <span className="font-semibold text-ink sm:mt-0.5 sm:w-[5.5rem] sm:flex-none">{f.t}</span>
+                  <span className="min-w-0 text-ink-soft">{f.d}</span>
                 </li>
               ))}
             </ul>
           </div>
-          <div className="flex items-start gap-3 rounded-2xl bg-[#fff1e2] p-5">
+          <div className="flex items-start gap-3 rounded-2xl bg-[#fff1e2] p-4 sm:p-5">
             <ShieldCheck className="mt-0.5 h-5 w-5 flex-none text-[#ff6c02]" />
-            <p className="text-[14px] text-ink">
+            <p className="min-w-0 text-[14px] leading-relaxed text-ink">
               <span className="font-semibold">Vous restez le patron.</span> L’agent propose, vous validez. Plafonds de
               budget, campagnes protégées, et chaque action est tracée — rien ne part tout seul.
             </p>
