@@ -5,7 +5,7 @@ import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { db } from "@/db";
 import * as schema from "@/db/schema/index";
 import { ac, adminRoles, orgAc, orgRoles } from "@/lib/auth/permissions";
-import { sendPasswordResetEmail } from "@/lib/email/smtp";
+import { isMailConfigured, sendPasswordResetEmail } from "@/lib/email/smtp";
 
 const baseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:8080";
 
@@ -22,6 +22,12 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     sendResetPassword: async ({ user, url }) => {
+      if (!isMailConfigured()) {
+        console.error("[auth] reset password skipped — SMTP not configured");
+        throw new Error(
+          "La réinitialisation par e-mail n'est pas encore disponible. Contactez hello@orkestria.top.",
+        );
+      }
       const result = await sendPasswordResetEmail({
         to: user.email,
         name: user.name,
@@ -29,7 +35,7 @@ export const auth = betterAuth({
       });
       if (!result.ok) {
         console.error("[auth] reset password email failed:", result.reason);
-        throw new Error("Impossible d'envoyer l'e-mail de réinitialisation.");
+        throw new Error("Impossible d'envoyer l'e-mail de réinitialisation. Réessayez plus tard ou contactez le support.");
       }
     },
   },
@@ -57,6 +63,11 @@ export const auth = betterAuth({
       path: "/",
       httpOnly: true,
       secure: baseURL.startsWith("https"),
+    },
+    // Caddy terminates TLS and sets these — needed for rate-limit / session IP.
+    ipAddress: {
+      ipAddressHeaders: ["x-forwarded-for", "x-real-ip"],
+      trustedProxies: ["127.0.0.1", "::1"],
     },
   },
   plugins: [

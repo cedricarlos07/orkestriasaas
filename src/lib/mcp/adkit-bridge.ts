@@ -17,7 +17,10 @@ export function buildAdkitEnv(opts: {
     META_AD_ACCOUNT_ID: act,
     META_API_VERSION: process.env.META_API_VERSION?.trim() || "v21.0",
     ADKIT_ALLOW_SPEND: opts.allowSpend ? "1" : "0",
-    ADVERTISER_URL: process.env.ADVERTISER_URL?.trim() || "https://example.com",
+    ADVERTISER_URL:
+      process.env.ADVERTISER_URL?.trim() ||
+      process.env.BETTER_AUTH_URL?.trim() ||
+      "https://orkestria.top",
   };
 
   if (opts.pageId?.trim()) env.META_PAGE_ID = opts.pageId.trim();

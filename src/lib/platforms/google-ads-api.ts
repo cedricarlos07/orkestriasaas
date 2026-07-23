@@ -308,7 +308,11 @@ export async function createGoogleCampaignPaused(
 
     const headlines = (input.headlines?.length ? input.headlines : [input.name, `${input.name} — offre`, "Découvrir"]).slice(0, 5);
     const descriptions = (input.descriptions?.length ? input.descriptions : ["Découvrez notre offre", "En savoir plus"]).slice(0, 4);
-    const finalUrl = input.finalUrl ?? "https://example.com";
+    const finalUrl =
+      input.finalUrl ??
+      process.env.ADVERTISER_URL?.trim() ??
+      process.env.BETTER_AUTH_URL?.trim() ??
+      "https://orkestria.top";
 
     const agRes = await fetch(`${API}/customers/${cid}/assetGroups:mutate`, {
       method: "POST",
@@ -411,7 +415,11 @@ export async function createGoogleCampaignPaused(
 
   const headlines = (input.headlines?.length ? input.headlines : [input.name, "Offre limitée", "En savoir plus"]).slice(0, 15);
   const descriptions = (input.descriptions?.length ? input.descriptions : ["Découvrez notre solution", "Demandez une démo"]).slice(0, 4);
-  const finalUrl = input.finalUrl ?? "https://example.com";
+  const finalUrl =
+    input.finalUrl ??
+    process.env.ADVERTISER_URL?.trim() ??
+    process.env.BETTER_AUTH_URL?.trim() ??
+    "https://orkestria.top";
 
   let adId: string | undefined;
   const adRes = await fetch(`${API}/customers/${cid}/adGroupAds:mutate`, {
