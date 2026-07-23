@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   PlugZap,
@@ -14,7 +14,7 @@ import {
 import { CONNECTORS } from "@/lib/oauth/connectors";
 import { useConnections } from "@/lib/connections-store";
 import { getGoogleSetupStatus } from "@/functions/adloop";
-import { getMetaSetupStatus } from "@/functions/meta-settings";
+import { getMetaSetupStatus, setMetaPage } from "@/functions/meta-settings";
 import { getResearchStackStatus } from "@/functions/stack-status";
 
 export const Route = createFileRoute("/_authenticated/app/connections")({ component: Connections });
@@ -48,7 +48,7 @@ function Connections() {
   } = useQuery({
     queryKey: ["meta-setup-status"],
     queryFn: () => getMetaSetupStatus(),
-    staleTime: 60_000,
+    staleTime: 15_000,
     retry: 1,
   });
 
@@ -57,6 +57,15 @@ function Connections() {
     queryFn: () => getResearchStackStatus(),
     staleTime: 60_000,
     retry: 1,
+  });
+
+  const [savingPage, setSavingPage] = useState(false);
+  const setPageMut = useMutation({
+    mutationFn: (pageId: string) => setMetaPage({ data: { pageId } }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["meta-setup-status"] });
+      await refetchMeta();
+    },
   });
 
   useEffect(() => {
@@ -73,7 +82,15 @@ function Connections() {
   }, [qc, refetchMeta, refetchGoogle]);
 
   const metaConn = byConnector("meta_ads");
-  const metaLinked = metaConn?.status === "connectée" && metaConn?.via === "oauth";
+  const metaLinked =
+    (metaConn?.status === "connectée" && metaConn?.via === "oauth") ||
+    Boolean(metaSetup?.oauthConnected);
+  const metaPageLabel =
+    metaSetup?.pageName ??
+    metaSetup?.availablePages?.find(
+      (p) => p.id === metaSetup.pageId || p.id.replace(/\D/g, "") === metaSetup.pageId,
+    )?.name ??
+    (metaSetup?.pageId ? `Page ${metaSetup.pageId}` : null);
 
   const handleDisconnectMeta = async () => {
     try {
@@ -82,6 +99,17 @@ function Connections() {
     } catch (e) {
       console.error(e);
       alert(e instanceof Error ? e.message : "Impossible de déconnecter Meta.");
+    }
+  };
+
+  const handleSelectPage = async (pageId: string) => {
+    setSavingPage(true);
+    try {
+      await setPageMut.mutateAsync(pageId);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Impossible d'enregistrer la Page.");
+    } finally {
+      setSavingPage(false);
     }
   };
 
@@ -133,14 +161,14 @@ function Connections() {
                     <CheckCircle2 className="h-3.5 w-3.5" /> Connecté ·{" "}
                     {metaSetup?.account ?? metaConn?.externalAccount ?? "compte lié"}
                   </span>
-                  {metaSetup?.pageName ? (
-                    <span className="text-[12px] text-ink-soft">Page · {metaSetup.pageName}</span>
-                  ) : metaSetup === undefined ? (
+                  {metaFetching && !metaSetup ? (
                     <span className="text-[12px] text-ink-soft">Vérification de la Page…</span>
+                  ) : metaPageLabel ? (
+                    <span className="text-[12px] text-ink-soft">Page · {metaPageLabel}</span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-[12px] text-amber-700">
                       <AlertCircle className="h-3.5 w-3.5" />
-                      Aucune Page détectée — déconnectez puis reconnectez Meta pour autoriser l&apos;accès aux Pages
+                      Aucune Page détectée — choisissez une Page ci-dessous ou reconnectez Meta
                     </span>
                   )}
                   <button
@@ -174,6 +202,33 @@ function Connections() {
                 </button>
               )}
             </div>
+            {metaLinked && (metaSetup?.availablePages?.length ?? 0) > 0 && (
+              <div className="space-y-2 border-t border-line/50 pt-3">
+                <p className="text-[12px] font-medium text-ink">Page Facebook pour les publicités</p>
+                <div className="flex flex-wrap gap-2">
+                  {metaSetup!.availablePages.map((p) => {
+                    const selected =
+                      metaSetup?.pageId === p.id || metaSetup?.pageId === p.id.replace(/\D/g, "");
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        disabled={savingPage || setPageMut.isPending}
+                        onClick={() => void handleSelectPage(p.id)}
+                        className={
+                          selected
+                            ? "inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-[12px] font-medium text-emerald-700 ring-1 ring-emerald-200"
+                            : "chip-ghost text-[12px]"
+                        }
+                      >
+                        {selected ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+                        {p.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -186,14 +241,17 @@ function Connections() {
             <div>
               <p className="text-[14px] font-medium text-ink">Google Ads</p>
               <p className="text-[12px] text-ink-soft">
-                Connectez votre compte Google Ads pour cibler un compte client précis. Sinon, Orkestria utilise le compte
-                agence configuré sur le serveur.
+                Requis pour lancer et piloter vos campagnes Google. Orkestria utilise le compte Google Ads configuré sur
+                le serveur ; vous pouvez aussi lier un compte client via OAuth.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {googleSetup?.googleReady ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> Google Ads disponible
+                  <CheckCircle2 className="h-3.5 w-3.5" />{" "}
+                  {googleSetup.oauthConnected
+                    ? `Connecté · ${googleSetup.account ?? "compte lié"}`
+                    : `Connecté · compte ${googleSetup.account ?? "agence"}`}
                 </span>
               ) : googleSetup?.adloopConfigured ? (
                 <span className="inline-flex items-center gap-1 text-[12px] text-amber-700">
@@ -206,32 +264,28 @@ function Connections() {
             </div>
             <div className="flex flex-wrap items-center gap-2 border-t border-line/50 pt-3">
               {googleSetup?.oauthConnected ? (
-                <>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Connecté · {googleSetup.account ?? "compte lié"}
-                  </span>
-                  <button
-                    type="button"
-                    className="chip-ghost text-[12px]"
-                    onClick={() => {
-                      const conn = byConnector("google_ads");
-                      if (conn) disconnect(conn.id);
-                    }}
-                  >
-                    Déconnecter
-                  </button>
-                </>
-              ) : googleSetup?.tokenError ? (
-                <>
-                  <span className="inline-flex items-center gap-1 text-[12px] text-amber-700">{googleSetup.tokenError}</span>
-                  <button type="button" className="btn-primary text-[13px]" onClick={() => void connect("google_ads")}>
-                    Reconnecter Google
-                  </button>
-                </>
-              ) : (
-                <button type="button" className="btn-primary text-[13px]" onClick={() => void connect("google_ads")}>
-                  Connecter Google Ads (optionnel)
+                <button
+                  type="button"
+                  className="chip-ghost text-[12px]"
+                  onClick={() => {
+                    const conn = byConnector("google_ads");
+                    if (conn) disconnect(conn.id);
+                  }}
+                >
+                  Déconnecter le compte client
                 </button>
+              ) : googleSetup?.oauthConfigured ? (
+                <button type="button" className="btn-primary text-[13px]" onClick={() => void connect("google_ads")}>
+                  {googleSetup.tokenError ? "Reconnecter Google Ads" : "Lier un compte Google Ads client"}
+                </button>
+              ) : googleSetup?.googleReady ? (
+                <span className="text-[12px] text-ink-soft">
+                  Compte agence actif — OAuth client disponible dès que les credentials Google Ads web sont configurées.
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[12px] text-amber-700">
+                  <AlertCircle className="h-3.5 w-3.5" /> Google Ads requis — configuration serveur en cours
+                </span>
               )}
             </div>
           </div>

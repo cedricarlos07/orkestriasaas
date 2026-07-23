@@ -50,7 +50,11 @@ export async function syncOrgMetaPageFromToken(
   const { listMetaPages } = await import("@/lib/platforms/meta-api");
   const pages = await listMetaPages(accessToken, adAccountId);
   if (!pages.length) return null;
-  const page = pages[0];
+  const existing = await getOrgMetaPageId(orgId);
+  const match = existing
+    ? pages.find((p) => p.id === existing || p.id.replace(/\D/g, "") === existing)
+    : null;
+  const page = match ?? pages[0]!;
   const pageId = page.id.replace(/\D/g, "") || page.id;
   await setOrgMetaPageId(orgId, pageId);
   return { pageId, pageName: page.name };

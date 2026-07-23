@@ -5,6 +5,7 @@ import { connections } from "@/db/schema/index";
 import { ensureSession } from "@/lib/auth.functions";
 import { getOrgGoogleCustomerId, isAdloopServerConfigured } from "@/lib/mcp/adloop-org";
 import { probeAdloopHealth } from "@/lib/mcp/clients/adloop";
+import { hasOAuthCredentials } from "@/lib/oauth/connectors";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 import { getActiveOrgId } from "./context";
 
@@ -17,7 +18,7 @@ export const getGoogleSetupStatus = createServerFn({ method: "GET" }).handler(as
 
   let oauthConnected = false;
   let tokenError: string | undefined;
-  if (googleConn) {
+  if (googleConn?.encryptedTokens) {
     try {
       await ensureFreshTokens(googleConn.id, orgId, "google_ads");
       oauthConnected = true;
@@ -34,15 +35,27 @@ export const getGoogleSetupStatus = createServerFn({ method: "GET" }).handler(as
     adloopHealth = { ok: probe.ok, error: probe.error };
   }
 
+  const oauthConfigured = hasOAuthCredentials("google_ads");
+  const agencyReady = adloopConfigured && adloopHealth.ok;
+  /** Google is ready when the org linked OAuth OR the server agency AdLoop stack is healthy. */
+  const googleReady = oauthConnected || agencyReady;
+
   return {
     oauthConnected,
+    oauthConfigured,
     tokenError,
-    account: googleConn?.externalAccount ?? null,
+    account: oauthConnected
+      ? (googleConn?.externalAccount ?? null)
+      : agencyReady
+        ? (process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID?.replace(/\D/g, "") ||
+            process.env.ADLOOP_CUSTOMER_ID?.replace(/\D/g, "") ||
+            "compte agence")
+        : null,
     customerId,
     adloopConfigured,
     adloopHealth,
-    /** Google prêt si AdLoop self-hosted OK (OAuth optionnel pour cibler un compte client). */
-    googleReady: adloopHealth.ok,
+    agencyReady,
+    googleReady,
   };
 });
 

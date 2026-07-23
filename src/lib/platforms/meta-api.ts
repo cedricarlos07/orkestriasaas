@@ -3,13 +3,37 @@ import type { UnifiedAccountSnapshot, UnifiedCampaign } from "@/lib/unified-ad-s
 const GRAPH = "https://graph.facebook.com/v21.0";
 
 async function fetchGraphPages(url: URL): Promise<{ id: string; name: string }[]> {
-  const res = await fetch(url);
-  if (!res.ok) return [];
-  const data = (await res.json()) as { data?: { id: string; name: string }[] };
-  return (data.data ?? []).map((p) => ({ id: p.id, name: p.name }));
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { data?: { id: string; name: string }[]; error?: unknown };
+    if (data.error) return [];
+    return (data.data ?? []).map((p) => ({ id: String(p.id), name: p.name || String(p.id) }));
+  } catch {
+    return [];
+  }
 }
 
-/** Pages the user can promote — tries /me/accounts, ad account promote_pages, then Business Manager. */
+export async function getMetaPageName(accessToken: string, pageId: string): Promise<string | null> {
+  const id = pageId.replace(/\D/g, "") || pageId;
+  try {
+    const url = new URL(`${GRAPH}/${id}`);
+    url.searchParams.set("fields", "id,name");
+    url.searchParams.set("access_token", accessToken);
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { id?: string; name?: string };
+    return data.name ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pages usable for Meta ads.
+ * Personal /me/accounts is often empty for Business Manager assets — also probe
+ * promote_pages + BM owned_pages + client_pages.
+ */
 export async function listMetaPages(
   accessToken: string,
   adAccountId?: string,
@@ -18,9 +42,10 @@ export async function listMetaPages(
   const pages: { id: string; name: string }[] = [];
   const add = (list: { id: string; name: string }[]) => {
     for (const p of list) {
-      if (seen.has(p.id)) continue;
-      seen.add(p.id);
-      pages.push(p);
+      const id = String(p.id);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      pages.push({ id, name: p.name || id });
     }
   };
 
@@ -43,15 +68,17 @@ export async function listMetaPages(
   businesses.searchParams.set("fields", "id,name");
   businesses.searchParams.set("access_token", accessToken);
   businesses.searchParams.set("limit", "25");
-  const bizRes = await fetch(businesses);
-  if (bizRes.ok) {
+  const bizRes = await fetch(businesses).catch(() => null);
+  if (bizRes?.ok) {
     const bizData = (await bizRes.json()) as { data?: { id: string }[] };
     for (const biz of bizData.data ?? []) {
-      const owned = new URL(`${GRAPH}/${biz.id}/owned_pages`);
-      owned.searchParams.set("fields", "id,name");
-      owned.searchParams.set("access_token", accessToken);
-      owned.searchParams.set("limit", "50");
-      add(await fetchGraphPages(owned));
+      for (const edge of ["owned_pages", "client_pages"] as const) {
+        const url = new URL(`${GRAPH}/${biz.id}/${edge}`);
+        url.searchParams.set("fields", "id,name");
+        url.searchParams.set("access_token", accessToken);
+        url.searchParams.set("limit", "50");
+        add(await fetchGraphPages(url));
+      }
     }
   }
 
