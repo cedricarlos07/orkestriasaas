@@ -11,7 +11,16 @@ type Props = {
 
 export function BrandLogo({ className, variant = "full", alt = "Orkestria" }: Props) {
   const src = variant === "mark" ? brandMark : variant === "onDark" ? brandLogoOnDark : brandLogo;
-  return <img src={src} alt={alt} className={className} draggable={false} />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      draggable={false}
+      decoding="async"
+      style={variant === "mark" ? undefined : { maxWidth: "min(100%, 180px)" }}
+    />
+  );
 }
 
 export default BrandLogo;
