@@ -205,10 +205,19 @@ function AppLayout() {
                             {badge}
                           </span>
                         ) : null}
-                        {collapsed && badge ? (
+                        {!collapsed && !badge && item.soon ? (
+                          <span
+                            className={`ml-auto rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
+                              active ? "bg-white/15 text-white/80" : "bg-surface-2 text-ink-soft"
+                            }`}
+                          >
+                            Bientôt
+                          </span>
+                        ) : null}
+                        {collapsed && (badge || item.soon) ? (
                           <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#ff6c02]" />
                         ) : null}
-                        {!collapsed && !badge && item.kbd && (
+                        {!collapsed && !badge && !item.soon && item.kbd && (
                           <kbd className="ml-auto hidden rounded border border-line/60 bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-soft group-hover:inline-block">
                             {item.kbd}
                           </kbd>
@@ -315,6 +324,10 @@ function AppLayout() {
                             <span className="flex-1 truncate">{item.label}</span>
                             {badge ? (
                               <span className={`ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold ${active ? "bg-white/15 text-white" : "bg-[#fff6ee] text-[#ff6c02]"}`}>{badge}</span>
+                            ) : item.soon ? (
+                              <span className={`ml-auto rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${active ? "bg-white/15 text-white/80" : "bg-surface-2 text-ink-soft"}`}>
+                                Bientôt
+                              </span>
                             ) : null}
                           </Link>
                         </li>

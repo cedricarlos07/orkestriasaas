@@ -268,7 +268,7 @@ export async function createMetaCampaignPaused(
   const campaign = (await campaignRes.json()) as { id?: string };
   if (!campaign.id) throw new Error("Meta create campaign: id manquant");
 
-  const countries = input.countries?.length ? input.countries : ["CI"];
+  const countries = input.countries?.length ? input.countries : ["US"];
   const targeting = JSON.stringify({
     geo_locations: { countries },
   });
@@ -330,7 +330,7 @@ export async function createMetaAdSet(
   },
 ): Promise<{ adSetId: string }> {
   const targeting = JSON.stringify({
-    geo_locations: { countries: input.countries?.length ? input.countries : ["CI"] },
+    geo_locations: { countries: input.countries?.length ? input.countries : ["US"] },
   });
   const res = await fetch(`${GRAPH}/${actId(adAccountId)}/adsets`, {
     method: "POST",
@@ -481,7 +481,7 @@ export async function createMetaCustomAudience(
         lookalike_spec: JSON.stringify({
           type: "similarity",
           ratio: input.lookalikeRatio ?? 0.01,
-          country: input.country ?? "CI",
+          country: input.country ?? "US",
         }),
         access_token: accessToken,
       }),

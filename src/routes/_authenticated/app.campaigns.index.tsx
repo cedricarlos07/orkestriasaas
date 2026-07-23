@@ -200,8 +200,33 @@ function List() {
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-5 py-16 text-center text-[13px] text-ink-soft">
-                  Aucune campagne ne correspond à votre recherche.
+                <td colSpan={7} className="px-5 py-16 text-center">
+                  {list.length === 0 ? (
+                    <div className="space-y-3">
+                      <p className="text-[14px] font-medium text-ink">Aucune campagne pour l&apos;instant</p>
+                      <p className="text-[13px] text-ink-soft">Créez votre première campagne Meta en quelques minutes.</p>
+                      <Link to="/app/campaigns/new" className="btn-primary inline-flex text-[13px]">
+                        Nouvelle campagne
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-[13px] text-ink-soft">
+                        Aucun résultat pour {filter !== "all" ? `le filtre « ${FILTERS.find((f) => f.id === filter)?.label} »` : "votre recherche"}
+                        {q.trim() ? ` (« ${q.trim()} »)` : ""}.
+                      </p>
+                      <button
+                        type="button"
+                        className="chip-ghost inline-flex text-[12px]"
+                        onClick={() => {
+                          setQ("");
+                          setFilter("all");
+                        }}
+                      >
+                        Réinitialiser
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             )}

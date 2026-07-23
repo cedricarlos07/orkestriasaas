@@ -60,7 +60,7 @@ function Step() {
         </div>
       ) : error ? (
         <p className="text-[14px] text-rose-600">
-          Impossible de charger les comptes. Connectez d&apos;abord Meta, Google ou TikTok à l&apos;étape précédente.
+          Impossible de charger les comptes. Connectez d&apos;abord Meta Ads à l&apos;étape précédente.
         </p>
       ) : accounts.length === 0 ? (
         <p className="text-[14px] text-ink-soft">

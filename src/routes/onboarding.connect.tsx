@@ -17,8 +17,8 @@ const PLATFORMS = [
     icon: Chrome,
     color: "#4285F4",
   },
-  { id: "tiktok", label: "TikTok Ads", desc: "For You & Spark Ads", icon: Music2, color: "#111" },
-  { id: "ga4", label: "Google Analytics", desc: "GA4 · mesure des ventes", icon: BarChart3, color: "#F9AB00" },
+  { id: "tiktok", label: "TikTok Ads", desc: "Bientôt", icon: Music2, color: "#111" },
+  { id: "ga4", label: "Google Analytics", desc: "Bientôt · mesure des ventes", icon: BarChart3, color: "#F9AB00" },
 ];
 
 export const Route = createFileRoute("/onboarding/connect")({ component: Step });

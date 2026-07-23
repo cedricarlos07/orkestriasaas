@@ -117,7 +117,7 @@ function OnboardingLayout() {
             <p className="hidden text-[13px] text-ink-soft sm:block">
               Étape <span className="font-semibold text-ink">{currentIndex + 1}</span> sur {STEPS.length} · <span className="text-ink">{STEPS[currentIndex].label}</span>
             </p>
-            <Link to="/" className="flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink">
+            <Link to="/app" className="flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink">
               <X className="h-4 w-4" /> Quitter
             </Link>
           </div>

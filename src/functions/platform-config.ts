@@ -24,6 +24,9 @@ export const getOAuthAvailability = createServerFn({ method: "GET" }).handler(as
     googleLoginConfigured: Boolean(
       process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim(),
     ),
+    facebookLoginConfigured: Boolean(
+      process.env.FACEBOOK_CLIENT_ID?.trim() && process.env.FACEBOOK_CLIENT_SECRET?.trim(),
+    ),
     writeEnabled: process.env.MCP_WRITE_ENABLED === "true",
     adloopConfigured: process.env.ADLOOP_ENABLED !== "false",
     useproxyConfigured: Boolean((process.env.USEPROXY_BEARER_TOKEN ?? process.env.USEPROXY_API_KEY)?.trim()),

@@ -154,7 +154,7 @@ export async function executePlatformWrite(
       ? (params.countries as string[])
       : params.countries
         ? [String(params.countries)]
-        : ["CI"];
+        : ["US"];
     const result = await createMetaCampaignPaused({
       accessToken: tokens.accessToken,
       adAccountId: metaAdAccountId(tokens),

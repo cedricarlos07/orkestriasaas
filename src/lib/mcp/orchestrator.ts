@@ -98,12 +98,31 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
   if (intent === "setup") {
     const { getStackSetupStatus } = await import("@/lib/mcp/setup-status");
     const stack = await getStackSetupStatus(input.orgId);
+    const autoLabel =
+      stack.meta.adkitVerify === "ok"
+        ? "OK"
+        : stack.meta.adkitVerify === "error"
+          ? "à vérifier"
+          : "non testée";
+    const googleLabel =
+      stack.google.oauthConnected
+        ? "compte client lié"
+        : stack.google.adloopHealth === "ok"
+          ? "disponible (compte agence)"
+          : stack.google.adloopConfigured
+            ? "configuration serveur en cours"
+            : "non configuré";
+    const researchLabel = stack.research.useproxyConfigured
+      ? stack.research.useproxyHealth === "ok"
+        ? "disponible"
+        : "indisponible"
+      : "non configurée";
     const lines = [
-      `**Meta OAuth :** ${stack.meta.oauthConnected ? "OK" : "manquant"}`,
+      `**Meta :** ${stack.meta.oauthConnected ? "connecté" : "à connecter"}`,
       `**Page Facebook :** ${stack.meta.pageId ?? "manquante"}`,
-      `**adkit :** ${stack.meta.adkitVerify}${stack.meta.adkitError ? ` (${stack.meta.adkitError})` : ""}`,
-      `**AdLoop Google :** ${stack.google.adloopHealth}${stack.google.adloopError ? ` (${stack.google.adloopError})` : ""}${stack.google.oauthConnected ? " · OAuth lié" : ""}`,
-      `**Research useproxy :** ${stack.research.useproxyConfigured ? stack.research.useproxyHealth : "clé serveur manquante"}`,
+      `**Automatisation Meta :** ${autoLabel}`,
+      `**Google Ads :** ${googleLabel}`,
+      `**Recherche concurrents :** ${researchLabel}`,
       "",
       stack.readyForMeta || stack.readyForCampaign
         ? "Prêt pour lancer des campagnes Meta (création en pause → activation explicite)."
@@ -119,13 +138,13 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
     try {
       const data = await routeResearch(input.orgId, { brand });
       return {
-        reply: `Voici ce que j'ai trouvé sur **${brand}** dans la Meta Ad Library :\n\n${JSON.stringify(data, null, 2).slice(0, 2000)}\n\n**Prochaines étapes :** décrivez votre brief (objectif, budget, audience) → je lance un dry-run adkit (PAUSED) → vous confirmez → activation explicite.`,
+        reply: `Voici ce que j'ai trouvé sur **${brand}** dans la Meta Ad Library :\n\n${JSON.stringify(data, null, 2).slice(0, 2000)}\n\n**Prochaines étapes :** décrivez votre brief (objectif, budget, audience) → création Meta en pause → votre validation → activation explicite.`,
         toolsUsed: ["research_competitor_ads"],
         runId: input.runId,
       };
     } catch (e) {
       return {
-        reply: `Recherche concurrentielle indisponible : ${e instanceof Error ? e.message : "erreur"}. La clé useproxy doit être configurée côté serveur (URL : mcp.useproxy.dev). Contactez l'admin ou continuez sans research.`,
+        reply: `Recherche concurrentielle indisponible pour le moment : ${e instanceof Error ? e.message : "erreur"}. Vous pouvez continuer sans cette étape — décrivez directement votre brief campagne.`,
         toolsUsed: [],
         runId: input.runId,
       };

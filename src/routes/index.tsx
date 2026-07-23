@@ -1467,7 +1467,7 @@ const MCP_CAPABILITIES = [
   { t: "Optimiser", d: "Budget, pause, mots-clés + négatifs, autonomie plafonnée" },
   { t: "Créer", d: "Textes, upload créatives Meta, conversions Google" },
   { t: "Mesurer", d: "Perf, tracking diagnose, anomalies" },
-  { t: "Contrôler", d: "execute dry-run, skills, policies, audit" },
+  { t: "Contrôler", d: "Prévisualisation, skills, policies, audit" },
 ];
 
 function McpSection() {

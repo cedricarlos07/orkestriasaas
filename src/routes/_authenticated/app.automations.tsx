@@ -48,13 +48,18 @@ function Automations() {
         <div>
           <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Optimisation continue · Ads Guardian</p>
           <h1 className="mt-0.5 font-display text-[26px] font-semibold text-ink">Automatisations</h1>
-          <p className="text-[13px] text-ink-soft">Règles de protection, niveau d'autonomie et alertes en temps réel.</p>
+          <p className="text-[13px] text-ink-soft">Règles de protection, niveau d&apos;autonomie et alertes — aperçu (non enregistré).</p>
         </div>
       </header>
 
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
+        Ces réglages sont un aperçu UX. Ils ne sont pas encore sauvegardés — les garde-fous réels passent par les
+        politiques MCP et les approbations.
+      </div>
+
       <section className="card-soft rounded-2xl p-6">
         <p className="mb-4 flex items-center gap-2 font-display text-[16px] font-semibold text-ink">
-          <Bot className="h-4 w-4 text-[#ff6c02]" /> Niveau d'autonomie
+          <Bot className="h-4 w-4 text-[#ff6c02]" /> Niveau d&apos;autonomie
         </p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {LEVELS.map((o) => {
@@ -132,7 +137,9 @@ function Automations() {
               ))
             )}
           </ul>
-          <button className="chip-ghost mt-4"><Zap className="h-4 w-4" /> Ajouter une règle</button>
+          <button type="button" disabled className="chip-ghost mt-4" title="Bientôt">
+            <Zap className="h-4 w-4" /> Ajouter une règle
+          </button>
         </div>
 
         <div className="card-soft rounded-2xl p-6">

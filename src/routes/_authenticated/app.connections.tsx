@@ -60,6 +60,7 @@ function Connections() {
   });
 
   const [savingPage, setSavingPage] = useState(false);
+  const [oauthBanner, setOauthBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const setPageMut = useMutation({
     mutationFn: (pageId: string) => setMetaPage({ data: { pageId } }),
     onSuccess: async () => {
@@ -70,8 +71,15 @@ function Connections() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("connected") || params.get("error")) {
+    const connected = params.get("connected");
+    const err = params.get("error");
+    if (connected || err) {
       window.history.replaceState({}, "", "/app/connections");
+      setOauthBanner(
+        err
+          ? { kind: "err", text: `Connexion échouée : ${err}` }
+          : { kind: "ok", text: `${connected === "meta_ads" ? "Meta Ads" : connected === "google_ads" ? "Google Ads" : "Compte"} connecté avec succès.` },
+      );
       void qc.invalidateQueries({ queryKey: ["connections"] });
       void qc.invalidateQueries({ queryKey: ["connection-catalog"] });
       void qc.invalidateQueries({ queryKey: ["dashboard-kpis"] });
@@ -141,6 +149,18 @@ function Connections() {
           Actualiser
         </button>
       </header>
+
+      {oauthBanner ? (
+        <div
+          className={`rounded-xl px-4 py-3 text-[13px] ${
+            oauthBanner.kind === "err"
+              ? "border border-rose-200 bg-rose-50 text-rose-800"
+              : "border border-emerald-200 bg-emerald-50 text-emerald-900"
+          }`}
+        >
+          {oauthBanner.text}
+        </div>
+      ) : null}
 
       {/* Meta Ads */}
       <section className="rounded-2xl border border-line/70 bg-white p-5">
@@ -241,22 +261,23 @@ function Connections() {
             <div>
               <p className="text-[14px] font-medium text-ink">Google Ads</p>
               <p className="text-[12px] text-ink-soft">
-                Requis pour lancer et piloter vos campagnes Google. Orkestria utilise le compte Google Ads configuré sur
-                le serveur ; vous pouvez aussi lier un compte client via OAuth.
+                Orkestria peut utiliser le compte agence configuré sur le serveur. Liez un compte client seulement si
+                vous voulez cibler un compte Google Ads précis.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {googleSetup?.googleReady ? (
+              {googleSetup?.oauthConnected ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
-                  <CheckCircle2 className="h-3.5 w-3.5" />{" "}
-                  {googleSetup.oauthConnected
-                    ? `Connecté · ${googleSetup.account ?? "compte lié"}`
-                    : `Connecté · compte ${googleSetup.account ?? "agence"}`}
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Compte client lié · {googleSetup.account ?? "Google Ads"}
+                </span>
+              ) : googleSetup?.agencyReady || googleSetup?.googleReady ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2.5 py-1 text-[12px] font-medium text-sky-800">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Disponible · compte agence
                 </span>
               ) : googleSetup?.adloopConfigured ? (
                 <span className="inline-flex items-center gap-1 text-[12px] text-amber-700">
                   <AlertCircle className="h-3.5 w-3.5" />
-                  {googleSetup.adloopHealth.error ?? "Google Ads en cours de configuration côté serveur"}
+                  Configuration Google Ads en cours côté serveur
                 </span>
               ) : (
                 <span className="text-[12px] text-amber-700">Google Ads pas encore activé sur le serveur</span>
@@ -276,15 +297,13 @@ function Connections() {
                 </button>
               ) : googleSetup?.oauthConfigured ? (
                 <button type="button" className="btn-primary text-[13px]" onClick={() => void connect("google_ads")}>
-                  {googleSetup.tokenError ? "Reconnecter Google Ads" : "Lier un compte Google Ads client"}
+                  {googleSetup.tokenError ? "Reconnecter un compte client" : "Lier un compte client"}
                 </button>
-              ) : googleSetup?.googleReady ? (
-                <span className="text-[12px] text-ink-soft">
-                  Compte agence actif — OAuth client disponible dès que les credentials Google Ads web sont configurées.
-                </span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-[12px] text-amber-700">
-                  <AlertCircle className="h-3.5 w-3.5" /> Google Ads requis — configuration serveur en cours
+                <span className="text-[12px] text-ink-soft">
+                  {googleSetup?.googleReady
+                    ? "Compte agence prêt — liaison client disponible bientôt."
+                    : "En attente de configuration serveur."}
                 </span>
               )}
             </div>
@@ -328,25 +347,23 @@ function Connections() {
           <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
         </div>
       ) : (
-        groups.map((g) => (
+        groups.map((g) => {
+          const items = Object.values(CONNECTORS).filter(
+            (c) => c.group === g.filter && c.id !== "meta_ads" && c.id !== "google_ads",
+          );
+          if (!items.length) return null;
+          return (
           <section key={g.title} className="rounded-2xl border border-line/70 bg-white">
             <div className="border-b border-line/60 px-5 py-3 text-[12px] uppercase tracking-wider text-ink-soft">
               {g.title}
             </div>
             <ul className="divide-y divide-line/60">
-              {Object.values(CONNECTORS)
-                .filter((c) => c.group === g.filter)
-                .map((cfg) => {
+              {items.map((cfg) => {
                   const conn = byConnector(cfg.id);
-                  const connected = conn?.status === "connectée";
+                  const connected = conn?.status === "connectée" && conn.via === "oauth";
                   const catalogItem = catalog.find((c) => c.id === cfg.id);
                   const configured = catalogItem?.configured ?? false;
                   const accountLabel = conn?.externalAccount ?? (connected ? "Compte lié" : null);
-                  const isMeta = cfg.id === "meta_ads";
-                  const isGoogle = cfg.id === "google_ads";
-                  const metaReallyConnected = isMeta && (connected || Boolean(metaSetup?.oauthConnected));
-                  const googleReady = isGoogle && (googleSetup?.googleReady || googleSetup?.oauthConnected);
-                  const showConnected = (isMeta ? metaReallyConnected : isGoogle ? googleReady : connected);
 
                   return (
                     <li key={cfg.id} className="flex items-center justify-between gap-4 px-5 py-4">
@@ -357,23 +374,11 @@ function Connections() {
                         <div>
                           <p className="text-[14px] font-medium text-ink">{cfg.label}</p>
                           <p className="text-[12px] text-ink-soft">
-                            {isMeta && metaReallyConnected
-                              ? `${accountLabel}${metaSetup?.pageName ? ` · ${metaSetup.pageName}` : ""}`
-                              : isMeta && metaSetup?.tokenError
-                                ? "Connexion à refaire"
-                                : isGoogle && googleSetup?.oauthConnected
-                                  ? accountLabel
-                                  : isGoogle && googleSetup?.googleReady
-                                    ? "Compte agence (serveur)"
-                                    : connected
-                                      ? accountLabel
-                                      : configured
-                                        ? "Disponible"
-                                        : "Bientôt"}
+                            {connected ? accountLabel : configured ? "Disponible" : "Bientôt"}
                           </p>
                         </div>
                       </div>
-                      {showConnected ? (
+                      {connected ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
                           <CheckCircle2 className="h-3.5 w-3.5" /> Connecté
                         </span>
@@ -389,7 +394,8 @@ function Connections() {
                 })}
             </ul>
           </section>
-        ))
+          );
+        })
       )}
 
       <section className="rounded-2xl border border-line/70 bg-white">

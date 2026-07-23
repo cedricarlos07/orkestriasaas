@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { UserPlus, CheckCircle2, Clock, Eye, EyeOff, Activity, Wrench, TrendingUp, AlertTriangle, ChevronRight, X, Sparkles, Briefcase, Users, Play, Pause, Settings2, Check } from "lucide-react";
+import { UserPlus, CheckCircle2, Clock, Eye, EyeOff, Activity, Wrench, TrendingUp, AlertTriangle, ChevronRight, X, Sparkles, Briefcase, Users, Play, Pause, Settings2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/app/agency")({ component: Agency });
 
@@ -37,7 +37,6 @@ function Agency() {
   const [workflows, setWorkflows] = useState<Record<string, boolean[]>>(
     Object.fromEntries(CLIENTS.map((c) => [c.name, [true, true, true, true, true]])),
   );
-  const [showNew, setShowNew] = useState(false);
   const allInsights = useMemo(
     () => clients.flatMap((c) => c.insights.map((i) => ({ ...i, client: c.name }))),
     [clients],
@@ -48,13 +47,6 @@ function Agency() {
     setClients((prev) => prev.map((c) => (c.name === name ? { ...c, status: c.status === "Actif" ? "En pause" : "Actif" } : c)));
   const toggleStep = (name: string, idx: number) =>
     setWorkflows((prev) => ({ ...prev, [name]: prev[name].map((v, i) => (i === idx ? !v : v)) }));
-  const addClient = (payload: { name: string; sector: string; budget: string }) => {
-    const nc: Client = { ...payload, status: "Actif", roas: "—", insights: [] };
-    setClients((prev) => [nc, ...prev]);
-    setWorkflows((prev) => ({ ...prev, [nc.name]: [true, true, true, true, true] }));
-    setActiveClient(nc.name);
-    setShowNew(false);
-  };
 
   const current = clients.find((c) => c.name === activeClient) ?? clients[0] ?? null;
 
@@ -69,17 +61,22 @@ function Agency() {
           <div>
             <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Espace agence</p>
             <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Clients, équipe, approbations</h1>
-            <p className="text-[13px] text-ink-soft">Marque blanche activable · portail client sécurisé.</p>
+            <p className="text-[13px] text-ink-soft">Portefeuille clients — aperçu. Persistance et marque blanche bientôt.</p>
           </div>
         </div>
-        <button onClick={() => setShowNew(true)} className="btn-primary"><UserPlus className="h-4 w-4" /> Nouveau client</button>
+        <button type="button" disabled className="chip-ghost" title="Bientôt">
+          <UserPlus className="h-4 w-4" /> Nouveau client
+        </button>
       </header>
 
       {clients.length === 0 && (
         <div className="card-soft p-8 text-center">
-          <p className="font-display text-[18px] font-semibold text-ink">Aucun client pour l'instant</p>
-          <p className="mt-2 text-[14px] text-ink-soft">Ajoutez votre premier client pour configurer workflows et insights.</p>
-          <button onClick={() => setShowNew(true)} className="btn-primary mt-4"><UserPlus className="h-4 w-4" /> Ajouter un client</button>
+          <p className="font-display text-[18px] font-semibold text-ink">Espace agence en préparation</p>
+          <p className="mt-2 text-[14px] text-ink-soft">
+            La gestion multi-clients (sauvegarde, workflows, portail) arrive bientôt. En attendant, pilotez vos campagnes
+            depuis Campagnes et Connexions.
+          </p>
+          <span className="chip-ghost mt-4 inline-flex">Bientôt</span>
         </div>
       )}
 
@@ -211,7 +208,6 @@ function Agency() {
       </section>
 
       {openInsight && <InsightDrawer insight={openInsight} onClose={() => setOpenId(null)} />}
-      {showNew && <NewClientDialog onClose={() => setShowNew(false)} onCreate={addClient} />}
     </div>
   );
 }
@@ -226,46 +222,6 @@ function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
     >
       <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.25)] transition ${on ? "translate-x-4" : "translate-x-0.5"}`} />
     </button>
-  );
-}
-
-function NewClientDialog({ onClose, onCreate }: { onClose: () => void; onCreate: (p: { name: string; sector: string; budget: string }) => void }) {
-  const [name, setName] = useState("");
-  const [sector, setSector] = useState("");
-  const [budget, setBudget] = useState("");
-  const valid = name.trim() && sector.trim() && budget.trim();
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <button aria-label="Fermer" onClick={onClose} className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-gradient-to-b from-white to-[#faf6ef] shadow-2xl ring-1 ring-line/60 animate-[fadeInUp_.2s_ease-out]">
-        <div aria-hidden className="pointer-events-none absolute -top-16 -right-16 h-40 w-40 rounded-full bg-[#ff6c02]/20 blur-3xl" />
-        <header className="relative flex items-center justify-between border-b border-line/60 px-5 py-4">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff8a3c] to-[#ff6c02] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"><UserPlus className="h-4 w-4" /></span>
-            <h2 className="font-display text-[16px] font-semibold text-ink">Nouveau client</h2>
-          </div>
-          <button onClick={onClose} className="rounded-full p-1.5 text-ink-soft hover:bg-white hover:text-ink"><X className="h-4 w-4" /></button>
-        </header>
-        <div className="relative space-y-3 p-5">
-          <Field label="Nom" value={name} onChange={setName} placeholder="Ex : Atelier Baobab" />
-          <Field label="Secteur" value={sector} onChange={setSector} placeholder="Ex : Mode" />
-          <Field label="Budget mensuel" value={budget} onChange={setBudget} placeholder="Ex : $800/mois" />
-        </div>
-        <footer className="relative flex items-center justify-end gap-2 border-t border-line/60 bg-white/70 px-5 py-3">
-          <button onClick={onClose} className="chip-ghost">Annuler</button>
-          <button disabled={!valid} onClick={() => onCreate({ name, sector, budget })} className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"><Check className="h-4 w-4" /> Créer</button>
-        </footer>
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-[12px] font-medium text-ink-soft">{label}</span>
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full rounded-xl border border-line bg-white px-3 py-2 text-[14px] text-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] focus:border-[#ff6c02] focus:outline-none focus:ring-2 focus:ring-[#ff6c02]/20" />
-    </label>
   );
 }
 

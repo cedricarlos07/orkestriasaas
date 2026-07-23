@@ -13,6 +13,7 @@ import {
   resumeMetaCampaign,
 } from "@/lib/platforms/meta-api";
 import { classifyRisk } from "@/lib/mcp/action-pipeline";
+import { countriesFromZone } from "@/lib/geo/countries-from-zone";
 
 /** Parse a USD (or major-unit) total from UI strings like "$250 · 7 jours" or "$400". */
 function parseBudgetTotal(raw: string | undefined): number {
@@ -177,7 +178,7 @@ export const launchCampaign = createServerFn({ method: "POST" })
         name: data.name,
         dailyBudget,
         objective: data.objective ?? "OUTCOME_TRAFFIC",
-        countries: ["CI"],
+        countries: countriesFromZone(data.zone),
       });
       externalId = result.campaignId;
       await db

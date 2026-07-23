@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp, Paperclip, Sparkles, Check, Loader2, Pause, PlayCircle,
-  Image as ImageIcon, Video, Upload, Wand2, ShieldCheck, Calendar,
+  Wand2, ShieldCheck, Calendar,
   Target, MapPin, Wallet, Clock, FileDown,
 } from "lucide-react";
 import { printHtmlAsPdf } from "@/lib/print-pdf";
@@ -50,7 +50,7 @@ function NewCampaign() {
             <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Assistant campagne</p>
             <h1 className="mt-0.5 font-display text-[26px] font-semibold text-ink">Créer une campagne</h1>
             <p className="text-[13px] text-ink-soft">
-              Décrivez votre objectif — je m'occupe du reste : plan média, créations, protection.
+              Décrivez votre objectif — Orkestria crée une campagne Meta en pause, prête à activer.
             </p>
           </div>
         </div>
@@ -285,7 +285,7 @@ function ChatFlow({
             <button onClick={() => onDone(buildPlan(brief))} className="btn-primary !py-2 !px-4 !text-[13px]">
               Approuver et prévisualiser <Check className="h-4 w-4" />
             </button>
-            <button onClick={() => submit("Ajuste avec plus de TikTok et moins de Google")} className="chip-ghost bg-surface-2">
+            <button onClick={() => submit("Réduis le budget à $250 et concentre sur la zone du brief")} className="chip-ghost bg-surface-2">
               <Wand2 className="h-4 w-4" /> Ajuster avec Orkestria
             </button>
           </div>
@@ -374,7 +374,7 @@ type Plan = {
   goal: string;
   duration: string;
   budget: string;
-  split: { channel: "Meta" | "Google" | "TikTok"; amount: string; share: number }[];
+  split: { channel: "Meta"; amount: string; share: number }[];
   creatives: string[];
   protection: string;
   estimate: string;
@@ -382,26 +382,17 @@ type Plan = {
 
 function buildPlan(brief: Brief, adjust?: string): Plan {
   const isCocody = /cocody/i.test(adjust ?? brief.zone ?? "");
-  const reducedBudget = /\$?\s*250/.test(adjust ?? "");
-  const moreTikTok = /tiktok/i.test(adjust ?? "");
+  const reducedBudget = /\$?\s*250/.test(adjust ?? "") || /\$?\s*250/.test(brief.budget ?? "");
 
   const total = reducedBudget ? 250 : 400;
-  const meta = moreTikTok ? 0.4 : 0.6;
-  const tiktok = moreTikTok ? 0.45 : 0.28;
-  const google = 1 - meta - tiktok;
-
   const fmt = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
   return {
     goal: brief.goal ?? "100 conversations WhatsApp",
     duration: reducedBudget ? "10 jours" : "14 jours",
     budget: fmt(total),
-    split: [
-      { channel: "Meta", amount: fmt(total * meta), share: meta * 100 },
-      { channel: "TikTok", amount: fmt(total * tiktok), share: tiktok * 100 },
-      { channel: "Google", amount: fmt(total * google), share: google * 100 },
-    ],
-    creatives: ["2 vidéos verticales", "2 affiches", "1 carrousel"],
+    split: [{ channel: "Meta", amount: fmt(total), share: 100 }],
+    creatives: ["Créatives Meta (compte publicitaire)", "Formats feed + stories"],
     protection: `Arrêter une publicité après $30 dépensés sans résultat${isCocody ? " · zone limitée à Cocody" : ""}`,
     estimate: reducedBudget ? "55 à 75 conversations WhatsApp" : "90 à 130 conversations WhatsApp",
   };
@@ -421,7 +412,7 @@ function PlanCard({ plan }: { plan: Plan }) {
         <Kv icon={ShieldCheck} label="Protection" value="Auto-pause activée" />
       </div>
       <div className="border-t border-line/60 px-5 py-4">
-        <p className="mb-2 text-[12px] uppercase tracking-wider text-ink-soft">Répartition</p>
+        <p className="mb-2 text-[12px] uppercase tracking-wider text-ink-soft">Canal</p>
         {plan.split.map((s) => (
           <div key={s.channel} className="mb-2 flex items-center gap-3 text-[13px]">
             <span className="w-16 font-medium text-ink">{s.channel}</span>
@@ -463,23 +454,22 @@ function Kv({ icon: Icon, label, value }: { icon: typeof Target; label: string; 
   );
 }
 
-function channelColor(c: string) {
-  return c === "Meta" ? "bg-[#1877f2]" : c === "TikTok" ? "bg-ink" : "bg-[#ff6c02]";
+function channelColor(_c: string) {
+  return "bg-[#1877f2]";
 }
 
 /* ------------------------------- Preview -------------------------------- */
 function Preview({ plan, onEdit, onApprove }: { plan: Plan; onEdit: () => void; onApprove: () => void }) {
-  const [choice, setChoice] = useState("templates");
   const exportMediaPlan = () => {
     const rows = plan.split.map((s) =>
       `<tr><td>${s.channel}</td><td>${s.amount}</td><td>${Math.round(s.share)}%</td></tr>`
     ).join("");
     printHtmlAsPdf("Plan média — Orkestria", `
-      <span class="badge">Plan média</span>
+      <span class="badge">Plan média Meta</span>
       <h1>${plan.goal}</h1>
       <p class="muted">Durée : ${plan.duration} · Budget total : ${plan.budget}</p>
       <div class="card">
-        <h2>Répartition par canal</h2>
+        <h2>Canal</h2>
         <table><thead><tr><th>Canal</th><th>Budget</th><th>Part</th></tr></thead><tbody>${rows}</tbody></table>
       </div>
       <div class="card">
@@ -491,67 +481,37 @@ function Preview({ plan, onEdit, onApprove }: { plan: Plan; onEdit: () => void; 
         <p>${plan.estimate}</p>
       </div>`);
   };
-  const exportCreatives = () => {
-    const items = plan.creatives.map((c) => `<li>${c}</li>`).join("");
-    printHtmlAsPdf("Récapitulatif créations — Orkestria", `
-      <span class="badge">Créations</span>
-      <h1>${plan.goal} — Créations</h1>
-      <p class="muted">Formats prévus pour Meta, TikTok et Google.</p>
-      <div class="card">
-        <h2>Livrables</h2>
-        <ul style="font-size:13px; line-height:1.6;">${items}</ul>
-      </div>
-      <div class="card grid2">
-        <div><h2>Message</h2><p>Nouveau menu — Livraison en 30 min. Commandez maintenant sur WhatsApp.</p></div>
-        <div><h2>Diffusion</h2><p>09:00 → 22:00 · pic à 12h et 19h · zones à forte densité prioritaires.</p></div>
-      </div>`);
-  };
   return (
     <div className="space-y-4">
       <PlanCard plan={plan} />
 
       <div className="rounded-2xl border border-line/70 bg-white p-5">
-        <p className="mb-3 font-display text-[15px] font-semibold text-ink">Créations</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-          {[
-            { id: "mine", i: ImageIcon, l: "Mes médias" },
-            { id: "templates", i: Wand2, l: "Templates" },
-            { id: "poster", i: Upload, l: "Importer affiche" },
-            { id: "video", i: Video, l: "Importer vidéo" },
-            { id: "ai", i: Sparkles, l: "IA externe (BYOK)" },
-          ].map((o) => (
-            <button
-              key={o.id}
-              onClick={() => setChoice(o.id)}
-              className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-[12px] transition ${
-                choice === o.id ? "border-[#ff6c02] bg-[#fff6ee]" : "border-line hover:border-ink/40"
-              }`}
-            >
-              <o.i className={`h-4 w-4 ${choice === o.id ? "text-[#ff6c02]" : "text-ink-soft"}`} /> {o.l}
-            </button>
+        <p className="mb-2 font-display text-[15px] font-semibold text-ink">Créations</p>
+        <p className="text-[13px] text-ink-soft">
+          La campagne Meta est créée en pause. Les créatives se gèrent dans Meta Ads Manager (ou bientôt dans
+          Orkestria Créations).
+        </p>
+        <ul className="mt-3 space-y-1 text-[13px] text-ink">
+          {plan.creatives.map((c) => (
+            <li key={c}>· {c}</li>
           ))}
-        </div>
+        </ul>
       </div>
 
       <div className="rounded-2xl border border-line/70 bg-white p-5">
-        <p className="mb-3 font-display text-[15px] font-semibold text-ink">Prévisualisations par plateforme</p>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {["Meta", "TikTok", "Google"].map((c) => (
-            <div key={c} className="overflow-hidden rounded-xl border border-line">
-              <div className="flex items-center justify-between border-b border-line/60 bg-surface-2 px-3 py-2 text-[12px]">
-                <span className="font-medium text-ink">{c}</span>
-                <span className="text-ink-soft">Aperçu 9:16</span>
-              </div>
-              <div className="relative aspect-[9/16] bg-gradient-to-br from-ink/90 via-ink to-ink/70">
-                <div className="absolute inset-0 flex flex-col justify-end p-3 text-white">
-                  <p className="text-[11px] uppercase tracking-wider text-white/70">Nouveau menu</p>
-                  <p className="font-display text-[18px] font-semibold">Livraison en 30 min</p>
-                  <p className="mt-1 text-[11px] text-white/80">Commandez maintenant sur WhatsApp</p>
-                  <button className="mt-3 rounded-full bg-[#ff6c02] px-3 py-1.5 text-[11px] font-medium">Commander</button>
-                </div>
-              </div>
+        <p className="mb-3 font-display text-[15px] font-semibold text-ink">Aperçu Meta</p>
+        <div className="mx-auto max-w-xs overflow-hidden rounded-xl border border-line">
+          <div className="flex items-center justify-between border-b border-line/60 bg-surface-2 px-3 py-2 text-[12px]">
+            <span className="font-medium text-ink">Meta</span>
+            <span className="text-ink-soft">Aperçu 9:16</span>
+          </div>
+          <div className="relative aspect-[9/16] bg-gradient-to-br from-ink/90 via-ink to-ink/70">
+            <div className="absolute inset-0 flex flex-col justify-end p-3 text-white">
+              <p className="text-[11px] uppercase tracking-wider text-white/70">Votre offre</p>
+              <p className="font-display text-[18px] font-semibold">{plan.goal}</p>
+              <p className="mt-1 text-[11px] text-white/80">Créée en pause — activation explicite</p>
             </div>
-          ))}
+          </div>
         </div>
       </div>
 
@@ -565,15 +525,11 @@ function Preview({ plan, onEdit, onApprove }: { plan: Plan; onEdit: () => void; 
       </div>
 
       <div className="flex flex-wrap gap-2 rounded-2xl border border-line/70 bg-white p-4">
-        <button onClick={onApprove} className="btn-primary">Tout approuver et lancer</button>
-        <button onClick={onEdit} className="chip-ghost bg-surface-2">Modifier avec Orkestria</button>
-        <button onClick={exportMediaPlan} className="chip-ghost bg-surface-2">
-          <FileDown className="h-4 w-4" /> Exporter le plan média (PDF)
+        <button type="button" onClick={onApprove} className="btn-primary">Créer sur Meta (en pause)</button>
+        <button type="button" onClick={onEdit} className="chip-ghost bg-surface-2">Modifier avec Orkestria</button>
+        <button type="button" onClick={exportMediaPlan} className="chip-ghost bg-surface-2">
+          <FileDown className="h-4 w-4" /> Exporter le plan (PDF)
         </button>
-        <button onClick={exportCreatives} className="chip-ghost bg-surface-2">
-          <FileDown className="h-4 w-4" /> Exporter les créations (PDF)
-        </button>
-        <button className="chip-ghost bg-surface-2">Enregistrer comme brouillon</button>
       </div>
     </div>
   );
@@ -804,7 +760,7 @@ function TipsCard() {
         <p className="text-[12px] font-medium uppercase tracking-wider text-[#ff8a3d]">Astuce</p>
       </div>
       <p className="relative mt-2 text-[13px] leading-relaxed text-white/90">
-        Parlez naturellement : « mets $250 sur Cocody » ou « double le budget TikTok ». Je recalcule le plan et je vous explique l'impact attendu.
+        Parlez naturellement : « mets $250 sur Cocody » ou « 7 jours ». Je recalcule le plan Meta et je vous explique l&apos;impact.
       </p>
     </div>
   );

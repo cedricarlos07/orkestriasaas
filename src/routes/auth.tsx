@@ -8,6 +8,9 @@ import { getOAuthAvailability } from "@/functions/platform-config";
 import { BrandLogo } from "@/components/BrandLogo";
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    redirect: typeof search.redirect === "string" ? search.redirect : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Créer un compte — Orkestria" },
@@ -18,13 +21,30 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+/** Same-origin app path only — blocks open redirects. */
+function safePostAuthPath(raw?: string | null): string | null {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw, typeof window !== "undefined" ? window.location.origin : "http://localhost");
+    if (typeof window !== "undefined" && u.origin !== window.location.origin) return null;
+    if (!u.pathname.startsWith("/") || u.pathname.startsWith("//")) return null;
+    if (u.pathname.startsWith("/auth")) return null;
+    return `${u.pathname}${u.search}${u.hash}`;
+  } catch {
+    return null;
+  }
+}
+
 function AuthPage() {
   const navigate = useNavigate();
+  const { redirect: redirectParam } = Route.useSearch();
   const { data: platformConfig } = useQuery({
     queryKey: ["platform-config"],
     queryFn: () => getOAuthAvailability(),
   });
-  const socialLoginEnabled = platformConfig?.googleLoginConfigured ?? false;
+  const googleLoginEnabled = platformConfig?.googleLoginConfigured ?? false;
+  const facebookLoginEnabled = platformConfig?.facebookLoginConfigured ?? false;
+  const socialLoginEnabled = googleLoginEnabled || facebookLoginEnabled;
   const [mode, setMode] = useState<"signup" | "login" | "forgot">("signup");
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -52,6 +72,15 @@ function AuthPage() {
     return Object.keys(e).length === 0;
   };
 
+  const goAfterAuth = async (fallback: string) => {
+    const dest = safePostAuthPath(redirectParam);
+    if (dest) {
+      window.location.assign(dest);
+      return;
+    }
+    navigate({ to: fallback });
+  };
+
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setRootError(null);
@@ -66,7 +95,7 @@ function AuthPage() {
           name: form.name.trim(),
         });
         if (error) throw new Error(error.message ?? "Inscription impossible.");
-        navigate({ to: "/setup" });
+        await goAfterAuth("/setup");
       } else if (mode === "login") {
         const { error } = await authClient.signIn.email({
           email: form.email.trim().toLowerCase(),
@@ -74,8 +103,8 @@ function AuthPage() {
         });
         if (error) throw new Error(error.message ?? "E-mail ou mot de passe incorrect.");
         const p = await getProfile();
-        if (!p) navigate({ to: "/setup" });
-        else navigate({ to: p.appRole === "agency" ? "/app/agency" : "/app" });
+        if (!p) await goAfterAuth("/setup");
+        else await goAfterAuth(p.appRole === "agency" ? "/app/agency" : "/app");
       } else {
         const { error } = await authClient.forgetPassword({
           email: form.email.trim().toLowerCase(),
@@ -97,7 +126,7 @@ function AuthPage() {
     try {
       await authClient.signIn.social({
         provider,
-        callbackURL: "/setup",
+        callbackURL: safePostAuthPath(redirectParam) ?? "/setup",
       });
     } catch (err) {
       setRootError((err as Error).message ?? "Connexion OAuth indisponible.");
@@ -184,13 +213,17 @@ function AuthPage() {
 
           {mode !== "forgot" && socialLoginEnabled && (
             <>
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                <button type="button" onClick={() => oauthSignIn("google")} disabled={loading !== null} className="flex items-center justify-center gap-2 rounded-full border border-line bg-white py-2.5 text-[13px] font-medium text-ink hover:bg-surface-2 disabled:opacity-60">
-                  {loading === "google" ? <Loader2 className="h-4 w-4 animate-spin" /> : <GoogleIcon />} Google
-                </button>
-                <button type="button" onClick={() => oauthSignIn("facebook")} disabled={loading !== null} className="flex items-center justify-center gap-2 rounded-full border border-line bg-white py-2.5 text-[13px] font-medium text-ink hover:bg-surface-2 disabled:opacity-60">
-                  {loading === "facebook" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FacebookIcon />} Facebook
-                </button>
+              <div className={`mt-6 grid gap-3 ${googleLoginEnabled && facebookLoginEnabled ? "grid-cols-2" : "grid-cols-1"}`}>
+                {googleLoginEnabled && (
+                  <button type="button" onClick={() => oauthSignIn("google")} disabled={loading !== null} className="flex items-center justify-center gap-2 rounded-full border border-line bg-white py-2.5 text-[13px] font-medium text-ink hover:bg-surface-2 disabled:opacity-60">
+                    {loading === "google" ? <Loader2 className="h-4 w-4 animate-spin" /> : <GoogleIcon />} Google
+                  </button>
+                )}
+                {facebookLoginEnabled && (
+                  <button type="button" onClick={() => oauthSignIn("facebook")} disabled={loading !== null} className="flex items-center justify-center gap-2 rounded-full border border-line bg-white py-2.5 text-[13px] font-medium text-ink hover:bg-surface-2 disabled:opacity-60">
+                    {loading === "facebook" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FacebookIcon />} Facebook
+                  </button>
+                )}
               </div>
 
               <div className="my-6 flex items-center gap-3 text-[12px] text-ink-soft">
@@ -271,7 +304,10 @@ function AuthPage() {
 
             {mode === "signup" && (
               <p className="text-[12px] text-ink-soft">
-                En continuant, vous acceptez les <a className="underline hover:text-ink" href="#">CGU</a> et la <a className="underline hover:text-ink" href="#">Politique de confidentialité</a>.
+                En continuant, vous acceptez les{" "}
+                <Link to="/terms" className="underline hover:text-ink">CGU</Link>
+                {" "}et la{" "}
+                <Link to="/privacy" className="underline hover:text-ink">Politique de confidentialité</Link>.
               </p>
             )}
 

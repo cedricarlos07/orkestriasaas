@@ -193,7 +193,7 @@ function Today() {
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button onClick={() => void decide(a.id, "approved")} className="btn-primary btn-halo !px-3 !py-1.5 !text-[12px]"><Check className="h-3.5 w-3.5" /> Approuver</button>
-                    <button className="chip-ghost !py-1.5 !text-[12px]"><Pencil className="h-3.5 w-3.5" /> Modifier</button>
+                    <button type="button" disabled className="chip-ghost !py-1.5 !text-[12px] opacity-60" title="Bientôt"><Pencil className="h-3.5 w-3.5" /> Modifier</button>
                     <button onClick={() => void decide(a.id, "refused")} className="chip-ghost !py-1.5 !text-[12px]"><X className="h-3.5 w-3.5" /> Refuser</button>
                   </div>
                 </li>
