@@ -36,11 +36,32 @@ function OnboardingLayout() {
   useEffect(() => {
     void getOnboardingSession()
       .then((row) => {
-        if (!row) return;
-        setSessionId(row.id);
-        setData({ ...defaultData, ...(row.data as Partial<OnboardingData>) });
+        let next: OnboardingData = row
+          ? { ...defaultData, ...(row.data as Partial<OnboardingData>) }
+          : { ...defaultData };
+        if (row) setSessionId(row.id);
+        try {
+          const pitch = sessionStorage.getItem("orkestria_landing_pitch");
+          if (pitch?.trim() && !next.pitch.trim()) {
+            next = { ...next, pitch: pitch.trim() };
+            sessionStorage.removeItem("orkestria_landing_pitch");
+          }
+        } catch {
+          /* ignore */
+        }
+        setData(next);
       })
-      .catch(() => {});
+      .catch(() => {
+        try {
+          const pitch = sessionStorage.getItem("orkestria_landing_pitch");
+          if (pitch?.trim()) {
+            setData((d) => (d.pitch.trim() ? d : { ...d, pitch: pitch.trim() }));
+            sessionStorage.removeItem("orkestria_landing_pitch");
+          }
+        } catch {
+          /* ignore */
+        }
+      });
   }, []);
 
   const persist = useCallback(

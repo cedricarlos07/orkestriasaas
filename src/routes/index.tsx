@@ -598,6 +598,28 @@ function ProductMenu() {
 function Hero() {
   const navigate = useNavigate();
   const dest = useSmartCta();
+  const { isLoggedIn } = useLandingAuth();
+  const [prompt, setPrompt] = useState("");
+  const [photoName, setPhotoName] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const go = () => {
+    const text = prompt.trim();
+    try {
+      if (text) sessionStorage.setItem("orkestria_landing_pitch", text);
+      else sessionStorage.removeItem("orkestria_landing_pitch");
+      if (photoName) sessionStorage.setItem("orkestria_landing_photo", photoName);
+      else sessionStorage.removeItem("orkestria_landing_photo");
+    } catch {
+      /* private mode */
+    }
+    if (isLoggedIn) {
+      navigate({ to: text ? "/app/orkestria" : dest });
+      return;
+    }
+    navigate({ to: "/auth" });
+  };
+
   return (
     <section className="relative isolate overflow-hidden">
       <div className="absolute inset-x-0 top-0 -z-10 h-[820px] w-full">
@@ -621,13 +643,20 @@ function Hero() {
         </p>
 
         <form
-          onSubmit={(e) => { e.preventDefault(); navigate({ to: dest }); }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            go();
+          }}
           className="mx-auto mt-10 max-w-3xl rounded-[28px] bg-white p-2.5 text-left shadow-[0_30px_80px_-30px_rgba(0,0,0,0.25)] ring-1 ring-black/5 focus-within:ring-2 focus-within:ring-[#ff6c02]/40 transition"
         >
           <div className="relative">
-            <span className="pointer-events-none absolute left-5 top-[18px] h-5 w-[2px] animate-pulse rounded bg-[#ff6c02]" />
+            {!prompt && (
+              <span className="pointer-events-none absolute left-5 top-[18px] h-5 w-[2px] animate-pulse rounded bg-[#ff6c02]" />
+            )}
             <textarea
               rows={3}
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -639,10 +668,32 @@ function Hero() {
             />
           </div>
           <div className="flex items-center justify-between gap-3 px-2 pb-1 pt-1">
-            <button type="button" className="chip-ghost">
-              <Paperclip className="h-4 w-4" /> Ajouter une photo
-            </button>
-            <button type="submit" className="btn-primary">
+            <div className="flex min-w-0 items-center gap-2">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  setPhotoName(f ? f.name : null);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="chip-ghost"
+              >
+                <Paperclip className="h-4 w-4" />
+                {photoName ? "Changer la photo" : "Ajouter une photo"}
+              </button>
+              {photoName && (
+                <span className="truncate text-[12px] text-ink-soft" title={photoName}>
+                  {photoName}
+                </span>
+              )}
+            </div>
+            <button type="submit" className="btn-primary shrink-0">
               Trouver mes clients
               <ArrowUp className="h-4 w-4" />
             </button>

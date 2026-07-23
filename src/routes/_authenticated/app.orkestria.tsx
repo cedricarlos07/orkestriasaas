@@ -219,6 +219,19 @@ function OrkestriaPage() {
     inputRef.current?.focus();
   }, [activeId]);
 
+  // Prefill from landing hero prompt
+  useEffect(() => {
+    try {
+      const pitch = sessionStorage.getItem("orkestria_landing_pitch");
+      if (!pitch?.trim()) return;
+      setInput(pitch.trim());
+      sessionStorage.removeItem("orkestria_landing_pitch");
+      setTimeout(() => inputRef.current?.focus(), 50);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const filteredThreads = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = [...threads];
