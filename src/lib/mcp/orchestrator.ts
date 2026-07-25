@@ -541,7 +541,11 @@ async function composeAuditReply(opts: {
       `--- Données d'audit réelles (${intent === "report" ? "rapport" : "audit"}) ---\n${auditData}${skillBlock}\n\n` +
       `Tâche : produis une analyse ${intent === "report" ? "de rapport" : "d'audit"} précise et concrète à partir des chiffres ci-dessus UNIQUEMENT. ` +
       `Nomme les campagnes et leur statut. Si dépense nulle, distingue « aucune campagne » vs « campagnes en pause » vs « actives sans delivery ». ` +
-      `N'invente aucun chiffre. Termine par une seule prochaine action claire.`;
+      `N'invente aucun chiffre. Structure STRICTEMENT la réponse ainsi (titres en gras exacts) :\n` +
+      `1) 2–4 phrases de synthèse (sans titre)\n` +
+      `2) **Problèmes à corriger :** puis liste numérotée\n` +
+      `3) **Opportunités :** puis liste numérotée\n` +
+      `4) **Première action recommandée :** une seule phrase actionnable.`;
 
     const history = (opts.history ?? []).slice(-6).map((turn) => ({
       role: turn.role === "user" ? ("user" as const) : ("assistant" as const),
@@ -574,7 +578,12 @@ function formatAuditReply(summary: AuditSummary): string {
     summary.opportunities.length > 0
       ? summary.opportunities.map((o, i) => `${i + 1}. ${o}`).join("\n")
       : "Continuez à monitorer les performances.";
-  return `${summary.situation}\n\n**Problèmes à corriger :**\n${problems}\n\n**Opportunités :**\n${opps}\n\n**Première action recommandée :** ${summary.firstAction}`;
+  return (
+    `${summary.situation}\n\n` +
+    `**Problèmes à corriger :**\n${problems}\n\n` +
+    `**Opportunités :**\n${opps}\n\n` +
+    `**Première action recommandée :**\n${summary.firstAction}`
+  );
 }
 
 export async function seedOrchestratorDefaults() {

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowUp,
   Paperclip,
@@ -22,6 +22,10 @@ import {
   ArrowLeft,
   Clock,
   Target,
+  AlertTriangle,
+  Lightbulb,
+  ArrowRight,
+  type LucideIcon,
 } from "lucide-react";
 import { useOrkestriaChat } from "@/lib/orkestria-chat";
 
@@ -618,38 +622,233 @@ function MessageBubble({ m }: { m: Msg }) {
           <Sparkles className="h-3.5 w-3.5" />
         </span>
       )}
-      <div className="max-w-[78%] space-y-2">
+      <div className={`space-y-2 ${isUser ? "max-w-[78%]" : "max-w-[min(100%,640px)] w-full"}`}>
         {m.tools && m.tools.length > 0 && <ToolTrace tools={m.tools} defaultOpen={false} />}
-        <div
-          className={
-            isUser
-              ? "rounded-2xl rounded-br-sm px-4 py-2.5 text-[14px] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_10px_20px_-12px_rgba(0,0,0,0.4)] bg-[linear-gradient(180deg,#2a2a2a_0%,#131313_55%,#050505_100%)]"
-              : "rounded-2xl rounded-bl-sm border border-white/70 bg-white/90 px-4 py-2.5 text-[14px] text-ink backdrop-blur shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_6px_16px_-12px_rgba(20,20,20,0.2)]"
-          }
-        >
-          {renderText(m.text)}
-        </div>
+        {isUser ? (
+          <div className="rounded-2xl rounded-br-sm px-4 py-2.5 text-[14px] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_10px_20px_-12px_rgba(0,0,0,0.4)] bg-[linear-gradient(180deg,#2a2a2a_0%,#131313_55%,#050505_100%)]">
+            {renderInline(m.text, "u")}
+          </div>
+        ) : (
+          <AgentReply text={m.text} />
+        )}
       </div>
     </div>
   );
 }
 
-function renderText(text: string) {
-  // very light markdown: **bold**
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+type ReplySectionKind = "situation" | "problems" | "opportunities" | "action" | "body";
+
+type ReplySection = { kind: ReplySectionKind; title?: string; body: string };
+
+const SECTION_RE =
+  /^\*\*(Probl[eè]mes?[^\n:*]*|Opportunit[eé]s?[^\n:*]*|Premi[eè]re action[^\n:*]*|Prochaine action[^\n:*]*|Action recommand[eé]e[^\n:*]*|Synth[eè]se[^\n:*]*|Contexte[^\n:*]*)\s*:?\*\*\s*:?\s*/i;
+
+function classifySection(title: string): ReplySectionKind {
+  const t = title.toLowerCase();
+  if (/probl/.test(t)) return "problems";
+  if (/opportunit/.test(t)) return "opportunities";
+  if (/action|prochaine/.test(t)) return "action";
+  if (/synth|contexte/.test(t)) return "situation";
+  return "body";
+}
+
+/** Split agent replies into situation + themed cards when section headers are present. */
+function parseReplySections(text: string): ReplySection[] {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const sections: ReplySection[] = [];
+  let cur: ReplySection = { kind: "situation", body: "" };
+
+  const push = () => {
+    if (cur.body.trim()) sections.push({ ...cur, body: cur.body.trim() });
+  };
+
+  for (const line of lines) {
+    const m = line.match(SECTION_RE);
+    if (m) {
+      push();
+      const title = m[1].replace(/\s*:$/, "").trim();
+      const rest = line.slice(m[0].length).trim();
+      cur = { kind: classifySection(title), title, body: rest ? `${rest}\n` : "" };
+      continue;
+    }
+    cur.body += `${line}\n`;
+  }
+  push();
+
+  const hasCards = sections.some((s) => s.kind === "problems" || s.kind === "opportunities" || s.kind === "action");
+  if (!hasCards) return [{ kind: "body", body: text.trim() }];
+  return sections;
+}
+
+function AgentReply({ text }: { text: string }) {
+  const sections = parseReplySections(text);
   return (
-    <>
-      {parts.map((p, i) =>
-        p.startsWith("**") && p.endsWith("**") ? (
-          <strong key={i} className="font-semibold">
-            {p.slice(2, -2)}
-          </strong>
-        ) : (
-          <span key={i}>{p}</span>
-        ),
-      )}
-    </>
+    <div className="space-y-2.5">
+      {sections.map((s, i) => {
+        if (s.kind === "problems") {
+          return (
+            <ReplyCard
+              key={i}
+              title={s.title ?? "Problèmes à corriger"}
+              icon={AlertTriangle}
+              tone="warn"
+              body={s.body}
+            />
+          );
+        }
+        if (s.kind === "opportunities") {
+          return (
+            <ReplyCard
+              key={i}
+              title={s.title ?? "Opportunités"}
+              icon={Lightbulb}
+              tone="ok"
+              body={s.body}
+            />
+          );
+        }
+        if (s.kind === "action") {
+          return (
+            <ReplyCard
+              key={i}
+              title={s.title ?? "Action recommandée"}
+              icon={ArrowRight}
+              tone="action"
+              body={s.body}
+            />
+          );
+        }
+        return (
+          <div
+            key={i}
+            className="rounded-2xl rounded-bl-sm border border-[#eadfce] bg-white px-4 py-3 text-[14px] text-ink shadow-[0_6px_18px_-14px_rgba(20,20,20,0.28)]"
+          >
+            {renderMarkdown(s.body)}
+          </div>
+        );
+      })}
+    </div>
   );
+}
+
+function ReplyCard({
+  title,
+  icon: Icon,
+  tone,
+  body,
+}: {
+  title: string;
+  icon: LucideIcon;
+  tone: "warn" | "ok" | "action";
+  body: string;
+}) {
+  const toneCls =
+    tone === "warn"
+      ? {
+          wrap: "border-[#f0c9a8] bg-[#fff8f1]",
+          icon: "bg-[#fff1e2] text-[#c94a00]",
+          title: "text-[#9a3d00]",
+        }
+      : tone === "ok"
+        ? {
+            wrap: "border-[#b6e3c8] bg-[#f3fbf6]",
+            icon: "bg-[#e6f7ee] text-[#0f7a3c]",
+            title: "text-[#0f7a3c]",
+          }
+        : {
+            wrap: "border-[#ffb066] bg-gradient-to-br from-[#fff5ea] to-[#ffe8d4]",
+            icon: "bg-gradient-to-br from-[#ff8a2b] to-[#ff5e00] text-white",
+            title: "text-[#c94a00]",
+          };
+
+  return (
+    <section className={`rounded-2xl border px-3.5 py-3 ${toneCls.wrap}`}>
+      <header className="mb-2 flex items-center gap-2">
+        <span aria-hidden className={`flex h-7 w-7 items-center justify-center rounded-lg ${toneCls.icon}`}>
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <h3 className={`text-[12px] font-semibold uppercase tracking-wide ${toneCls.title}`}>{title}</h3>
+      </header>
+      <div className="text-[13.5px] text-ink pl-0.5">{renderMarkdown(body, { listTone: tone })}</div>
+    </section>
+  );
+}
+
+function renderInline(text: string, keyPrefix: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={`${keyPrefix}-${i}`} className="font-semibold">
+        {part.slice(2, -2)}
+      </strong>
+    ) : (
+      <span key={`${keyPrefix}-${i}`}>{part}</span>
+    ),
+  );
+}
+
+/** Markdown-lite: paragraphs, bullets, numbered lists, **bold**. */
+function renderMarkdown(text: string, opts?: { listTone?: "warn" | "ok" | "action" }) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const blocks: ReactNode[] = [];
+  let list: { ordered: boolean; items: string[] } | null = null;
+
+  const flushList = () => {
+    if (!list) return;
+    const { ordered, items } = list;
+    const ListTag = ordered ? "ol" : "ul";
+    const marker =
+      opts?.listTone === "warn"
+        ? "marker:text-[#c94a00]"
+        : opts?.listTone === "ok"
+          ? "marker:text-[#0f7a3c]"
+          : opts?.listTone === "action"
+            ? "marker:text-[#c94a00]"
+            : "marker:text-ink-soft";
+    blocks.push(
+      <ListTag
+        key={`list-${blocks.length}`}
+        className={`my-1 space-y-1.5 pl-5 ${ordered ? "list-decimal" : "list-disc"} ${marker}`}
+      >
+        {items.map((item, i) => (
+          <li key={i} className="leading-relaxed">
+            {renderInline(item, `li-${blocks.length}-${i}`)}
+          </li>
+        ))}
+      </ListTag>,
+    );
+    list = null;
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      flushList();
+      continue;
+    }
+    const bullet = line.match(/^[-•*]\s+(.*)$/);
+    const numbered = line.match(/^\d+[.)]\s+(.*)$/);
+    if (bullet) {
+      if (list?.ordered) flushList();
+      list ??= { ordered: false, items: [] };
+      list.items.push(bullet[1]);
+      continue;
+    }
+    if (numbered) {
+      if (list && !list.ordered) flushList();
+      list ??= { ordered: true, items: [] };
+      list.items.push(numbered[1]);
+      continue;
+    }
+    flushList();
+    blocks.push(
+      <p key={`p-${blocks.length}`} className="leading-relaxed text-[14px]">
+        {renderInline(line, `p-${blocks.length}`)}
+      </p>,
+    );
+  }
+  flushList();
+
+  return <div className="space-y-2">{blocks}</div>;
 }
 
 function PendingBlock({ text, tools }: { text: string; tools: ToolCall[] }) {
