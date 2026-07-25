@@ -215,7 +215,7 @@ function OrkestriaPage() {
     queryFn: () => getSetupStatus(),
     staleTime: 60_000,
   });
-  const memoryActive = setupStatus?.memory.mem0Health === "ok";
+  const memoryActive = setupStatus?.memory?.mem0Health === "ok";
   const pending = isSending
     ? {
         text: sendingIntent
