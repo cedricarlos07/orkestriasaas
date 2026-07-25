@@ -4,8 +4,9 @@ import { connections } from "@/db/schema/index";
 import { buildAdkitEnv, adkitVerify } from "@/lib/mcp/adkit-bridge";
 import { getOrgGoogleCustomerId, isAdloopServerConfigured } from "@/lib/mcp/adloop-org";
 import { probeAdloopHealth } from "@/lib/mcp/clients/adloop";
-import { probeUseproxyHealth } from "@/lib/mcp/clients/useproxy";
+import { isMetaAdLibraryConfigured, probeMetaAdLibraryHealth } from "@/lib/platforms/meta-ad-library";
 import { resolveMetaPageId, syncOrgMetaPageFromToken } from "@/lib/mcp/meta-org";
+import { isMem0Configured, probeMem0Health } from "@/lib/mcp/mem0-bridge";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 
 export type StackSetupStatus = {
@@ -27,6 +28,9 @@ export type StackSetupStatus = {
     useproxyConfigured: boolean;
     useproxyHealth: "ok" | "skipped" | "error";
     useproxyError?: string;
+    adsLibraryConfigured: boolean;
+    adsLibraryHealth: "ok" | "skipped" | "error";
+    adsLibraryError?: string;
     url: string;
   };
   /** Meta campaigns can launch when Meta OAuth + Page are ready (adkit preferred but not blocking). */
@@ -34,6 +38,11 @@ export type StackSetupStatus = {
   readyForMeta: boolean;
   readyForGoogle: boolean;
   missingSteps: string[];
+  memory: {
+    mem0Configured: boolean;
+    mem0Health: "ok" | "skipped" | "error";
+    mem0Error?: string;
+  };
 };
 
 export async function getStackSetupStatus(orgId: string): Promise<StackSetupStatus> {
@@ -96,17 +105,15 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
     }
   }
 
-  const useproxyConfigured = Boolean(
-    (process.env.USEPROXY_BEARER_TOKEN ?? process.env.USEPROXY_API_KEY)?.trim(),
-  );
-  let useproxyHealth: StackSetupStatus["research"]["useproxyHealth"] = "skipped";
-  let useproxyError: string | undefined;
-  if (useproxyConfigured) {
-    const probe = await probeUseproxyHealth();
-    if (probe.ok) useproxyHealth = "ok";
+  const adsLibraryConfigured = isMetaAdLibraryConfigured();
+  let adsLibraryHealth: StackSetupStatus["research"]["adsLibraryHealth"] = "skipped";
+  let adsLibraryError: string | undefined;
+  if (adsLibraryConfigured) {
+    const probe = await probeMetaAdLibraryHealth();
+    if (probe.ok) adsLibraryHealth = "ok";
     else {
-      useproxyHealth = "error";
-      useproxyError = probe.error;
+      adsLibraryHealth = "error";
+      adsLibraryError = probe.error;
     }
   }
 
@@ -114,6 +121,18 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
   const readyForGoogle = adloopConfigured && adloopHealth === "ok";
   /** Campaign launch in product is Meta-first — do not block on Google/AdLoop. */
   const readyForCampaign = readyForMeta;
+
+  const mem0Configured = isMem0Configured();
+  let mem0Health: StackSetupStatus["memory"]["mem0Health"] = "skipped";
+  let mem0Error: string | undefined;
+  if (mem0Configured) {
+    const probe = await probeMem0Health();
+    if (probe.ok) mem0Health = "ok";
+    else {
+      mem0Health = "error";
+      mem0Error = probe.error;
+    }
+  }
 
   return {
     meta: {
@@ -131,14 +150,22 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
       customerId,
     },
     research: {
-      useproxyConfigured,
-      useproxyHealth,
-      useproxyError,
-      url: process.env.USEPROXY_MCP_URL ?? "https://mcp.useproxy.dev/mcp",
+      useproxyConfigured: adsLibraryConfigured,
+      useproxyHealth: adsLibraryHealth,
+      useproxyError: adsLibraryError,
+      adsLibraryConfigured,
+      adsLibraryHealth,
+      adsLibraryError,
+      url: "graph.facebook.com/ads_archive",
     },
     readyForCampaign,
     readyForMeta,
     readyForGoogle,
     missingSteps,
+    memory: {
+      mem0Configured,
+      mem0Health,
+      mem0Error,
+    },
   };
 }

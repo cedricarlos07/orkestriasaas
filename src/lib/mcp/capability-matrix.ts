@@ -125,6 +125,6 @@ export function summarizeMaturity(matrix: PlatformCapability[] = getCapabilityMa
     production: matrix.filter((m) => m.maturity === "production").map((m) => m.connector),
     experimental: matrix.filter((m) => m.maturity === "experimental").map((m) => m.connector),
     reporting: matrix.filter((m) => m.maturity === "reporting").map((m) => m.connector),
-    research: ["useproxy_ads_library"] as const,
+    research: ["meta_ads_archive"] as const,
   };
 }

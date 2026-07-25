@@ -1,45 +1,16 @@
-import { callMcpTool, probeMcpEndpoint } from "@/lib/mcp/clients/mcp-jsonrpc";
-
-export function useproxyMcpUrl(): string {
-  return (process.env.USEPROXY_MCP_URL?.trim() || "https://mcp.useproxy.dev/mcp").replace(/\/$/, "");
-}
-
-/** OAuth bearer after connecting useproxy MCP (USEPROXY_BEARER_TOKEN or legacy USEPROXY_API_KEY). */
-function useproxyBearer(): string | undefined {
-  return (process.env.USEPROXY_BEARER_TOKEN ?? process.env.USEPROXY_API_KEY)?.trim();
-}
-
-export async function callUseproxyTool(
-  tool: string,
-  params: Record<string, unknown> = {},
-): Promise<{ ok: boolean; data?: unknown; error?: string; latencyMs: number }> {
-  const bearer = useproxyBearer();
-  if (!bearer) {
-    return {
-      ok: false,
-      error:
-        "useproxy non authentifié côté serveur — connectez votre compte useproxy (OAuth) puis ajoutez le bearer en USEPROXY_BEARER_TOKEN",
-      latencyMs: 0,
-    };
-  }
-  return callMcpTool({ url: useproxyMcpUrl(), tool, params, bearer });
-}
-
-export async function probeUseproxyHealth(): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
-  const bearer = useproxyBearer();
-  if (!bearer) {
-    return {
-      ok: false,
-      latencyMs: 0,
-      error: "Pas de bearer useproxy (OAuth) — research désactivé jusqu'à connexion admin",
-    };
-  }
-  const health = await probeMcpEndpoint(useproxyMcpUrl(), bearer);
-  if (health.ok) return health;
-  const fallback = await callUseproxyTool("get_meta_platform_id", { brand_names: ["Nike"] });
-  if (fallback.ok) return { ok: true, latencyMs: fallback.latencyMs };
-  return { ok: false, latencyMs: health.latencyMs, error: fallback.error ?? health.error };
-}
+/**
+ * Competitor research — Meta Ad Library via official Graph API (no useproxy / ScrapeCreators).
+ */
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { connections } from "@/db/schema/index";
+import {
+  isMetaAdLibraryConfigured,
+  metaAppAccessToken,
+  probeMetaAdLibraryHealth,
+  researchCompetitorAdsViaMeta,
+} from "@/lib/platforms/meta-ad-library";
+import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 
 export type CompetitorResearchInput = {
   brand: string;
@@ -47,25 +18,57 @@ export type CompetitorResearchInput = {
   country?: string;
 };
 
-export async function researchCompetitorAds(input: CompetitorResearchInput): Promise<Record<string, unknown>> {
-  const brands = input.brands?.length ? input.brands : [input.brand];
-  const platformRes = await callUseproxyTool("get_meta_platform_id", { brand_names: brands });
-  if (!platformRes.ok) throw new Error(platformRes.error ?? "get_meta_platform_id failed");
+export { isMetaAdLibraryConfigured as isFbAdsLibraryConfigured, probeMetaAdLibraryHealth as probeFbAdsLibraryHealth };
 
-  const platformData = platformRes.data as { platform_ids?: string[]; results?: unknown };
-  const ids = platformData?.platform_ids ?? [];
-  const adsRes = await callUseproxyTool("get_meta_ads", {
-    platform_ids: ids.length ? ids : undefined,
-    brand_names: brands,
+export async function resolveResearchAccessToken(orgId?: string): Promise<string> {
+  if (orgId) {
+    const rows = await db
+      .select()
+      .from(connections)
+      .where(eq(connections.organizationId, orgId))
+      .limit(20);
+    const meta = rows.find((r) => r.connector === "meta_ads" && r.status === "connectée" && r.encryptedTokens);
+    if (meta) {
+      try {
+        const tokens = await ensureFreshTokens(meta.id, orgId, "meta_ads");
+        if (tokens.accessToken) return tokens.accessToken;
+      } catch {
+        /* fall through to app token */
+      }
+    }
+  }
+  const app = metaAppAccessToken();
+  if (!app) {
+    throw new Error(
+      "Research Ad Library : connectez Meta Ads ou configurez META_APP_ID + META_APP_SECRET",
+    );
+  }
+  return app;
+}
+
+export async function researchCompetitorAds(
+  input: CompetitorResearchInput & { orgId?: string },
+): Promise<Record<string, unknown>> {
+  const accessToken = await resolveResearchAccessToken(input.orgId);
+  return researchCompetitorAdsViaMeta({
+    accessToken,
+    brand: input.brand,
+    brands: input.brands,
     country: input.country,
   });
-  if (!adsRes.ok) throw new Error(adsRes.error ?? "get_meta_ads failed");
-
-  return {
-    brands,
-    country: input.country ?? null,
-    platformLookup: platformRes.data,
-    ads: adsRes.data,
-    upstream: "useproxy",
-  };
 }
+
+export async function probeResearchHealth(): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
+  if (!isMetaAdLibraryConfigured()) {
+    return {
+      ok: false,
+      latencyMs: 0,
+      error: "META_APP_ID / META_APP_SECRET requis pour Ad Library Meta",
+    };
+  }
+  return probeMetaAdLibraryHealth();
+}
+
+/** @deprecated alias */
+export const probeUseproxyHealth = probeResearchHealth;
+export const humanizeUseproxyError = (raw?: string) => raw ?? "Research probe échoué";

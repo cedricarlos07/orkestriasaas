@@ -1,7 +1,12 @@
 import { requireEnv } from "@/lib/platforms/config";
 import type { UnifiedAccountSnapshot, UnifiedCampaign } from "@/lib/unified-ad-schema";
 
-const API = "https://googleads.googleapis.com/v17";
+/** Google Ads REST version — v17–v19 sunset (404). Override with GOOGLE_ADS_API_VERSION. */
+function googleAdsApiBase(): string {
+  const raw = (process.env.GOOGLE_ADS_API_VERSION ?? "v20").trim().replace(/^\/+/, "");
+  const ver = raw.startsWith("v") ? raw : `v${raw}`;
+  return `https://googleads.googleapis.com/${ver}`;
+}
 
 function headers(accessToken: string, loginCustomerId?: string): Record<string, string> {
   const h: Record<string, string> = {
@@ -13,11 +18,20 @@ function headers(accessToken: string, loginCustomerId?: string): Record<string, 
   return h;
 }
 
+async function readGoogleAdsError(res: Response, context: string): Promise<never> {
+  const text = await res.text();
+  const compact =
+    text.includes("<!DOCTYPE html>") || text.includes("<html")
+      ? `HTTP ${res.status} (HTML Google — version API obsolète? base=${googleAdsApiBase()})`
+      : text.slice(0, 500);
+  throw new Error(`${context}: ${compact}`);
+}
+
 export async function listAccessibleGoogleAdsCustomers(accessToken: string): Promise<{ id: string; name: string }[]> {
-  const res = await fetch(`${API}/customers:listAccessibleCustomers`, {
+  const res = await fetch(`${googleAdsApiBase()}/customers:listAccessibleCustomers`, {
     headers: headers(accessToken),
   });
-  if (!res.ok) throw new Error(`Google Ads list customers: ${await res.text()}`);
+  if (!res.ok) await readGoogleAdsError(res, "Google Ads list customers");
   const data = (await res.json()) as { resourceNames?: string[] };
   const ids = (data.resourceNames ?? []).map((r) => r.replace("customers/", ""));
   const accounts: { id: string; name: string }[] = [];
@@ -43,12 +57,12 @@ export async function gaqlSearch(
   query: string,
   loginCustomerId?: string,
 ): Promise<unknown[]> {
-  const res = await fetch(`${API}/customers/${customerId.replace(/\D/g, "")}/googleAds:search`, {
+  const res = await fetch(`${googleAdsApiBase()}/customers/${customerId.replace(/\D/g, "")}/googleAds:search`, {
     method: "POST",
     headers: headers(accessToken, loginCustomerId),
     body: JSON.stringify({ query }),
   });
-  if (!res.ok) throw new Error(`Google Ads GAQL: ${await res.text()}`);
+  if (!res.ok) await readGoogleAdsError(res, "Google Ads GAQL");
   const data = (await res.json()) as { results?: unknown[] };
   return data.results ?? [];
 }
@@ -158,7 +172,7 @@ export async function updateGoogleCampaignBudget(
   const budgetResource = (rows[0] as { campaignBudget?: { resourceName?: string } })?.campaignBudget?.resourceName;
   if (!budgetResource) throw new Error("Budget campagne Google introuvable");
 
-  const res = await fetch(`${API}/customers/${cid}/campaignBudgets:mutate`, {
+  const res = await fetch(`${googleAdsApiBase()}/customers/${cid}/campaignBudgets:mutate`, {
     method: "POST",
     headers: headers(accessToken),
     body: JSON.stringify({
@@ -183,7 +197,7 @@ async function mutateCampaignStatus(
   status: "PAUSED" | "ENABLED",
 ): Promise<void> {
   const cid = customerId.replace(/\D/g, "");
-  const res = await fetch(`${API}/customers/${cid}/campaigns:mutate`, {
+  const res = await fetch(`${googleAdsApiBase()}/customers/${cid}/campaigns:mutate`, {
     method: "POST",
     headers: headers(accessToken),
     body: JSON.stringify({
@@ -216,7 +230,7 @@ export async function addGoogleKeywords(
   keywords: { text: string; matchType?: "BROAD" | "PHRASE" | "EXACT" }[],
 ): Promise<{ resourceNames: string[] }> {
   const cid = customerId.replace(/\D/g, "");
-  const res = await fetch(`${API}/customers/${cid}/adGroupCriteria:mutate`, {
+  const res = await fetch(`${googleAdsApiBase()}/customers/${cid}/adGroupCriteria:mutate`, {
     method: "POST",
     headers: headers(accessToken),
     body: JSON.stringify({
@@ -261,7 +275,7 @@ export async function createGoogleCampaignPaused(
   const budgetMicros = Math.round(input.dailyBudget * 1_000_000);
   const type = input.type === "pmax" ? "pmax" : "search";
 
-  const budgetRes = await fetch(`${API}/customers/${cid}/campaignBudgets:mutate`, {
+  const budgetRes = await fetch(`${googleAdsApiBase()}/customers/${cid}/campaignBudgets:mutate`, {
     method: "POST",
     headers: headers(accessToken),
     body: JSON.stringify({
@@ -283,7 +297,7 @@ export async function createGoogleCampaignPaused(
   if (!budgetRn) throw new Error("Google create budget: resourceName manquant");
 
   if (type === "pmax") {
-    const campRes = await fetch(`${API}/customers/${cid}/campaigns:mutate`, {
+    const campRes = await fetch(`${googleAdsApiBase()}/customers/${cid}/campaigns:mutate`, {
       method: "POST",
       headers: headers(accessToken),
       body: JSON.stringify({
@@ -314,7 +328,7 @@ export async function createGoogleCampaignPaused(
       process.env.BETTER_AUTH_URL?.trim() ??
       "https://orkestria.top";
 
-    const agRes = await fetch(`${API}/customers/${cid}/assetGroups:mutate`, {
+    const agRes = await fetch(`${googleAdsApiBase()}/customers/${cid}/assetGroups:mutate`, {
       method: "POST",
       headers: headers(accessToken),
       body: JSON.stringify({
@@ -357,7 +371,7 @@ export async function createGoogleCampaignPaused(
   }
 
   // Search
-  const campRes = await fetch(`${API}/customers/${cid}/campaigns:mutate`, {
+  const campRes = await fetch(`${googleAdsApiBase()}/customers/${cid}/campaigns:mutate`, {
     method: "POST",
     headers: headers(accessToken),
     body: JSON.stringify({
@@ -385,7 +399,7 @@ export async function createGoogleCampaignPaused(
   if (!campRn) throw new Error("Google create Search: campaign manquant");
   const campaignId = resourceId(campRn);
 
-  const agRes = await fetch(`${API}/customers/${cid}/adGroups:mutate`, {
+  const agRes = await fetch(`${googleAdsApiBase()}/customers/${cid}/adGroups:mutate`, {
     method: "POST",
     headers: headers(accessToken),
     body: JSON.stringify({
@@ -422,7 +436,7 @@ export async function createGoogleCampaignPaused(
     "https://orkestria.top";
 
   let adId: string | undefined;
-  const adRes = await fetch(`${API}/customers/${cid}/adGroupAds:mutate`, {
+  const adRes = await fetch(`${googleAdsApiBase()}/customers/${cid}/adGroupAds:mutate`, {
     method: "POST",
     headers: headers(accessToken),
     body: JSON.stringify({
@@ -469,7 +483,7 @@ export async function addGoogleNegativeKeywords(
   keywords: { text: string; matchType?: string }[],
 ): Promise<{ count: number }> {
   const cid = customerId.replace(/\D/g, "");
-  const res = await fetch(`${API}/customers/${cid}/campaignCriteria:mutate`, {
+  const res = await fetch(`${googleAdsApiBase()}/customers/${cid}/campaignCriteria:mutate`, {
     method: "POST",
     headers: headers(accessToken),
     body: JSON.stringify({
@@ -495,7 +509,7 @@ export async function createGoogleUserList(
   input: { name: string; description?: string },
 ): Promise<{ audienceId: string; details?: Record<string, unknown> }> {
   const cid = customerId.replace(/\D/g, "");
-  const res = await fetch(`${API}/customers/${cid}/userLists:mutate`, {
+  const res = await fetch(`${googleAdsApiBase()}/customers/${cid}/userLists:mutate`, {
     method: "POST",
     headers: headers(accessToken),
     body: JSON.stringify({
@@ -532,7 +546,7 @@ export async function createGoogleConversionAction(
   input: { name: string; category?: string },
 ): Promise<{ conversionId: string }> {
   const cid = customerId.replace(/\D/g, "");
-  const res = await fetch(`${API}/customers/${cid}/conversionActions:mutate`, {
+  const res = await fetch(`${googleAdsApiBase()}/customers/${cid}/conversionActions:mutate`, {
     method: "POST",
     headers: headers(accessToken),
     body: JSON.stringify({
@@ -597,7 +611,7 @@ export async function attachGoogleUserListToCampaign(
   input: { campaignId: string; audienceId: string },
 ): Promise<{ ok: true }> {
   const cid = customerId.replace(/\D/g, "");
-  const res = await fetch(`${API}/customers/${cid}/campaignCriteria:mutate`, {
+  const res = await fetch(`${googleAdsApiBase()}/customers/${cid}/campaignCriteria:mutate`, {
     method: "POST",
     headers: headers(accessToken),
     body: JSON.stringify({

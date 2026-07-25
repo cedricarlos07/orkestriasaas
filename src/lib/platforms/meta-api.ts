@@ -55,23 +55,50 @@ export async function listMetaPages(
   meAccounts.searchParams.set("limit", "50");
   add(await fetchGraphPages(meAccounts));
 
+  const actIds = new Set<string>();
   if (adAccountId) {
     const actId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId.replace(/\D/g, "")}`;
-    const promote = new URL(`${GRAPH}/${actId}/promote_pages`);
-    promote.searchParams.set("fields", "id,name");
-    promote.searchParams.set("access_token", accessToken);
-    promote.searchParams.set("limit", "50");
-    add(await fetchGraphPages(promote));
+    if (actId.replace(/\D/g, "")) actIds.add(actId);
   }
+
+  // Pages often live on the ad account (BM), not on /me/accounts
+  try {
+    const actsUrl = new URL(`${GRAPH}/me/adaccounts`);
+    actsUrl.searchParams.set("fields", "id");
+    actsUrl.searchParams.set("access_token", accessToken);
+    actsUrl.searchParams.set("limit", "25");
+    const actsRes = await fetch(actsUrl);
+    if (actsRes.ok) {
+      const actsData = (await actsRes.json()) as { data?: { id: string }[] };
+      for (const a of actsData.data ?? []) {
+        const id = String(a.id);
+        const act = id.startsWith("act_") ? id : `act_${id.replace(/\D/g, "")}`;
+        if (act.replace(/\D/g, "")) actIds.add(act);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const promoteLists = await Promise.all(
+    [...actIds].slice(0, 12).map(async (actId) => {
+      const promote = new URL(`${GRAPH}/${actId}/promote_pages`);
+      promote.searchParams.set("fields", "id,name");
+      promote.searchParams.set("access_token", accessToken);
+      promote.searchParams.set("limit", "50");
+      return fetchGraphPages(promote);
+    }),
+  );
+  for (const list of promoteLists) add(list);
 
   const businesses = new URL(`${GRAPH}/me/businesses`);
   businesses.searchParams.set("fields", "id,name");
   businesses.searchParams.set("access_token", accessToken);
-  businesses.searchParams.set("limit", "25");
+  businesses.searchParams.set("limit", "10");
   const bizRes = await fetch(businesses).catch(() => null);
   if (bizRes?.ok) {
     const bizData = (await bizRes.json()) as { data?: { id: string }[] };
-    for (const biz of bizData.data ?? []) {
+    for (const biz of (bizData.data ?? []).slice(0, 5)) {
       for (const edge of ["owned_pages", "client_pages"] as const) {
         const url = new URL(`${GRAPH}/${biz.id}/${edge}`);
         url.searchParams.set("fields", "id,name");
@@ -108,15 +135,35 @@ export async function fetchMetaAdsSnapshot(
 ): Promise<UnifiedAccountSnapshot> {
   const actId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId.replace(/\D/g, "")}`;
 
+  const accountUrl = new URL(`${GRAPH}/${actId}`);
+  accountUrl.searchParams.set("fields", "name,currency");
+  accountUrl.searchParams.set("access_token", accessToken);
+
+  const campaignsUrl = new URL(`${GRAPH}/${actId}/campaigns`);
+  campaignsUrl.searchParams.set("fields", "id,name,status,effective_status,objective");
+  campaignsUrl.searchParams.set("limit", "50");
+  campaignsUrl.searchParams.set("access_token", accessToken);
+
   const insightsUrl = new URL(`${GRAPH}/${actId}/insights`);
   insightsUrl.searchParams.set("fields", "spend,impressions,clicks,actions,campaign_id,campaign_name");
   insightsUrl.searchParams.set("level", "campaign");
   insightsUrl.searchParams.set("date_preset", "last_30d");
   insightsUrl.searchParams.set("access_token", accessToken);
 
-  const res = await fetch(insightsUrl);
-  if (!res.ok) throw new Error(`Meta insights: ${await res.text()}`);
-  const data = (await res.json()) as {
+  const [accRes, campsRes, insightsRes] = await Promise.all([
+    fetch(accountUrl),
+    fetch(campaignsUrl),
+    fetch(insightsUrl),
+  ]);
+
+  if (!campsRes.ok) throw new Error(`Meta campaigns: ${await campsRes.text()}`);
+  if (!insightsRes.ok) throw new Error(`Meta insights: ${await insightsRes.text()}`);
+
+  const accData = accRes.ok ? ((await accRes.json()) as { name?: string; currency?: string }) : {};
+  const campsData = (await campsRes.json()) as {
+    data?: { id: string; name?: string; status?: string; effective_status?: string; objective?: string }[];
+  };
+  const insightsData = (await insightsRes.json()) as {
     data?: {
       campaign_id?: string;
       campaign_name?: string;
@@ -127,32 +174,46 @@ export async function fetchMetaAdsSnapshot(
     }[];
   };
 
-  const accountUrl = new URL(`${GRAPH}/${actId}`);
-  accountUrl.searchParams.set("fields", "name,currency");
-  accountUrl.searchParams.set("access_token", accessToken);
-  const accRes = await fetch(accountUrl);
-  const accData = accRes.ok ? ((await accRes.json()) as { name?: string; currency?: string }) : {};
-
-  let spend = 0;
-  let conversions = 0;
-  const campaigns: UnifiedCampaign[] = [];
   const currency = accData.currency ?? "USD";
+  const metricsById = new Map<
+    string,
+    { spend: number; impressions: number; clicks: number; conversions: number; name?: string }
+  >();
 
-  for (const row of data.data ?? []) {
-    const rowSpend = Number(row.spend ?? 0);
+  for (const row of insightsData.data ?? []) {
+    const id = row.campaign_id ?? "";
+    if (!id) continue;
     const purchase = row.actions?.find((a) =>
       ["purchase", "offsite_conversion.fb_pixel_purchase", "omni_purchase"].includes(a.action_type),
     );
-    const conv = Number(purchase?.value ?? 0);
+    metricsById.set(id, {
+      spend: Number(row.spend ?? 0),
+      impressions: Number(row.impressions ?? 0),
+      clicks: Number(row.clicks ?? 0),
+      conversions: Number(purchase?.value ?? 0),
+      name: row.campaign_name,
+    });
+  }
+
+  const campaigns: UnifiedCampaign[] = [];
+  let spend = 0;
+  let conversions = 0;
+  const seen = new Set<string>();
+
+  for (const c of campsData.data ?? []) {
+    seen.add(c.id);
+    const m = metricsById.get(c.id);
+    const rowSpend = m?.spend ?? 0;
+    const conv = m?.conversions ?? 0;
+    const impressions = m?.impressions ?? 0;
+    const clicks = m?.clicks ?? 0;
     spend += rowSpend;
     conversions += conv;
-    const clicks = Number(row.clicks ?? 0);
-    const impressions = Number(row.impressions ?? 0);
     campaigns.push({
       platform: "Meta Ads",
-      id: row.campaign_id ?? "",
-      name: row.campaign_name ?? "Campagne",
-      status: "ACTIVE",
+      id: c.id,
+      name: c.name ?? m?.name ?? "Campagne",
+      status: c.effective_status ?? c.status ?? "UNKNOWN",
       spend: rowSpend,
       currency,
       impressions,
@@ -164,13 +225,56 @@ export async function fetchMetaAdsSnapshot(
     });
   }
 
+  // Insights-only rows (deleted campaigns that still spent)
+  for (const [id, m] of metricsById) {
+    if (seen.has(id)) continue;
+    spend += m.spend;
+    conversions += m.conversions;
+    campaigns.push({
+      platform: "Meta Ads",
+      id,
+      name: m.name ?? "Campagne",
+      status: "UNKNOWN",
+      spend: m.spend,
+      currency,
+      impressions: m.impressions,
+      clicks: m.clicks,
+      conversions: m.conversions,
+      ctr: m.impressions > 0 ? (m.clicks / m.impressions) * 100 : 0,
+      cpa: m.conversions > 0 ? m.spend / m.conversions : null,
+      roas: null,
+    });
+  }
+
+  campaigns.sort((a, b) => b.spend - a.spend);
+
   const issues: string[] = [];
   const opportunities: string[] = [];
-  if (campaigns.some((c) => c.ctr > 0 && c.ctr < 0.8)) {
-    issues.push("Au moins une campagne Meta a un CTR faible — créations ou audiences à revoir");
+  if (!campaigns.length) {
+    issues.push("Aucune campagne sur ce compte Meta — créez un premier funnel en pause.");
+    opportunities.push("Lancez un test trafic/leads avec budget journalier modeste (10–20 €/j) en pause d'abord.");
+  } else {
+    const active = campaigns.filter((c) => /ACTIVE|ENABLED/i.test(c.status));
+    const paused = campaigns.filter((c) => /PAUSED/i.test(c.status));
+    if (spend === 0 && active.length) {
+      issues.push(
+        `${active.length} campagne(s) ACTIVE sans dépense sur 30 jours — delivery / paiement / audience à vérifier.`,
+      );
+    }
+    if (spend === 0 && !active.length && paused.length) {
+      issues.push(`${paused.length} campagne(s) en pause — aucune diffusion actuellement.`);
+    }
+    if (spend > 0 && !conversions) {
+      issues.push("Dépenses sans conversion achat sur 30 jours — vérifiez le pixel / événement Purchase.");
+    }
+    if (campaigns.some((c) => c.impressions > 1000 && c.ctr > 0 && c.ctr < 0.8)) {
+      issues.push("Au moins une campagne Meta a un CTR faible — créations ou audiences à revoir.");
+    }
+    if (paused.length && spend > 0) {
+      opportunities.push("Réactivez ou archivez les campagnes en pause pour clarifier le compte.");
+    }
+    opportunities.push("Testez des audiences lookalike sur vos meilleurs clients Meta.");
   }
-  if (!conversions) issues.push("Meta ne remonte aucune conversion achat sur 30 jours — vérifiez le pixel");
-  opportunities.push("Testez des audiences lookalike sur vos meilleurs clients Meta");
 
   return {
     platform: "Meta Ads",

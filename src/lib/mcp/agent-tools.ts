@@ -15,6 +15,7 @@ import {
   type WriteActionName,
 } from "@/lib/mcp/policy-engine";
 import { listSkills, getSkill } from "@/lib/mcp/skills";
+import { listMediaBuyingSkills } from "@/lib/mcp/skills-repo";
 import { runAutonomyTick } from "@/lib/mcp/autonomy";
 import { getCapabilityMatrix, summarizeMaturity } from "@/lib/mcp/capability-matrix";
 import {
@@ -93,7 +94,11 @@ async function getTokensFor(orgId: string, connector: ConnectorId) {
 
 async function fetchSnapshot(orgId: string, connector: ConnectorId, accountId?: string, period?: string) {
   const { conn, tokens } = await getTokensFor(orgId, connector);
-  const acct = accountId ?? tokens.accountId;
+  const { resolveActiveAdAccountId } = await import("@/lib/mcp/resolve-ad-account");
+  const acct =
+    accountId ??
+    (await resolveActiveAdAccountId(orgId, connector)) ??
+    tokens.accountId;
   if (!acct && conn.id !== ADLOOP_CONNECTION_ID) {
     throw new Error(`${CONNECTORS[connector].label} : aucun compte publicitaire sélectionné.`);
   }
@@ -1092,7 +1097,7 @@ const measureTools: AgentTool[] = [
   {
     name: "research_competitor_ads",
     description:
-      "Spy competitor ads via Meta Ad Library (useproxy). Read-only research — no spend. Use before creating campaigns.",
+      "Spy competitor ads via Meta Ad Library API (ads_archive on your Meta app). Read-only — no spend. Coverage: commercial mainly EU/UK; political worldwide.",
     family: "measure",
     inputSchema: {
       type: "object",
@@ -1609,32 +1614,32 @@ const governTools: AgentTool[] = [
   },
   {
     name: "list_skills",
-    description: "List built-in Orkestria MCP skills (file SOPs + launch/optimize/audit/audience/creative_rotate).",
+    description:
+      "List Orkestria MCP skills: built-in launch/optimize/audit plus media-buying SOPs (mb/* from ai-media-buying-skills).",
     family: "govern",
     inputSchema: { type: "object", properties: {} },
-    handler: async () => listSkills(),
+    handler: async () =>
+      listSkills().map((s) => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        source: s.source ?? "builtin",
+        platform: s.platform,
+        category: s.category,
+        steps: s.steps,
+      })),
   },
   {
     name: "run_skill",
     description:
-      "Return the step plan for a skill. The agent should then call each tool (prefer execute dry_run for writes).",
+      "Return the step plan (and full SOP markdown for mb/* skills). Execute steps via named tools; prefer dry_run for writes.",
     family: "govern",
     inputSchema: {
       type: "object",
       properties: {
         skillId: {
           type: "string",
-          enum: [
-            "launch",
-            "optimize",
-            "audit",
-            "audience",
-            "creative_rotate",
-            "campaign-manager",
-            "performance-analyzer",
-            "budget-optimizer",
-            "creative-generator",
-          ],
+          description: "Skill id from list_skills (e.g. launch, optimize, mb/meta-ads/diagnostics/anomaly-detector)",
         },
       },
       required: ["skillId"],
@@ -1643,9 +1648,59 @@ const governTools: AgentTool[] = [
       const skill = getSkill(str(args.skillId) ?? "");
       if (!skill) throw new Error("Unknown skill — call list_skills");
       return {
-        skill,
+        skill: {
+          id: skill.id,
+          name: skill.name,
+          description: skill.description,
+          source: skill.source,
+          platform: skill.platform,
+          category: skill.category,
+          steps: skill.steps,
+        },
+        sopMarkdown: skill.fullMarkdown,
         instructions:
-          "Execute steps in order. For writes, call execute with dry_run=true first, then dry_run=false after review. Check list_capabilities for maturity.",
+          skill.source === "media_buying"
+            ? "Apply this SOP using live data from get_account_summary / get_performance. Do not ask to connect accounts already in context."
+            : "Execute steps in order. For writes, call execute with dry_run=true first, then dry_run=false after review. Check list_capabilities for maturity.",
+      };
+    },
+  },
+  {
+    name: "get_media_skill",
+    description: "Find a media-buying SOP by platform and/or category (from ai-media-buying-skills repo).",
+    family: "govern",
+    inputSchema: {
+      type: "object",
+      properties: {
+        platform: {
+          type: "string",
+          description: "Platform filter (e.g. Meta Ads, Google LSA, TikTok Ads)",
+        },
+        category: {
+          type: "string",
+          description: "Category filter (e.g. diagnostics, creative, launch, reporting)",
+        },
+      },
+    },
+    handler: async (_ctx, args) => {
+      const platform = str(args.platform)?.toLowerCase();
+      const category = str(args.category)?.toLowerCase();
+      const matches = listMediaBuyingSkills().filter((s) => {
+        if (platform && !s.platform.toLowerCase().includes(platform)) return false;
+        if (category && !s.category.toLowerCase().includes(category)) return false;
+        return true;
+      });
+      if (!matches.length) throw new Error("No media skill matched — try list_skills");
+      const skill = matches[0]!;
+      return {
+        id: skill.id,
+        name: skill.name,
+        platform: skill.platform,
+        category: skill.category,
+        whenToUse: skill.whenToUse,
+        promptExcerpt: skill.promptExcerpt,
+        fullMarkdown: skill.fullMarkdown,
+        totalMatches: matches.length,
       };
     },
   },

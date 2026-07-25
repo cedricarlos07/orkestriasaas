@@ -103,7 +103,7 @@ export function buildAuditSummary(schema: UnifiedAdSchema): AuditSummary {
     opportunities: allOpps.slice(0, 3),
     firstAction: pickFirstAction(allIssues, schema),
     accounts: schema.accounts,
-    totals: { ...totals, cpa, roas: cpa ? (totals.conversions * 5000) / totals.spend : null },
+    totals: { ...totals, cpa, roas: null },
   };
 }
 

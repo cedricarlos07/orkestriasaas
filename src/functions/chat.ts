@@ -7,10 +7,17 @@ import { getActiveOrgId } from "./context";
 import { uid } from "./utils";
 
 import { runOrchestrator } from "@/lib/mcp/orchestrator";
+import { persistChatTurn } from "@/lib/mcp/mem0-bridge";
 import { enforceQuotas, QuotaError, recordUsage } from "@/lib/quotas/enforce";
 
 const WELCOME =
   "Bonjour 👋 Dites-moi ce que je peux faire pour vous aujourd'hui. Vous pouvez me demander un audit, un rapport, ou de lancer une campagne.";
+
+function threadTitle(text: string): string {
+  const clean = text.trim().replace(/\s+/g, " ");
+  if (!clean) return "Nouvelle conversation";
+  return clean.length > 48 ? `${clean.slice(0, 48)}…` : clean;
+}
 
 export const listThreads = createServerFn({ method: "GET" }).handler(async () => {
   const session = await ensureSession();
@@ -64,6 +71,17 @@ export const sendChatMessage = createServerFn({ method: "POST" })
     const orgId = await getActiveOrgId(session);
     const threads = await db.select().from(chatThreads).where(eq(chatThreads.id, data.threadId)).limit(1);
     if (!threads[0] || threads[0].organizationId !== orgId) throw new Error("Not found");
+
+    const previous = await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.threadId, data.threadId))
+      .orderBy(chatMessages.createdAt);
+    const history = previous
+      .filter((m) => m.text !== WELCOME)
+      .slice(-10)
+      .map((m) => ({ role: m.role === "user" ? ("user" as const) : ("agent" as const), text: m.text }));
+
     const now = new Date();
     await db.insert(chatMessages).values({
       id: uid("msg"),
@@ -85,6 +103,7 @@ export const sendChatMessage = createServerFn({ method: "POST" })
       userId: session.user.id,
       message: data.text,
       skill: "analysis",
+      history,
     });
 
     await recordUsage({
@@ -106,7 +125,18 @@ export const sendChatMessage = createServerFn({ method: "POST" })
       })),
       createdAt: new Date(now.getTime() + 500),
     });
-    await db.update(chatThreads).set({ updatedAt: new Date() }).where(eq(chatThreads.id, data.threadId));
+
+    persistChatTurn(orgId, data.text, orchestrated.reply, { threadId: data.threadId });
+
+    const isFirstUserMessage = !previous.some((m) => m.role === "user");
+    const title =
+      isFirstUserMessage || threads[0].title === "Nouvelle conversation"
+        ? threadTitle(data.text)
+        : threads[0].title;
+    await db
+      .update(chatThreads)
+      .set({ updatedAt: new Date(), title })
+      .where(eq(chatThreads.id, data.threadId));
     return listThreads();
   });
 

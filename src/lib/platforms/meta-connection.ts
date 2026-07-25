@@ -13,13 +13,16 @@ export async function getMetaConnection(orgId: string) {
   const conn = rows.find((c) => c.connector === "meta_ads" && c.status === "connectée" && c.encryptedTokens);
   if (!conn) return null;
 
-  const tokens = await ensureFreshTokens(conn.id, orgId, "meta_ads");
-  if (!tokens.accountId) {
-    // Connected OAuth but no ad account selected yet — not an error for read paths.
+  try {
+    const tokens = await ensureFreshTokens(conn.id, orgId, "meta_ads");
+    if (!tokens.accountId) {
+      // Connected OAuth but no ad account selected yet — not an error for read paths.
+      return null;
+    }
+    return { conn, tokens, via: "oauth" as const };
+  } catch {
     return null;
   }
-
-  return { conn, tokens, via: "oauth" as const };
 }
 
 export async function isMetaLinked(orgId: string): Promise<boolean> {

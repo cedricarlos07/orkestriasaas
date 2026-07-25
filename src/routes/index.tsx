@@ -355,7 +355,10 @@ function SmartCta({ children, variant = "primary", className = "" }: { children:
 
 function Logo() {
   return (
-    <BrandLogo className="h-8 w-auto" />
+    <Link to="/" className="inline-flex items-center gap-2.5" aria-label="Orkestria — accueil">
+      <BrandLogo variant="mark" className="h-8 w-8" alt="" />
+      <span className="font-display text-[20px] font-semibold tracking-tight text-ink">Orkestria</span>
+    </Link>
   );
 }
 
@@ -630,9 +633,12 @@ function Hero() {
       <Header />
 
       <div className="mx-auto max-w-[1240px] px-6 pb-40 pt-32 text-center md:pt-36">
-        <div className="mx-auto inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-1.5 text-[13px] text-ink shadow-sm ring-1 ring-black/5 backdrop-blur">
+        <p className="font-display text-[15px] font-semibold tracking-[0.18em] uppercase text-[#ff6c02]">
+          Orkestria
+        </p>
+        <div className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-1.5 text-[13px] text-ink shadow-sm ring-1 ring-black/5 backdrop-blur">
           <span className="h-2 w-2 rounded-full bg-[#ff6c02]" />
-          Nouveau · Votre publicité pilotée par une IA
+          Votre publicité pilotée par une IA
         </div>
 
         <h1 className="mx-auto mt-6 max-w-5xl font-display text-[40px] font-semibold leading-[1.05] tracking-tight text-ink sm:text-[52px] md:text-[64px]">

@@ -6,6 +6,7 @@ import { authClient } from "@/lib/auth-client";
 import { getProfile } from "@/functions/profiles";
 import { getOAuthAvailability } from "@/functions/platform-config";
 import { BrandLogo } from "@/components/BrandLogo";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -46,18 +47,32 @@ function AuthPage() {
   const googleLoginEnabled = platformConfig?.googleLoginConfigured ?? false;
   const facebookLoginEnabled = platformConfig?.facebookLoginConfigured ?? false;
   const socialLoginEnabled = googleLoginEnabled || facebookLoginEnabled;
-  const [mode, setMode] = useState<"signup" | "login" | "forgot">("signup");
+  const passwordResetEnabled = platformConfig?.passwordResetConfigured ?? false;
+  const [mode, setMode] = useState<"signup" | "login" | "forgot" | "otp">("signup");
   const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [otp, setOtp] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [rootError, setRootError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [showPwd, setShowPwd] = useState(false);
-  const [loading, setLoading] = useState<null | "google" | "facebook" | "submit">(null);
+  const [loading, setLoading] = useState<null | "google" | "facebook" | "submit" | "otp" | "resend">(null);
   const [resetToken, setResetToken] = useState<string | null>(null);
+  // Only force OTP right after signup/login when we explicitly await a code.
+  const [awaitingOtp, setAwaitingOtp] = useState(false);
+  const [verificationSkipped, setVerificationSkipped] = useState(false);
 
   // Already signed in → never show login as a "disconnect".
   useEffect(() => {
     if (sessionPending || !session?.user) return;
+
+    // Soft OTP gate: only when we just asked for a code, and user hasn't skipped.
+    if (!session.user.emailVerified && awaitingOtp && !verificationSkipped) {
+      setMode("otp");
+      setForm((f) => ({ ...f, email: session.user.email }));
+      setInfo((prev) => prev ?? "Un code à 6 chiffres a été envoyé. Entrez-le pour confirmer votre e-mail.");
+      return;
+    }
+
     let cancelled = false;
     void (async () => {
       const dest = safePostAuthPath(redirectParam);
@@ -72,7 +87,7 @@ function AuthPage() {
     return () => {
       cancelled = true;
     };
-  }, [sessionPending, session?.user, redirectParam, navigate]);
+  }, [sessionPending, session?.user, redirectParam, navigate, awaitingOtp, verificationSkipped]);
 
   const set = (k: string, v: string) => {
     setForm({ ...form, [k]: v });
@@ -82,6 +97,11 @@ function AuthPage() {
 
   const validate = () => {
     const e: Record<string, string> = {};
+    if (mode === "otp") {
+      if (otp.trim().length !== 6) e.otp = "Code à 6 chiffres requis.";
+      setErrors(e);
+      return Object.keys(e).length === 0;
+    }
     if (mode === "signup" && form.name.trim().length < 2) e.name = "Indiquez votre nom (2 caractères min).";
     const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
     if (!emailOk) e.email = "E-mail invalide.";
@@ -102,13 +122,46 @@ function AuthPage() {
     navigate({ to: fallback });
   };
 
+  const finishVerified = async () => {
+    setAwaitingOtp(false);
+    setVerificationSkipped(true);
+    const p = await getProfile();
+    await goAfterAuth(!p ? "/setup" : p.appRole === "agency" ? "/app/agency" : "/app");
+  };
+
+  const resendOtp = async () => {
+    setRootError(null);
+    setLoading("resend");
+    try {
+      const { error } = await authClient.emailOtp.sendVerificationOtp({
+        email: form.email.trim().toLowerCase(),
+        type: "email-verification",
+      });
+      if (error) throw new Error(error.message ?? "Envoi impossible.");
+      setInfo("Nouveau code envoyé. Vérifiez votre boîte (et spam).");
+    } catch (err) {
+      setRootError((err as Error).message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setRootError(null);
     setInfo(null);
     if (!validate()) return;
-    setLoading("submit");
+    setLoading(mode === "otp" ? "otp" : "submit");
     try {
+      if (mode === "otp") {
+        const { error } = await authClient.emailOtp.verifyEmail({
+          email: form.email.trim().toLowerCase(),
+          otp: otp.trim(),
+        });
+        if (error) throw new Error(error.message ?? "Code invalide ou expiré.");
+        await finishVerified();
+        return;
+      }
       if (mode === "signup") {
         const { error } = await authClient.signUp.email({
           email: form.email.trim().toLowerCase(),
@@ -116,7 +169,10 @@ function AuthPage() {
           name: form.name.trim(),
         });
         if (error) throw new Error(error.message ?? "Inscription impossible.");
-        await goAfterAuth("/setup");
+        setAwaitingOtp(true);
+        setMode("otp");
+        setOtp("");
+        setInfo("Compte créé. Entrez le code à 6 chiffres reçu par e-mail.");
       } else if (mode === "login") {
         const { error } = await authClient.signIn.email({
           email: form.email.trim().toLowerCase(),
@@ -127,7 +183,12 @@ function AuthPage() {
         if (!p) await goAfterAuth("/setup");
         else await goAfterAuth(p.appRole === "agency" ? "/app/agency" : "/app");
       } else {
-        const { error } = await authClient.forgetPassword({
+        if (!passwordResetEnabled) {
+          throw new Error(
+            "La réinitialisation par e-mail n'est pas encore disponible. Contactez hello@orkestria.top.",
+          );
+        }
+        const { error } = await authClient.requestPasswordReset({
           email: form.email.trim().toLowerCase(),
           redirectTo: `${window.location.origin}/reset-password`,
         });
@@ -201,7 +262,7 @@ function AuthPage() {
             <BrandLogo className="h-7 w-auto" />
           </Link>
 
-          {mode !== "forgot" && (
+          {mode !== "forgot" && mode !== "otp" && (
           <div className="inline-flex rounded-full bg-surface-2 p-1 text-[13px]">
             <button
               onClick={() => setMode("signup")}
@@ -217,22 +278,35 @@ function AuthPage() {
             </button>
           </div>
           )}
-          {mode === "forgot" && (
-            <button onClick={() => { setMode("login"); setInfo(null); setResetToken(null); }} className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink">
+          {(mode === "forgot" || mode === "otp") && (
+            <button
+              onClick={() => {
+                setMode("login");
+                setInfo(null);
+                setResetToken(null);
+                setOtp("");
+                setAwaitingOtp(false);
+              }}
+              className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink"
+            >
               <ArrowLeft className="h-3.5 w-3.5" /> Retour à la connexion
             </button>
           )}
 
           <h2 className="mt-6 font-display text-[30px] font-semibold text-ink">
-            {mode === "signup" ? "Créez votre espace" : mode === "login" ? "Content de vous revoir" : "Mot de passe oublié ?"}
+            {mode === "signup" && "Créez votre espace"}
+            {mode === "login" && "Content de vous revoir"}
+            {mode === "forgot" && "Mot de passe oublié ?"}
+            {mode === "otp" && "Vérifiez votre e-mail"}
           </h2>
           <p className="mt-2 text-[14px] text-ink-soft">
             {mode === "signup" && "30 secondes pour démarrer. Ensuite Orkestria s'occupe de tout."}
             {mode === "login" && "Connectez-vous pour retrouver votre espace publicitaire."}
             {mode === "forgot" && "Indiquez votre e-mail, nous vous envoyons un lien pour définir un nouveau mot de passe."}
+            {mode === "otp" && `Code envoyé à ${form.email || "votre adresse"}. Valable 10 minutes.`}
           </p>
 
-          {mode !== "forgot" && socialLoginEnabled && (
+          {mode !== "forgot" && mode !== "otp" && socialLoginEnabled && (
             <>
               <div className={`mt-6 grid gap-3 ${googleLoginEnabled && facebookLoginEnabled ? "grid-cols-2" : "grid-cols-1"}`}>
                 {googleLoginEnabled && (
@@ -253,7 +327,18 @@ function AuthPage() {
             </>
           )}
 
-          {mode !== "forgot" && !socialLoginEnabled && (
+          {mode === "otp" && googleLoginEnabled && (
+            <div className="mt-6 space-y-3">
+              <button type="button" onClick={() => oauthSignIn("google")} disabled={loading !== null} className="flex w-full items-center justify-center gap-2 rounded-full border border-line bg-white py-2.5 text-[13px] font-medium text-ink hover:bg-surface-2 disabled:opacity-60">
+                {loading === "google" ? <Loader2 className="h-4 w-4 animate-spin" /> : <GoogleIcon />} Continuer avec Google
+              </button>
+              <div className="flex items-center gap-3 text-[12px] text-ink-soft">
+                <span className="h-px flex-1 bg-line" /> ou entrer le code <span className="h-px flex-1 bg-line" />
+              </div>
+            </div>
+          )}
+
+          {mode !== "forgot" && mode !== "otp" && !socialLoginEnabled && (
             <p className="mt-4 text-[13px] text-ink-soft">Connectez-vous avec votre e-mail et mot de passe.</p>
           )}
 
@@ -281,6 +366,39 @@ function AuthPage() {
           )}
 
           <form onSubmit={submit} className="space-y-4">
+            {mode === "otp" ? (
+              <div>
+                <span className="mb-2 block text-[13px] font-medium text-ink">Code à 6 chiffres</span>
+                <InputOTP maxLength={6} value={otp} onChange={setOtp} containerClassName="justify-between">
+                  <InputOTPGroup className="gap-2">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <InputOTPSlot
+                        key={i}
+                        index={i}
+                        className="h-12 w-11 rounded-xl border border-line bg-white text-[18px] font-semibold"
+                      />
+                    ))}
+                  </InputOTPGroup>
+                </InputOTP>
+                {errors.otp && <p className="mt-2 text-[12px] text-rose-600">{errors.otp}</p>}
+                <div className="mt-3 flex items-center justify-between gap-3 text-[12px]">
+                  <button type="button" onClick={() => void resendOtp()} disabled={loading !== null} className="font-medium text-[#ff6c02] hover:underline disabled:opacity-50">
+                    {loading === "resend" ? "Envoi…" : "Renvoyer le code"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAwaitingOtp(false);
+                      void finishVerified();
+                    }}
+                    className="text-ink-soft hover:text-ink hover:underline"
+                  >
+                    Continuer sans vérifier
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
             {mode === "signup" && (
               <FormRow icon={User} label="Nom complet" value={form.name} onChange={(v) => set("name", v)} placeholder="Aïcha Konaté" error={errors.name} autoComplete="name" />
             )}
@@ -290,7 +408,22 @@ function AuthPage() {
                 <div className="mb-1.5 flex items-center justify-between">
                   <span className="text-[13px] font-medium text-ink">Mot de passe</span>
                   {mode === "login" && (
-                    <button type="button" onClick={() => { setMode("forgot"); setErrors({}); setRootError(null); }} className="text-[12px] font-medium text-[#ff6c02] hover:underline">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setErrors({});
+                        setInfo(null);
+                        if (!passwordResetEnabled) {
+                          setRootError(
+                            "Réinitialisation par e-mail pas encore active. Écrivez à hello@orkestria.top.",
+                          );
+                          return;
+                        }
+                        setMode("forgot");
+                        setRootError(null);
+                      }}
+                      className="text-[12px] font-medium text-[#ff6c02] hover:underline"
+                    >
                       Oublié ?
                     </button>
                   )}
@@ -331,24 +464,27 @@ function AuthPage() {
                 <Link to="/privacy" className="underline hover:text-ink">Politique de confidentialité</Link>.
               </p>
             )}
+              </>
+            )}
 
             <button
               type="submit"
               disabled={loading !== null}
               className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading === "submit" ? <><Loader2 className="h-4 w-4 animate-spin" /> Un instant…</> : (
+              {loading === "submit" || loading === "otp" ? <><Loader2 className="h-4 w-4 animate-spin" /> Un instant…</> : (
                 <>
                   {mode === "signup" && "Créer mon compte"}
                   {mode === "login" && "Se connecter"}
                   {mode === "forgot" && "Envoyer le lien"}
+                  {mode === "otp" && "Valider le code"}
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
             </button>
           </form>
 
-          {mode !== "forgot" && (
+          {mode !== "forgot" && mode !== "otp" && (
             <p className="mt-6 text-center text-[13px] text-ink-soft">
               {mode === "signup" ? (
                 <>Déjà un compte ? <button onClick={() => setMode("login")} className="font-medium text-ink hover:underline">Se connecter</button></>

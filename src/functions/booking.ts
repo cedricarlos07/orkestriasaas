@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { availabilityConfig, bookings } from "@/db/schema/index";
+import { sendBookingConfirmationEmail, sendBookingNotifyEmail } from "@/lib/email/smtp";
 import { uid } from "./utils";
 
 export const getBookingConfig = createServerFn({ method: "GET" }).handler(async () => {
@@ -70,6 +71,29 @@ export const createBooking = createServerFn({ method: "POST" })
       createdAt: new Date(),
     };
     await db.insert(bookings).values(row);
+
+    const startIso = row.startIso.toISOString();
+    const endIso = row.endIso.toISOString();
+    void Promise.all([
+      sendBookingConfirmationEmail({
+        to: data.email,
+        name: data.name,
+        topic: data.topic,
+        startIso,
+        endIso,
+        company: data.company,
+      }),
+      sendBookingNotifyEmail({
+        name: data.name,
+        email: data.email,
+        topic: data.topic,
+        startIso,
+        endIso,
+        company: data.company,
+        message: data.message,
+      }),
+    ]).catch((err) => console.error("[booking] email failed:", err));
+
     return row;
   });
 

@@ -1,8 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { notifications } from "@/db/schema/index";
+import { notifications, user } from "@/db/schema/index";
 import { ensureSession } from "@/lib/auth.functions";
+import { sendNotificationEmail } from "@/lib/email/smtp";
 import { getActiveOrgId } from "./context";
 import { uid } from "./utils";
 
@@ -39,15 +40,16 @@ export const markAllNotificationsRead = createServerFn({ method: "POST" }).handl
 
 export const createNotification = createServerFn({ method: "POST" })
   .inputValidator(
-    (data: { kind: string; title: string; body: string; userId?: string }) => data,
+    (data: { kind: string; title: string; body: string; userId?: string; sendEmail?: boolean }) => data,
   )
   .handler(async ({ data }) => {
     const session = await ensureSession();
     const orgId = await getActiveOrgId(session);
+    const targetUserId = data.userId ?? session.user.id;
     const row = {
       id: uid("n"),
       organizationId: orgId,
-      userId: data.userId ?? session.user.id,
+      userId: targetUserId,
       kind: data.kind,
       title: data.title,
       body: data.body,
@@ -56,5 +58,27 @@ export const createNotification = createServerFn({ method: "POST" })
       createdAt: new Date(),
     };
     await db.insert(notifications).values(row);
+
+    const shouldEmail = data.sendEmail !== false;
+    if (shouldEmail) {
+      try {
+        const [target] = await db.select({ email: user.email }).from(user).where(eq(user.id, targetUserId)).limit(1);
+        const email = target?.email ?? (targetUserId === session.user.id ? session.user.email : null);
+        if (email) {
+          const sent = await sendNotificationEmail({
+            to: email,
+            title: data.title,
+            body: data.body,
+          });
+          if (sent.ok) {
+            await db.update(notifications).set({ emailSent: true }).where(eq(notifications.id, row.id));
+            row.emailSent = true;
+          }
+        }
+      } catch (err) {
+        console.error("[notifications] email failed:", err);
+      }
+    }
+
     return row;
   });

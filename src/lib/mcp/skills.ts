@@ -1,12 +1,20 @@
 /**
  * Built-in MCP skills (SOPs) — Synter-style file SOPs + in-code launch skills.
- * File SOPs live under skills/ and agents/ad-operator.md.
+ * Media buying SOPs from _vendor/ai-media-buying-skills are merged at runtime.
  */
+import { getMediaBuyingSkill, listMediaBuyingSkills } from "@/lib/mcp/skills-repo";
+
 export type SkillDefinition = {
   id: string;
   name: string;
   description: string;
   steps: { tool: string; hint: string }[];
+  source?: "builtin" | "media_buying";
+  platform?: string;
+  category?: string;
+  whenToUse?: string;
+  /** Full markdown for mb/* skills */
+  fullMarkdown?: string;
 };
 
 export const MCP_SKILLS: SkillDefinition[] = [
@@ -19,6 +27,7 @@ export const MCP_SKILLS: SkillDefinition[] = [
       { tool: "create_media_plan", hint: "Allocate budget across connected platforms" },
       { tool: "create_campaign", hint: "Create paused campaign (dry_run=true then false)" },
     ],
+    source: "builtin",
   },
   {
     id: "optimize",
@@ -29,6 +38,7 @@ export const MCP_SKILLS: SkillDefinition[] = [
       { tool: "get_performance", hint: "Pull 30-day performance" },
       { tool: "pause_campaign", hint: "Pause clear losers via dry_run then confirm" },
     ],
+    source: "builtin",
   },
   {
     id: "audit",
@@ -39,6 +49,7 @@ export const MCP_SKILLS: SkillDefinition[] = [
       { tool: "list_conversions", hint: "List conversion actions / pixels" },
       { tool: "get_account_summary", hint: "Consolidated multi-platform snapshot" },
     ],
+    source: "builtin",
   },
   {
     id: "audience",
@@ -49,6 +60,7 @@ export const MCP_SKILLS: SkillDefinition[] = [
       { tool: "attach_audience", hint: "Attach to campaign (Google/LI) or ad set (Meta)" },
       { tool: "list_campaigns", hint: "Verify targeting surface" },
     ],
+    source: "builtin",
   },
   {
     id: "creative_rotate",
@@ -59,6 +71,7 @@ export const MCP_SKILLS: SkillDefinition[] = [
       { tool: "pause_ad", hint: "Pause suggested ads via dry_run then confirm" },
       { tool: "list_creatives", hint: "Refresh creative inventory" },
     ],
+    source: "builtin",
   },
   {
     id: "campaign-manager",
@@ -69,6 +82,7 @@ export const MCP_SKILLS: SkillDefinition[] = [
       { tool: "create_media_plan", hint: "Budget allocation" },
       { tool: "create_meta_campaign", hint: "Or create_search_campaign / create_pmax_campaign" },
     ],
+    source: "builtin",
   },
   {
     id: "performance-analyzer",
@@ -79,6 +93,7 @@ export const MCP_SKILLS: SkillDefinition[] = [
       { tool: "compare_campaigns", hint: "Rank campaigns" },
       { tool: "detect_anomalies", hint: "Surface issues" },
     ],
+    source: "builtin",
   },
   {
     id: "budget-optimizer",
@@ -89,6 +104,7 @@ export const MCP_SKILLS: SkillDefinition[] = [
       { tool: "compare_campaigns", hint: "Efficiency ranking" },
       { tool: "update_campaign_budget", hint: "Apply with dry_run protocol" },
     ],
+    source: "builtin",
   },
   {
     id: "creative-generator",
@@ -99,13 +115,38 @@ export const MCP_SKILLS: SkillDefinition[] = [
       { tool: "upload_creative", hint: "Upload image asset" },
       { tool: "list_creatives", hint: "Inventory" },
     ],
+    source: "builtin",
   },
 ];
 
+function mediaSkillToDefinition(
+  s: ReturnType<typeof listMediaBuyingSkills>[number],
+): SkillDefinition {
+  return {
+    id: s.id,
+    name: s.name,
+    description: s.description,
+    whenToUse: s.whenToUse,
+    platform: s.platform,
+    category: s.category,
+    fullMarkdown: s.fullMarkdown,
+    source: "media_buying",
+    steps: [
+      { tool: "get_account_summary", hint: "Pull live account data for this SOP" },
+      { tool: "get_performance", hint: "Metrics for the analysis window" },
+      { tool: "detect_anomalies", hint: "Surface issues aligned with the SOP" },
+    ],
+  };
+}
+
 export function listSkills(): SkillDefinition[] {
-  return MCP_SKILLS;
+  const repo = listMediaBuyingSkills().map(mediaSkillToDefinition);
+  return [...MCP_SKILLS, ...repo];
 }
 
 export function getSkill(id: string): SkillDefinition | undefined {
-  return MCP_SKILLS.find((s) => s.id === id);
+  const builtin = MCP_SKILLS.find((s) => s.id === id);
+  if (builtin) return builtin;
+  const mb = getMediaBuyingSkill(id);
+  return mb ? mediaSkillToDefinition(mb) : undefined;
 }

@@ -18,6 +18,7 @@ import {
 } from "@/lib/mcp/adkit-bridge";
 import { researchCompetitorAds } from "@/lib/mcp/clients/useproxy";
 import { resolveMetaPageId } from "@/lib/mcp/meta-org";
+import { resolveActiveAdAccountId } from "@/lib/mcp/resolve-ad-account";
 import type { WriteActionInput, WriteActionName } from "@/lib/mcp/policy-engine";
 import { getAdapter } from "@/lib/platforms/adapter";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
@@ -59,17 +60,21 @@ export async function routeReadSnapshot(ctx: ReadRouteContext): Promise<{
   }
 
   const tokens = await ensureFreshTokens(ctx.connectionId, ctx.orgId, ctx.connector);
-  const accountId = ctx.accountId ?? tokens.accountId ?? "";
+  const preferred =
+    ctx.accountId ||
+    (await resolveActiveAdAccountId(ctx.orgId, ctx.connector)) ||
+    tokens.accountId ||
+    "";
   const adapter = getAdapter(ctx.connector);
-  const snapshot = await adapter.fetchSnapshot(tokens, accountId, period);
+  const snapshot = await adapter.fetchSnapshot(tokens, preferred, period);
   return { snapshot, upstream: "native" };
 }
 
 export async function routeResearch(
-  _orgId: string,
+  orgId: string,
   input: { brand: string; brands?: string[]; country?: string },
 ): Promise<Record<string, unknown>> {
-  return researchCompetitorAds(input);
+  return researchCompetitorAds({ ...input, orgId });
 }
 
 export async function routeWrite(ctx: WriteRouteContext): Promise<Record<string, unknown>> {
@@ -92,7 +97,11 @@ export async function routeWrite(ctx: WriteRouteContext): Promise<Record<string,
 
   const adapter = getAdapter(ctx.connector);
   const tokens = await ensureFreshTokens(ctx.connectionId, ctx.orgId, ctx.connector);
-  const accountId = ctx.accountId ?? tokens.accountId ?? "";
+  const accountId =
+    ctx.accountId ||
+    (await resolveActiveAdAccountId(ctx.orgId, ctx.connector)) ||
+    tokens.accountId ||
+    "";
 
   if (ctx.connector === "meta_ads") {
     const pageId = await resolveMetaPageId(ctx.orgId, ctx.params.pageId as string | undefined);

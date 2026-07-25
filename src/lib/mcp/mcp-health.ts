@@ -4,7 +4,8 @@ import { mcpStatusSnapshots } from "@/db/schema/index";
 import { probeAdloopHealth } from "@/lib/mcp/clients/adloop";
 import { probeAdkitMcp } from "@/lib/mcp/adkit-bridge";
 import { adkitMcpCommand } from "@/lib/mcp/clients/adkit-mcp";
-import { probeUseproxyHealth } from "@/lib/mcp/clients/useproxy";
+import { probeMetaAdLibraryHealth } from "@/lib/platforms/meta-ad-library";
+import { probeMem0Health, isMem0Configured } from "@/lib/mcp/mem0-bridge";
 
 export async function probeMcpHealth(): Promise<void> {
   const services = [
@@ -16,11 +17,33 @@ export async function probeMcpHealth(): Promise<void> {
       url: `${process.env.ADLOOP_MCP_COMMAND ?? "python3"} ${process.env.ADLOOP_MCP_ARGS ?? "-m adloop"}`,
     },
     {
+      serviceId: "meta_ad_library",
+      label: "Meta Ad Library (ads_archive)",
+      probe: () => probeMetaAdLibraryHealth(),
+      mode: "meta_graph",
+      url: "graph.facebook.com/ads_archive",
+    },
+    {
+      serviceId: "fb_ads_library_mcp",
+      label: "facebook-ads-library-mcp (legacy optional)",
+      probe: async () => ({
+        ok: false,
+        latencyMs: 0,
+        error: "deprecated — research uses Meta ads_archive",
+      }),
+      mode: "deprecated",
+      url: null,
+    },
+    {
       serviceId: "useproxy_mcp",
-      label: "Proxy Ads Library (research)",
-      probe: () => probeUseproxyHealth(),
-      mode: "useproxy",
-      url: process.env.USEPROXY_MCP_URL ?? "https://mcp.useproxy.dev/mcp",
+      label: "Proxy Ads Library (legacy)",
+      probe: async () => ({
+        ok: false,
+        latencyMs: 0,
+        error: "deprecated — research uses Meta ads_archive",
+      }),
+      mode: "deprecated",
+      url: null,
     },
     {
       serviceId: "google_ads_native",
@@ -65,6 +88,18 @@ export async function probeMcpHealth(): Promise<void> {
       },
       mode: "adkit_stdio",
       url: adkitMcpCommand(),
+    },
+    {
+      serviceId: "mem0",
+      label: "Mem0 (long-term org memory)",
+      probe: async () => {
+        if (!isMem0Configured()) {
+          return { ok: false, latencyMs: 0, error: "MEM0_API_KEY unset or MEM0_ENABLED=false" };
+        }
+        return probeMem0Health();
+      },
+      mode: "mem0_rest",
+      url: process.env.MEM0_API_URL ?? "http://127.0.0.1:8888",
     },
   ] as const;
 

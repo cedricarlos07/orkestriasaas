@@ -46,6 +46,13 @@ function maskId(id: string): string {
   return `${id.slice(0, 4)}••••${clean.slice(-4)}`;
 }
 
+/** Normalize Meta act ids so act_123 and 123 compare equal. */
+function sameAdAccountId(a: string, b: string): boolean {
+  const na = a.replace(/^act_/i, "").replace(/\D/g, "");
+  const nb = b.replace(/^act_/i, "").replace(/\D/g, "");
+  return Boolean(na) && na === nb;
+}
+
 async function readLinked(orgId: string): Promise<LinkedStore> {
   const rows = await db
     .select()
@@ -98,7 +105,8 @@ async function activateOnConnection(orgId: string, connectionId: string, account
     .update(connections)
     .set({
       encryptedTokens: encryptTokens(tokens),
-      externalAccount: accountName,
+      // Persist the ad account id (not the display name) so reads/audits hit the right act.
+      externalAccount: accountId,
       updatedAt: new Date(),
     })
     .where(eq(connections.id, connectionId));
@@ -245,7 +253,7 @@ export const selectAdAccount = createServerFn({ method: "POST" })
     const quotas = await getQuotaStatus(orgId);
     const limit = quotas.quotas.adAccounts;
     const store = await readLinked(orgId);
-    const already = store.accounts.some((a) => a.accountId === data.accountId);
+    const already = store.accounts.some((a) => sameAdAccountId(a.accountId, data.accountId));
     const shouldLink = data.link !== false;
 
     if (shouldLink && !already && limit >= 0 && store.accounts.length >= limit) {
@@ -271,7 +279,9 @@ export const selectAdAccount = createServerFn({ method: "POST" })
       ];
     } else if (already) {
       accounts = accounts.map((a) =>
-        a.accountId === data.accountId ? { ...a, accountName: data.accountName, connectionId: data.connectionId } : a,
+        sameAdAccountId(a.accountId, data.accountId)
+          ? { ...a, accountId: data.accountId, accountName: data.accountName, connectionId: data.connectionId }
+          : a,
       );
     }
 
@@ -285,9 +295,9 @@ export const unlinkAdAccount = createServerFn({ method: "POST" })
     const session = await ensureSession();
     const orgId = await getActiveOrgId(session);
     const store = await readLinked(orgId);
-    const accounts = store.accounts.filter((a) => a.accountId !== data.accountId);
+    const accounts = store.accounts.filter((a) => !sameAdAccountId(a.accountId, data.accountId));
     let activeAccountId = store.activeAccountId;
-    if (activeAccountId === data.accountId) {
+    if (activeAccountId && sameAdAccountId(activeAccountId, data.accountId)) {
       activeAccountId = accounts[0]?.accountId ?? null;
       if (accounts[0]) {
         await activateOnConnection(

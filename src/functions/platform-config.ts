@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { CONNECTORS, hasOAuthCredentials, type ConnectorId } from "@/lib/oauth/connectors";
 import { oauthCallbackUrl } from "@/lib/oauth/connectors";
 import { isLlmConfigured } from "@/lib/llm/client";
+import { isMailConfigured } from "@/lib/email/smtp";
 
 export type ConnectorAvailability = {
   id: ConnectorId;
@@ -29,8 +30,11 @@ export const getOAuthAvailability = createServerFn({ method: "GET" }).handler(as
     ),
     writeEnabled: process.env.MCP_WRITE_ENABLED === "true",
     adloopConfigured: process.env.ADLOOP_ENABLED !== "false",
-    useproxyConfigured: Boolean((process.env.USEPROXY_BEARER_TOKEN ?? process.env.USEPROXY_API_KEY)?.trim()),
-    useproxyUrl: process.env.USEPROXY_MCP_URL ?? "https://mcp.useproxy.dev/mcp",
+    passwordResetConfigured: isMailConfigured(),
+    useproxyConfigured: Boolean(process.env.META_APP_ID?.trim() && process.env.META_APP_SECRET?.trim()),
+    useproxyUrl: "graph.facebook.com/ads_archive",
+    adsLibraryConfigured: Boolean(process.env.META_APP_ID?.trim() && process.env.META_APP_SECRET?.trim()),
+    adsLibraryUpstream: "meta_ads_archive",
     adkitCommand: process.env.ADKIT_MCP_COMMAND ?? "adkit-mcp",
     baseUrl: process.env.BETTER_AUTH_URL ?? "http://localhost:8080",
   };

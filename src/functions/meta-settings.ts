@@ -3,10 +3,8 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { connections } from "@/db/schema/index";
 import { ensureSession } from "@/lib/auth.functions";
-import { buildAdkitEnv, adkitVerify } from "@/lib/mcp/adkit-bridge";
 import {
   getOrgMetaPageId,
-  resolveMetaPageId,
   setOrgMetaPageId,
   syncOrgMetaPageFromToken,
 } from "@/lib/mcp/meta-org";
@@ -59,22 +57,10 @@ export const getMetaSetupStatus = createServerFn({ method: "GET" }).handler(asyn
           null;
       }
 
-      try {
-        const resolvedPageId = await resolveMetaPageId(orgId, pageId);
-        const env = buildAdkitEnv({
-          accessToken: tokens.accessToken,
-          accountId: accountId ?? "",
-          pageId: resolvedPageId ?? undefined,
-          allowSpend: false,
-        });
-        await adkitVerify(env);
-        automationHealth = { ok: true };
-      } catch (e) {
-        automationHealth = {
-          ok: false,
-          error: e instanceof Error ? e.message : "Vérification Meta échouée",
-        };
-      }
+      automationHealth = {
+        ok: Boolean(pageId),
+        error: pageId ? undefined : "Choisissez une Page Facebook ci-dessous",
+      };
     } catch (e) {
       const message = e instanceof Error ? e.message : "Vérification Meta échouée";
       if (!oauthConnected) tokenError = message;

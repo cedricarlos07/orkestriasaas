@@ -1,24 +1,34 @@
 import { createServerFn } from "@tanstack/react-start";
 import { ensureSession } from "@/lib/auth.functions";
-import { probeUseproxyHealth } from "@/lib/mcp/clients/useproxy";
+import { getActiveOrgId } from "./context";
+import { isMetaAdLibraryConfigured } from "@/lib/platforms/meta-ad-library";
+import { probeResearchHealth, resolveResearchAccessToken } from "@/lib/mcp/clients/useproxy";
+import { probeMetaAdLibraryHealth } from "@/lib/platforms/meta-ad-library";
 
 export const getResearchStackStatus = createServerFn({ method: "GET" }).handler(async () => {
-  await ensureSession();
-  const configured = Boolean((process.env.USEPROXY_BEARER_TOKEN ?? process.env.USEPROXY_API_KEY)?.trim());
+  const session = await ensureSession();
+  const orgId = await getActiveOrgId(session);
+  const configured = isMetaAdLibraryConfigured();
   if (!configured) {
     return {
       configured: false,
-      url: process.env.USEPROXY_MCP_URL ?? "https://mcp.useproxy.dev/mcp",
+      url: "graph.facebook.com/ads_archive",
       health: {
         ok: false,
-        error: "Pas de bearer OAuth useproxy — connectez useproxy une fois, puis token admin serveur",
+        error: "META_APP_ID / META_APP_SECRET manquants",
       },
     };
   }
-  const health = await probeUseproxyHealth();
+  let health: { ok: boolean; latencyMs: number; error?: string };
+  try {
+    const token = await resolveResearchAccessToken(orgId);
+    health = await probeMetaAdLibraryHealth(token);
+  } catch {
+    health = await probeResearchHealth();
+  }
   return {
     configured: true,
-    url: process.env.USEPROXY_MCP_URL ?? "https://mcp.useproxy.dev/mcp",
+    url: "graph.facebook.com/ads_archive (Meta app)",
     health,
   };
 });
