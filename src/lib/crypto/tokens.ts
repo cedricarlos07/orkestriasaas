@@ -3,17 +3,28 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:
 const ALGO = "aes-256-gcm";
 const IV_LEN = 12;
 
+let cachedKey: Buffer | null = null;
+
 function getKey(): Buffer {
+  if (cachedKey) return cachedKey;
   const dedicated = process.env.TOKEN_ENCRYPTION_KEY?.trim();
   const fallback = process.env.BETTER_AUTH_SECRET?.trim();
-  if (!dedicated && process.env.NODE_ENV === "production") {
-    console.error(
-      "[security] TOKEN_ENCRYPTION_KEY manquant — fallback BETTER_AUTH_SECRET (à corriger).",
+
+  // Fail closed in production: reusing the auth secret to encrypt platform
+  // tokens breaks key separation, so a missing dedicated key is a hard error.
+  if (process.env.NODE_ENV === "production" && !dedicated) {
+    throw new Error(
+      "TOKEN_ENCRYPTION_KEY requis en production (pas de fallback sur BETTER_AUTH_SECRET).",
     );
   }
   const secret = dedicated || fallback;
   if (!secret) throw new Error("TOKEN_ENCRYPTION_KEY or BETTER_AUTH_SECRET required");
-  return scryptSync(secret, "orkestria-tokens", 32);
+  if (dedicated && dedicated.length < 32) {
+    throw new Error("TOKEN_ENCRYPTION_KEY trop court (32 caractères minimum).");
+  }
+  // scrypt is intentionally slow — derive once per process.
+  cachedKey = scryptSync(secret, "orkestria-tokens", 32);
+  return cachedKey;
 }
 
 export type TokenPayload = {

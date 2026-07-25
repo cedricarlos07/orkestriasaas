@@ -2,6 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ApiAuthError, authenticateApiKey } from "@/lib/mcp/api-keys";
 import { AGENT_TOOLS, invokeAgentTool } from "@/lib/mcp/agent-tools";
 import { classifyTool, enforceQuotas, QuotaError, recordUsage } from "@/lib/quotas/enforce";
+import { API_SECURITY_HEADERS } from "@/lib/security/headers";
+import {
+  clientIpFromHeaders,
+  consume,
+  enforceApiKeyLimit,
+  RateLimitError,
+  RATE_LIMITS,
+} from "@/lib/security/rate-limit";
 import { randomUUID } from "node:crypto";
 
 const PROTOCOL_VERSION = "2025-03-26";
@@ -9,11 +17,24 @@ const SERVER_INFO = { name: "orkestria-mcp", version: "1.2.0" };
 
 type Session = { id: string; createdAt: number };
 const sessions = new Map<string, Session>();
+const SESSION_TTL_MS = 30 * 60 * 1000;
+const MAX_SESSIONS = 500;
+
+/** Drop expired sessions, then the oldest ones if still over the cap. */
+function reapSessions(): void {
+  const cutoff = Date.now() - SESSION_TTL_MS;
+  for (const [id, s] of sessions) {
+    if (s.createdAt < cutoff) sessions.delete(id);
+  }
+  if (sessions.size <= MAX_SESSIONS) return;
+  const oldest = [...sessions.values()].sort((a, b) => a.createdAt - b.createdAt);
+  for (const s of oldest.slice(0, sessions.size - MAX_SESSIONS)) sessions.delete(s.id);
+}
 
 function json(body: unknown, status = 200, extraHeaders?: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", ...extraHeaders },
+    headers: { "Content-Type": "application/json", ...API_SECURITY_HEADERS, ...extraHeaders },
   });
 }
 
@@ -65,6 +86,8 @@ async function handleRpc(request: Request, message: Record<string, unknown>): Pr
       if (!params.name) return rpcError(id, -32602, "params.name requis");
       try {
         const kind = classifyTool(params.name);
+        // Per-key ceiling first: a leaked key must not drain the org quota.
+        await enforceApiKeyLimit(ctx.keyId, RATE_LIMITS.mcpPerKey.limit, RATE_LIMITS.mcpPerKey.windowSec);
         await enforceQuotas({ orgId: ctx.organizationId, kind, tool: params.name });
         const result = await invokeAgentTool(ctx, params.name, params.arguments ?? {});
         await recordUsage({
@@ -77,11 +100,12 @@ async function handleRpc(request: Request, message: Record<string, unknown>): Pr
           structuredContent: result,
         });
       } catch (e) {
-        if (e instanceof QuotaError) {
+        if (e instanceof QuotaError || e instanceof RateLimitError) {
+          const code = e instanceof QuotaError ? e.code : "rate_limited";
           return rpcResult(id, {
             content: [{ type: "text", text: e.message }],
             isError: true,
-            structuredContent: { error: e.message, code: e.code, retryAfterSec: e.retryAfterSec },
+            structuredContent: { error: e.message, code, retryAfterSec: e.retryAfterSec },
           });
         }
         return rpcResult(id, {
@@ -98,17 +122,39 @@ async function handleRpc(request: Request, message: Record<string, unknown>): Pr
 function ensureSession(request: Request): { sessionId: string; isNew: boolean } {
   const existing = request.headers.get("mcp-session-id");
   if (existing && sessions.has(existing)) return { sessionId: existing, isNew: false };
+  reapSessions();
   const id = randomUUID();
   sessions.set(id, { id, createdAt: Date.now() });
   return { sessionId: id, isNew: true };
+}
+
+/** Per-IP throttle for anything reachable without an API key. */
+async function limitAnon(request: Request): Promise<Response | null> {
+  const ip = clientIpFromHeaders(request.headers);
+  const res = await consume(`ip:${ip}:mcp_anon`, RATE_LIMITS.mcpAnon.limit, RATE_LIMITS.mcpAnon.windowSec);
+  if (res.ok) return null;
+  return json(rpcError(null, -32000, "Trop de requêtes."), 429, {
+    "Retry-After": String(res.retryAfterSec),
+  });
 }
 
 export const Route = createFileRoute("/api/mcp/")({
   server: {
     handlers: {
       GET: async ({ request }: { request: Request }) => {
+        const throttled = await limitAnon(request);
+        if (throttled) return throttled;
+
         // Streamable HTTP: GET opens SSE stream when Accept includes text/event-stream
         if (wantsSse(request)) {
+          // Require a valid key before allocating a long-lived session, otherwise
+          // anonymous clients can pin unbounded streams and session entries.
+          try {
+            await authenticateApiKey(request.headers.get("authorization"));
+          } catch (e) {
+            const status = e instanceof ApiAuthError ? e.status : 401;
+            return json(rpcError(null, -32001, e instanceof Error ? e.message : "Non autorisé"), status);
+          }
           const { sessionId } = ensureSession(request);
           const stream = new ReadableStream({
             start(controller) {
@@ -156,6 +202,11 @@ export const Route = createFileRoute("/api/mcp/")({
         });
       },
       POST: async ({ request }: { request: Request }) => {
+        // Unauthenticated methods (initialize / tools/list) are reachable here,
+        // so throttle by IP before doing any work.
+        const throttled = await limitAnon(request);
+        if (throttled) return throttled;
+
         let body: unknown;
         try {
           body = await request.json();

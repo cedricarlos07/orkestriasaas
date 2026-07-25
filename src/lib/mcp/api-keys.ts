@@ -24,14 +24,21 @@ export function generateApiKey(): { key: string; prefix: string; keyHash: string
   return { key, prefix: `${key.slice(0, 12)}…`, keyHash: hashKey(key) };
 }
 
+/** Default key lifetime. Bounded so a leaked key stops working on its own. */
+const DEFAULT_TTL_DAYS = 365;
+
 export async function createApiKey(opts: {
   organizationId: string;
   userId: string;
   name: string;
   scopes: ApiKeyScope[];
-}): Promise<{ id: string; key: string; prefix: string }> {
+  /** Days until expiry; 0 or negative means never expires. */
+  ttlDays?: number;
+}): Promise<{ id: string; key: string; prefix: string; expiresAt: Date | null }> {
   const { key, prefix, keyHash } = generateApiKey();
   const id = uid("key");
+  const ttl = opts.ttlDays ?? DEFAULT_TTL_DAYS;
+  const expiresAt = ttl > 0 ? new Date(Date.now() + ttl * 86_400_000) : null;
   await db.insert(apiKeys).values({
     id,
     organizationId: opts.organizationId,
@@ -40,9 +47,10 @@ export async function createApiKey(opts: {
     prefix,
     keyHash,
     scopes: opts.scopes,
+    expiresAt,
     createdAt: new Date(),
   });
-  return { id, key, prefix };
+  return { id, key, prefix, expiresAt };
 }
 
 export async function revokeApiKey(organizationId: string, keyId: string): Promise<void> {
@@ -67,6 +75,9 @@ export async function authenticateApiKey(bearer: string | null): Promise<ApiKeyC
     .limit(1);
   const row = rows[0];
   if (!row) throw new ApiAuthError("Clé API inconnue ou révoquée");
+  if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) {
+    throw new ApiAuthError("Clé API expirée. Générez-en une nouvelle depuis les réglages.");
+  }
 
   void db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, row.id)).catch(() => {});
 

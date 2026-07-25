@@ -1,5 +1,16 @@
 import { relations } from "drizzle-orm";
-import { boolean, index, pgTable, text, timestamp, integer, jsonb, numeric } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  index,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  integer,
+  jsonb,
+  numeric,
+} from "drizzle-orm/pg-core";
 
 // ─── Better Auth core ───────────────────────────────────────────────────────
 
@@ -56,6 +67,22 @@ export const account = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (t) => [index("account_user_id_idx").on(t.userId)],
+);
+
+/**
+ * better-auth's own rate limit store (`rateLimit: { storage: "database" }`).
+ * Property names must match better-auth's field names for the drizzle adapter.
+ */
+export const rateLimit = pgTable(
+  "rate_limit",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull(),
+    count: integer("count").notNull().default(0),
+    // mode:"number" so better-auth receives a number, not a string.
+    lastRequest: bigint("last_request", { mode: "number" }).notNull().default(0),
+  },
+  (t) => [index("rate_limit_key_idx").on(t.key)],
 );
 
 export const verification = pgTable("verification", {
@@ -690,6 +717,8 @@ export const apiKeys = pgTable(
     keyHash: text("key_hash").notNull().unique(),
     scopes: jsonb("scopes").notNull().default(["read"]),
     lastUsedAt: timestamp("last_used_at"),
+    /** Null = never expires (legacy keys). New keys get a bounded lifetime. */
+    expiresAt: timestamp("expires_at"),
     revokedAt: timestamp("revoked_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -788,5 +817,25 @@ export const usageEvents = pgTable(
   (t) => [
     index("usage_events_org_created_idx").on(t.organizationId, t.createdAt),
     index("usage_events_org_kind_idx").on(t.organizationId, t.kind),
+  ],
+);
+
+/**
+ * Durable fixed-window rate limit counters. Survives restarts and is shared
+ * across workers, unlike the in-process buckets used for plan quotas.
+ * `bucket` is an opaque key such as `ip:1.2.3.4:auth_signin` or `key:<id>:mcp`.
+ */
+export const rateLimits = pgTable(
+  "rate_limits",
+  {
+    bucket: text("bucket").notNull(),
+    /** Start of the fixed window (epoch seconds, aligned on windowSec). */
+    windowStart: integer("window_start").notNull(),
+    count: integer("count").notNull().default(0),
+    expiresAt: timestamp("expires_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.bucket, t.windowStart] }),
+    index("rate_limits_expires_idx").on(t.expiresAt),
   ],
 );
