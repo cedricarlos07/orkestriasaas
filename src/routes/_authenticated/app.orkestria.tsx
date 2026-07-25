@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import {
   ArrowUp,
   Paperclip,
@@ -20,10 +19,11 @@ import {
   Check,
   X,
   Filter,
+  ArrowLeft,
   Clock,
+  Target,
 } from "lucide-react";
 import { useOrkestriaChat } from "@/lib/orkestria-chat";
-import { getSetupStatus } from "@/functions/setup-status";
 
 export const Route = createFileRoute("/_authenticated/app/orkestria")({ component: OrkestriaPage });
 
@@ -72,19 +72,9 @@ const SUGGESTIONS: { t: string; i: typeof BarChart3; grad: string; ic: string; i
   { t: "Analyse mes campagnes des 30 derniers jours", i: BarChart3, grad: "from-[#fff1e2] via-[#ffe0c2] to-[#ffcf9c]", ic: "text-[#c94a00]", intent: "audit" },
   { t: "Fais le rapport de la semaine", i: FileText, grad: "from-[#e6f7ee] via-[#c9edd8] to-[#a9e0bf]", ic: "text-[#0f7a3c]", intent: "report" },
   { t: "Lance une campagne pour mon nouveau menu", i: Rocket, grad: "from-[#ffe6ee] via-[#ffc7d8] to-[#ffa3bd]", ic: "text-[#9e1e4a]", intent: "campaign" },
-  { t: "Vérifier ma configuration V1", i: Cog, grad: "from-[#f5f4f1] via-[#ebe8e2] to-[#ddd8cf]", ic: "text-[#3a3834]" },
-  { t: "Prépare un rapport dirigeant sur mes campagnes Meta", i: Users, grad: "from-[#fff8f0] via-[#ffe8d4] to-[#ffd4a8]", ic: "text-[#8a4b12]" },
+  { t: "Vérifier ma configuration V1", i: Cog, grad: "from-[#f0f4ff] via-[#dce4ff] to-[#c2d0ff]", ic: "text-[#1b3a8a]" },
+  { t: "Prépare un rapport dirigeant sur mes campagnes Meta", i: Users, grad: "from-[#f0e6ff] via-[#dcc7ff] to-[#c2a3ff]", ic: "text-[#4a2a9e]" },
 ];
-
-const THREAD_VISUAL: Record<
-  IntentKey | "other",
-  { icon: typeof BarChart3; label: string; tile: string; ink: string }
-> = {
-  audit: { icon: BarChart3, label: "Audit", tile: "bg-[#fff1e2] text-[#c94a00]", ink: "text-[#c94a00]" },
-  report: { icon: FileText, label: "Rapport", tile: "bg-[#e6f7ee] text-[#0f7a3c]", ink: "text-[#0f7a3c]" },
-  campaign: { icon: Rocket, label: "Campagne", tile: "bg-[#ffe6ee] text-[#9e1e4a]", ink: "text-[#9e1e4a]" },
-  other: { icon: MessageSquare, label: "Chat", tile: "bg-[#f3f1ed] text-[#5c574e]", ink: "text-ink-soft" },
-};
 
 type FormState = {
   intent: IntentKey;
@@ -167,10 +157,6 @@ function threadType(t: Thread): IntentKey | null {
   return null;
 }
 
-function threadVisual(t: Thread) {
-  return THREAD_VISUAL[threadType(t) ?? "other"];
-}
-
 function relevanceScore(t: Thread, q: string) {
   if (!q) return 0;
   const ql = q.toLowerCase();
@@ -183,17 +169,8 @@ function relevanceScore(t: Thread, q: string) {
   return score;
 }
 
-function guessPendingSkill(text: string): string | null {
-  const t = text.toLowerCase();
-  if (/cpa|anomal|probl[eè]me|audit|diagnostic|bilan|analys/.test(t)) return "Anomaly detector";
-  if (/pixel|capi|conversion|tracking|[ée]v[eé]nement/.test(t)) return "CAPI diagnostics";
-  if (/derni[eè]re pub|creative|cr[eé]atif|fatigue|annonce/.test(t)) return "Creative fatigue";
-  if (/rapport|report|performance|roas/.test(t)) return "Performance report";
-  if (/lancer|campagne|launch|budget/.test(t)) return "Launch verifier";
-  return null;
-}
-
 // ---------- Page ----------
+
 function OrkestriaPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const {
@@ -209,29 +186,15 @@ function OrkestriaPage() {
   const [typeFilter, setTypeFilter] = useState<"all" | IntentKey | "other">("all");
   const [sortBy, setSortBy] = useState<"date" | "relevance">("date");
   const [sendingIntent, setSendingIntent] = useState<IntentKey | null>(null);
-  const [sendingSkill, setSendingSkill] = useState<string | null>(null);
-  const { data: setupStatus } = useQuery({
-    queryKey: ["orkestria-setup-status"],
-    queryFn: () => getSetupStatus(),
-    staleTime: 60_000,
-  });
-  const memoryActive = setupStatus?.memory?.mem0Health === "ok";
   const pending = isSending
     ? {
-        text: sendingIntent
-          ? INTENT_META[sendingIntent].label
-          : sendingSkill
-            ? `SOP ${sendingSkill}…`
-            : "Orkestria analyse votre demande…",
-        tools: sendingSkill
-          ? [{ name: "media_skill", label: sendingSkill, status: "running" as const }]
-          : ([] as ToolCall[]),
+        text: sendingIntent ? INTENT_META[sendingIntent].label : "Orkestria analyse votre demande…",
+        tools: [] as ToolCall[],
       }
     : null;
   const [formIntent, setFormIntent] = useState<IntentKey | null>(null);
   const [form, setForm] = useState<FormState>({ intent: "audit", scope: "30 derniers jours", detail: "" });
   const [sidebarOpenMobile, setSidebarOpenMobile] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -318,7 +281,6 @@ function OrkestriaPage() {
     if (!text || isSending || !activeId) return;
     const intent = detectIntent(text);
     setSendingIntent(intent);
-    setSendingSkill(intent ? null : guessPendingSkill(text));
     setInput("");
     if (liveRef.current) liveRef.current.textContent = "Orkestria travaille sur votre demande.";
     void sendMessage(activeId, text)
@@ -326,10 +288,7 @@ function OrkestriaPage() {
         if (liveRef.current) liveRef.current.textContent = "Orkestria a répondu.";
         setTimeout(() => inputRef.current?.focus(), 30);
       })
-      .finally(() => {
-        setSendingIntent(null);
-        setSendingSkill(null);
-      });
+      .finally(() => setSendingIntent(null));
   };
 
   const submitForm = () => {
@@ -339,46 +298,26 @@ function OrkestriaPage() {
     send(composed);
   };
 
-  const activeVisual = active ? threadVisual(active) : THREAD_VISUAL.other;
-  const ActiveIcon = activeVisual.icon;
-
   return (
-    <div className="mx-auto grid h-[calc(100dvh-8rem)] max-w-[1240px] grid-cols-1 gap-3 lg:grid-cols-[300px_1fr]">
+    <div className="mx-auto grid h-[calc(100dvh-8rem)] max-w-[1200px] grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
       {/* --- Thread sidebar --- */}
       <aside
         aria-label="Historique des conversations"
         className={`${sidebarOpenMobile ? "block" : "hidden"} lg:block`}
       >
-        <div
-          className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-[#ffd7ac]/70 p-3"
-          style={{
-            backgroundImage:
-              "radial-gradient(90% 60% at 0% 0%, rgba(255,140,60,0.12) 0%, transparent 55%), linear-gradient(180deg,#ffffff 0%,#fff8f1 100%)",
-          }}
+        <div className="card-hover relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_14px_30px_-22px_rgba(20,20,20,0.25)]"
+          style={{ backgroundImage: "linear-gradient(180deg,#ffffff 0%,#faf7f2 100%)" }}
         >
-          <div className="mb-3 flex items-center gap-2.5 px-0.5">
-            <span
-              aria-hidden
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff8a2b] to-[#ff5e00] text-white shadow-[0_8px_18px_-10px_rgba(255,108,2,0.7)]"
-            >
-              <Sparkles className="h-4 w-4" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-display text-[17px] font-semibold leading-tight text-ink">Orkestria</p>
-              <p className="text-[11px] text-ink-soft">{threads.length} conversation{threads.length > 1 ? "s" : ""}</p>
-            </div>
-            <button
-              type="button"
-              onClick={createThread}
-              aria-label="Nouvelle conversation"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff8a2b] to-[#ff5e00] text-white shadow-[0_8px_18px_-10px_rgba(255,108,2,0.7)] transition hover:brightness-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40"
-            >
-              <Plus className="h-4 w-4" aria-hidden />
-            </button>
-          </div>
+          <button
+            onClick={createThread}
+            className="btn-primary btn-halo w-full !justify-start !px-3 !py-2 !text-[13px]"
+            aria-label="Créer une nouvelle conversation"
+          >
+            <Plus className="h-4 w-4" aria-hidden /> Nouvelle conversation
+          </button>
 
-          <label className="flex items-center gap-2 rounded-xl border border-line/60 bg-white/90 px-2.5 py-2 text-ink-soft focus-within:border-[#ff6c02] focus-within:ring-2 focus-within:ring-[#ff6c02]/20">
-            <Search className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          <label className="mt-3 flex items-center gap-2 rounded-lg border border-line/70 bg-white px-2.5 py-1.5 text-[12px] text-ink-soft focus-within:border-[#ff6c02] focus-within:ring-2 focus-within:ring-[#ff6c02]/25">
+            <Search className="h-3.5 w-3.5" aria-hidden />
             <span className="sr-only">Rechercher une conversation</span>
             <input
               value={query}
@@ -388,125 +327,119 @@ function OrkestriaPage() {
             />
           </label>
 
-          <div role="group" aria-label="Filtrer par type" className="mt-2.5 flex gap-1">
-            {(
-              [
-                { k: "all", icon: MessageSquare, label: "Tous" },
-                { k: "audit", icon: BarChart3, label: "Audit" },
-                { k: "report", icon: FileText, label: "Rapport" },
-                { k: "campaign", icon: Rocket, label: "Campagne" },
-              ] as const
-            ).map((f) => {
-              const on = typeFilter === f.k;
-              const Icon = f.icon;
-              return (
-                <button
-                  key={f.k}
-                  type="button"
-                  onClick={() => setTypeFilter(f.k)}
-                  aria-pressed={on}
-                  title={f.label}
-                  className={`flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border text-[11px] font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40 ${
-                    on
-                      ? "border-[#ffb066] bg-[#fff5ea] text-[#c94a00]"
-                      : "border-transparent bg-white/60 text-ink-soft hover:bg-white hover:text-ink"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" aria-hidden />
-                  <span className="hidden xl:inline">{f.label}</span>
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setShowFilters((v) => !v)}
-              aria-expanded={showFilters}
-              aria-label="Options de tri"
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40 ${
-                showFilters || sortBy === "relevance"
-                  ? "border-[#ffb066] bg-[#fff5ea] text-[#c94a00]"
-                  : "border-transparent bg-white/60 text-ink-soft hover:bg-white hover:text-ink"
-              }`}
-            >
-              <Filter className="h-3.5 w-3.5" aria-hidden />
-            </button>
-          </div>
-
-          {showFilters && (
-            <div role="group" aria-label="Trier les conversations" className="mt-2 flex gap-1 anim-fade-up">
-              {(
-                [
-                  { k: "date", label: "Plus récentes", icon: Clock },
-                  { k: "relevance", label: "Pertinence", icon: Search },
-                ] as const
-              ).map((s) => {
-                const on = sortBy === s.k;
+          {/* Filters & sort */}
+          <div className="mt-2 space-y-1.5">
+            <div className="flex items-center gap-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-soft">
+              <Filter className="h-3 w-3" aria-hidden /> Type
+            </div>
+            <div role="group" aria-label="Filtrer par type" className="flex flex-wrap gap-1">
+              {([
+                { k: "all", label: "Tous" },
+                { k: "audit", label: "Audit" },
+                { k: "report", label: "Rapport" },
+                { k: "campaign", label: "Campagne" },
+                { k: "other", label: "Autres" },
+              ] as { k: typeof typeFilter; label: string }[]).map((f) => {
+                const active = typeFilter === f.k;
+                return (
+                  <button
+                    key={f.k}
+                    type="button"
+                    onClick={() => setTypeFilter(f.k)}
+                    aria-pressed={active}
+                    className={`rounded-full border px-2 py-0.5 text-[11px] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40 ${
+                      active
+                        ? "border-[#ffb066] bg-gradient-to-br from-[#fff5ea] to-[#ffe4c9] text-[#c94a00] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
+                        : "border-line bg-white text-ink-soft hover:border-[#ffb066] hover:text-ink"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-1.5 pt-1 px-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-soft">
+              <Clock className="h-3 w-3" aria-hidden /> Tri
+            </div>
+            <div role="group" aria-label="Trier les conversations" className="flex gap-1">
+              {([
+                { k: "date", label: "Date" },
+                { k: "relevance", label: "Pertinence" },
+              ] as { k: typeof sortBy; label: string }[]).map((s) => {
+                const active = sortBy === s.k;
                 const disabled = s.k === "relevance" && !query.trim();
-                const Icon = s.icon;
                 return (
                   <button
                     key={s.k}
                     type="button"
                     onClick={() => !disabled && setSortBy(s.k)}
-                    aria-pressed={on}
+                    aria-pressed={active}
                     disabled={disabled}
-                    title={disabled ? "Tapez une recherche pour trier par pertinence" : s.label}
-                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40 disabled:cursor-not-allowed disabled:opacity-40 ${
-                      on
-                        ? "border-[#ffb066] bg-[#fff5ea] text-[#c94a00]"
-                        : "border-line/60 bg-white text-ink-soft hover:text-ink"
+                    title={disabled ? "Recherchez un terme pour activer le tri par pertinence" : undefined}
+                    className={`flex-1 rounded-md border px-2 py-1 text-[11px] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40 disabled:opacity-45 disabled:cursor-not-allowed ${
+                      active
+                        ? "border-[#ffb066] bg-gradient-to-br from-[#fff5ea] to-[#ffe4c9] text-[#c94a00] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
+                        : "border-line bg-white text-ink-soft hover:border-[#ffb066] hover:text-ink"
                     }`}
                   >
-                    <Icon className="h-3 w-3" aria-hidden />
                     {s.label}
                   </button>
                 );
               })}
             </div>
-          )}
+          </div>
 
-          <ul className="mt-3 flex-1 space-y-1.5 overflow-y-auto pr-0.5" role="list">
+          <div className="mt-3 flex items-center justify-between px-1 text-[10px] font-semibold uppercase tracking-wider text-ink-soft">
+            <span>Historique</span>
+            <span aria-hidden>{threads.length}</span>
+          </div>
+
+          <ul className="mt-1 flex-1 space-y-1 overflow-y-auto pr-1" role="list">
             {filteredThreads.map((t) => {
               const isActive = t.id === activeId;
-              const vis = threadVisual(t);
-              const Icon = vis.icon;
+              const tt = threadType(t);
+              const badge = tt
+                ? {
+                    audit: { label: "Audit", cls: "bg-[#fff1e2] text-[#c94a00] border-[#ffd7ac]" },
+                    report: { label: "Rapport", cls: "bg-[#e6f7ee] text-[#0f7a3c] border-[#b6e3c8]" },
+                    campaign: { label: "Campagne", cls: "bg-[#ffe6ee] text-[#9e1e4a] border-[#ffbfd1]" },
+                  }[tt]
+                : null;
               return (
-                <li key={t.id} className="group">
+                <li key={t.id} className="group relative">
                   <div
-                    className={`flex items-center gap-2 rounded-xl border p-2 transition ${
+                    className={`flex items-start gap-2 rounded-xl border px-2.5 py-2 transition ${
                       isActive
-                        ? "border-[#ffb066] bg-gradient-to-br from-[#fff5ea] to-[#ffe8d4] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]"
-                        : "border-transparent bg-white/55 hover:border-line/70 hover:bg-white"
+                        ? "border-[#ffb066] bg-gradient-to-br from-[#fff5ea] to-[#ffe4c9] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
+                        : "border-transparent bg-white/70 hover:border-line hover:bg-white"
                     }`}
                   >
                     <button
                       type="button"
                       onClick={() => selectThread(t.id)}
                       aria-current={isActive ? "true" : undefined}
-                      className="flex min-w-0 flex-1 items-center gap-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40 rounded-lg"
+                      className="flex min-w-0 flex-1 items-start gap-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40 rounded-md"
                     >
-                      <span
-                        aria-hidden
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${vis.tile}`}
-                      >
-                        <Icon className="h-4 w-4" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className={`truncate text-[13px] leading-snug ${isActive ? "font-semibold text-ink" : "font-medium text-ink"}`}>
-                          {t.title}
-                        </p>
-                        <p className="mt-0.5 truncate text-[11px] text-ink-soft">
-                          <span className={vis.ink}>{vis.label}</span>
-                          <span aria-hidden> · </span>
-                          {t.messages.length} msg
-                        </p>
+                      <MessageSquare className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${isActive ? "text-[#c94a00]" : "text-ink-soft"}`} aria-hidden />
+                      <div className="min-w-0">
+                        <p className={`truncate text-[13px] ${isActive ? "font-semibold text-ink" : "text-ink"}`}>{t.title}</p>
+                        <div className="mt-0.5 flex items-center gap-1.5">
+                          {badge && (
+                            <span className={`inline-flex items-center rounded-full border px-1.5 py-[1px] text-[10px] font-medium ${badge.cls}`}>
+                              {badge.label}
+                            </span>
+                          )}
+                          <span className="truncate text-[11px] text-ink-soft">
+                            {t.messages.length} message{t.messages.length > 1 ? "s" : ""}
+                          </span>
+                        </div>
                       </div>
                     </button>
                     <button
                       type="button"
                       onClick={() => deleteThread(t.id)}
-                      aria-label={`Supprimer ${t.title}`}
-                      className="rounded-lg p-1.5 text-ink-soft opacity-0 transition hover:bg-white hover:text-[#a01b1b] focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40 group-hover:opacity-100"
+                      aria-label={`Supprimer la conversation ${t.title}`}
+                      className="rounded-md p-1 text-ink-soft opacity-0 transition hover:bg-white hover:text-[#a01b1b] focus:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40 group-hover:opacity-100"
                     >
                       <Trash2 className="h-3.5 w-3.5" aria-hidden />
                     </button>
@@ -515,21 +448,25 @@ function OrkestriaPage() {
               );
             })}
             {filteredThreads.length === 0 && (
-              <li className="rounded-xl border border-dashed border-line/70 px-3 py-6 text-center text-[12px] text-ink-soft">
+              <li className="rounded-lg border border-dashed border-line/70 p-3 text-center text-[12px] text-ink-soft">
                 Aucune conversation.
               </li>
             )}
           </ul>
+
+          <p className="mt-2 border-t border-line/60 pt-2 text-[11px] text-ink-soft">
+            Historique enregistré dans ce navigateur.
+          </p>
         </div>
       </aside>
 
       {/* --- Chat column --- */}
       <section aria-label="Conversation Orkestria" className="flex min-w-0 flex-col">
-        <header className="mb-3 flex items-center gap-3 anim-fade-up">
+        <header className="mb-4 flex items-center gap-3 anim-fade-up">
           <button
             type="button"
             onClick={() => setSidebarOpenMobile((v) => !v)}
-            aria-label="Afficher l'historique"
+            aria-label="Afficher l'historique des conversations"
             aria-expanded={sidebarOpenMobile}
             className="lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-white text-ink shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40"
           >
@@ -537,32 +474,18 @@ function OrkestriaPage() {
           </button>
           <span
             aria-hidden
-            className={`flex h-11 w-11 items-center justify-center rounded-2xl ${activeVisual.tile}`}
+            className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff8a2b] to-[#ff5e00] text-white shadow-[0_10px_24px_-10px_rgba(255,108,2,0.6),inset_0_1px_0_rgba(255,255,255,0.35)]"
           >
-            <ActiveIcon className="h-5 w-5" />
+            <Sparkles className="h-5 w-5" />
+            <span className="absolute -inset-1 -z-10 rounded-2xl bg-[#ff6c02]/25 blur-xl anim-pulse-dot" />
           </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="font-display text-[24px] font-semibold leading-none tracking-tight text-ink">Orkestria</h1>
-              {memoryActive && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-[#e6f7ee] px-1.5 py-0.5 text-[10px] font-medium text-[#0f7a3c]">
-                  <Database className="h-3 w-3" aria-hidden />
-                  Mémoire
-                </span>
-              )}
-            </div>
-            <p className="mt-1 truncate text-[13px] text-ink-soft">{active?.title ?? "Nouvelle conversation"}</p>
+          <div className="min-w-0">
+            <p className="text-[12px] font-medium uppercase tracking-wider text-[#c94a00]">Conversation centrale</p>
+            <h1 className="mt-0.5 truncate font-display text-[26px] font-semibold text-ink">{active?.title ?? "Orkestria"}</h1>
           </div>
-          <button
-            type="button"
-            onClick={createThread}
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-line/70 bg-white px-3 py-2 text-[12px] font-medium text-ink transition hover:border-[#ffb066] hover:bg-[#fff8f1] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40"
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden />
-            Nouvelle
-          </button>
         </header>
 
+        {/* SR-only live region for tool status announcements */}
         <div ref={liveRef} aria-live="polite" aria-atomic="true" className="sr-only" />
 
         <div
@@ -570,58 +493,68 @@ function OrkestriaPage() {
           role="log"
           aria-live="polite"
           aria-relevant="additions"
-          className="relative flex-1 overflow-y-auto rounded-2xl border border-[#ffd7ac]/50 p-5 sm:p-6"
+          className="card-hover relative flex-1 space-y-4 overflow-y-auto rounded-2xl border border-white/70 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_18px_38px_-24px_rgba(20,20,20,0.25)]"
           style={{
             backgroundImage:
-              "radial-gradient(100% 70% at 0% 0%, rgba(255,140,60,0.09) 0%, transparent 50%), linear-gradient(180deg, #ffffff 0%, #fffaf5 100%)",
+              "radial-gradient(120% 80% at 0% 0%, rgba(255,140,60,0.08) 0%, rgba(255,140,60,0) 45%), radial-gradient(120% 80% at 100% 100%, rgba(120,80,255,0.06) 0%, rgba(120,80,255,0) 45%), linear-gradient(180deg, #ffffff 0%, #fbfaf7 100%)",
           }}
         >
-          <div className="relative mx-auto max-w-[720px] space-y-4">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 rounded-2xl opacity-[0.18] mix-blend-overlay"
+            style={{
+              backgroundImage:
+                "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.15 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>\")",
+            }}
+          />
+          <div className="relative space-y-4">
             {active?.messages.map((m) => (
               <MessageBubble key={m.id} m={m} />
             ))}
 
+            {/* Typing / tools indicator */}
             {pending && <PendingBlock text={pending.text} tools={pending.tools} />}
 
+            {/* Suggestions + guided form */}
             {!pending && active && active.messages.length === 1 && (
-              <div className="space-y-4 pt-1">
-                <p className="text-[12px] font-medium text-ink-soft">Que voulez-vous faire ?</p>
+              <div className="space-y-3 pt-2">
                 <div className="stagger grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                   {SUGGESTIONS.map((s) => (
                     <button
                       key={s.t}
                       type="button"
                       onClick={() => (s.intent ? openForm(s.intent) : send(s.t))}
-                      className={`group relative overflow-hidden rounded-2xl border border-white/80 bg-gradient-to-br ${s.grad} p-3.5 text-left transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_-18px_rgba(20,20,20,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40`}
+                      className={`card-hover group relative overflow-hidden rounded-xl border border-white/60 bg-gradient-to-br ${s.grad} p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_8px_20px_-16px_rgba(20,20,20,0.25)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40`}
                       aria-label={s.t}
                     >
-                      <div className="relative flex items-start gap-3">
-                        <span
-                          aria-hidden
-                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/90 ${s.ic} shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]`}
-                        >
-                          <s.i className="h-5 w-5" />
+                      <div aria-hidden className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-full bg-white/40 blur-xl" />
+                      <div className="relative flex items-start gap-2.5">
+                        <span aria-hidden className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/85 ${s.ic} ring-1 ring-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]`}>
+                          <s.i className="h-4 w-4" />
                         </span>
-                        <span className="pt-1.5 text-[13px] font-medium leading-snug text-ink">{s.t}</span>
+                        <span className="pt-1 text-[13px] font-medium text-ink">{s.t}</span>
                       </div>
                     </button>
                   ))}
                 </div>
+
                 <GuidedLauncher onPick={openForm} />
               </div>
             )}
           </div>
         </div>
 
+        {/* Composer */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
             send(input);
           }}
-          className="mt-3 flex items-end gap-2 rounded-2xl border border-[#ffd7ac]/60 bg-white px-3 py-2.5 shadow-[0_10px_28px_-22px_rgba(20,20,20,0.35)] transition focus-within:border-[#ff6c02] focus-within:ring-2 focus-within:ring-[#ff6c02]/20"
+          className="mt-3 flex items-end gap-2 rounded-2xl border border-white/70 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_24px_-18px_rgba(20,20,20,0.25)] focus-within:border-[#ff6c02] focus-within:ring-2 focus-within:ring-[#ff6c02]/25 transition"
+          style={{ backgroundImage: "linear-gradient(180deg,#ffffff 0%,#faf7f2 100%)" }}
           aria-label="Envoyer un message à Orkestria"
         >
-          <button type="button" className="mb-0.5 rounded-lg p-2 text-ink-soft transition hover:bg-[#fff5ea] hover:text-ink" aria-label="Joindre un fichier">
+          <button type="button" className="chip-ghost !p-2" aria-label="Joindre un fichier">
             <Paperclip className="h-4 w-4" aria-hidden />
           </button>
           <label className="sr-only" htmlFor="ork-msg">
@@ -639,22 +572,23 @@ function OrkestriaPage() {
               }
             }}
             rows={1}
-            placeholder={pending ? "Orkestria travaille…" : "Écrivez à Orkestria…"}
+            placeholder={pending ? "Orkestria travaille…" : "Parlez à Orkestria… (Entrée pour envoyer, Maj+Entrée pour une nouvelle ligne)"}
             disabled={!!pending}
             aria-disabled={!!pending}
-            className="max-h-32 flex-1 resize-none bg-transparent py-2 text-[14px] text-ink placeholder:text-ink-soft focus:outline-none disabled:opacity-60"
+            className="max-h-32 flex-1 resize-none bg-transparent text-[14px] text-ink placeholder:text-ink-soft focus:outline-none disabled:opacity-60"
           />
           <button
             type="submit"
             disabled={!input.trim() || !!pending}
             aria-label="Envoyer le message"
-            className="mb-0.5 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff8a2b] to-[#ff5e00] text-white shadow-[0_8px_18px_-10px_rgba(255,108,2,0.7)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40"
+            className="btn-primary btn-halo !p-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ArrowUp className="h-4 w-4" aria-hidden />
           </button>
         </form>
       </section>
 
+      {/* Guided form modal */}
       {formIntent && (
         <GuidedForm
           value={form}
@@ -684,7 +618,7 @@ function MessageBubble({ m }: { m: Msg }) {
           <Sparkles className="h-3.5 w-3.5" />
         </span>
       )}
-      <div className={`space-y-2 ${isUser ? "max-w-[78%]" : "max-w-[88%]"}`}>
+      <div className="max-w-[78%] space-y-2">
         {m.tools && m.tools.length > 0 && <ToolTrace tools={m.tools} defaultOpen={false} />}
         <div
           className={
@@ -700,73 +634,22 @@ function MessageBubble({ m }: { m: Msg }) {
   );
 }
 
-function renderInline(text: string, keyPrefix: string) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith("**") && part.endsWith("**") ? (
-      <strong key={`${keyPrefix}-${i}`} className="font-semibold">
-        {part.slice(2, -2)}
-      </strong>
-    ) : (
-      <span key={`${keyPrefix}-${i}`}>{part}</span>
-    ),
-  );
-}
-
-/** Markdown-lite: paragraphs, bullet and numbered lists, **bold**. */
 function renderText(text: string) {
-  const lines = text.split("\n");
-  const blocks: React.ReactNode[] = [];
-  let list: { ordered: boolean; items: string[] } | null = null;
-
-  const flushList = () => {
-    if (!list) return;
-    const { ordered, items } = list;
-    const ListTag = ordered ? "ol" : "ul";
-    blocks.push(
-      <ListTag
-        key={`list-${blocks.length}`}
-        className={`my-1 space-y-1 pl-5 ${ordered ? "list-decimal" : "list-disc"} marker:text-ink-soft`}
-      >
-        {items.map((item, i) => (
-          <li key={i} className="leading-relaxed">
-            {renderInline(item, `li-${blocks.length}-${i}`)}
-          </li>
-        ))}
-      </ListTag>,
-    );
-    list = null;
-  };
-
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line) {
-      flushList();
-      continue;
-    }
-    const bullet = line.match(/^[-•*]\s+(.*)$/);
-    const numbered = line.match(/^\d+[.)]\s+(.*)$/);
-    if (bullet) {
-      if (list && list.ordered) flushList();
-      list ??= { ordered: false, items: [] };
-      list.items.push(bullet[1]);
-      continue;
-    }
-    if (numbered) {
-      if (list && !list.ordered) flushList();
-      list ??= { ordered: true, items: [] };
-      list.items.push(numbered[1]);
-      continue;
-    }
-    flushList();
-    blocks.push(
-      <p key={`p-${blocks.length}`} className="leading-relaxed">
-        {renderInline(line, `p-${blocks.length}`)}
-      </p>,
-    );
-  }
-  flushList();
-
-  return <div className="space-y-2">{blocks}</div>;
+  // very light markdown: **bold**
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.startsWith("**") && p.endsWith("**") ? (
+          <strong key={i} className="font-semibold">
+            {p.slice(2, -2)}
+          </strong>
+        ) : (
+          <span key={i}>{p}</span>
+        ),
+      )}
+    </>
+  );
 }
 
 function PendingBlock({ text, tools }: { text: string; tools: ToolCall[] }) {
@@ -850,26 +733,28 @@ function ToolStatusDot({ status }: { status: ToolCall["status"] }) {
 
 function GuidedLauncher({ onPick }: { onPick: (i: IntentKey) => void }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-[11px] text-ink-soft">Ou formulaire :</span>
-      {(Object.keys(INTENT_META) as IntentKey[]).map((k) => {
-        const meta = INTENT_META[k];
-        const Icon = meta.icon;
-        return (
-          <button
-            key={k}
-            type="button"
-            onClick={() => onPick(k)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-line/60 bg-white px-2.5 py-1.5 text-[12px] font-medium text-ink transition hover:border-[#ffb066] hover:bg-[#fff8f1] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40"
-            aria-label={`Ouvrir le formulaire ${meta.label}`}
-          >
-            <span aria-hidden className={`flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br ${meta.grad} text-white`}>
-              <Icon className="h-3 w-3" />
-            </span>
-            {meta.label}
-          </button>
-        );
-      })}
+    <div className="rounded-2xl border border-white/70 bg-white/85 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-soft">Formulaire guidé</p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {(Object.keys(INTENT_META) as IntentKey[]).map((k) => {
+          const meta = INTENT_META[k];
+          const Icon = meta.icon;
+          return (
+            <button
+              key={k}
+              type="button"
+              onClick={() => onPick(k)}
+              className="card-hover group flex items-center gap-2 rounded-xl border border-line/70 bg-white px-3 py-2 text-left text-[13px] text-ink hover:border-[#ffb066] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40"
+              aria-label={`Ouvrir le formulaire ${meta.label}`}
+            >
+              <span aria-hidden className={`flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br ${meta.grad} text-white shadow-[0_6px_14px_-6px_rgba(0,0,0,0.3)]`}>
+                <Icon className="h-3.5 w-3.5" />
+              </span>
+              <span className="min-w-0 flex-1 truncate font-medium">{meta.label}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -889,7 +774,9 @@ function GuidedForm({
 }) {
   const meta = INTENT_META[intent];
   const Icon = meta.icon;
+  const [step, setStep] = useState<"edit" | "preview">("edit");
 
+  // Focus trap-lite: focus first control on mount, ESC closes
   const firstRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     firstRef.current?.focus();
@@ -917,7 +804,9 @@ function GuidedForm({
             <Icon className="h-4 w-4" />
           </span>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/85">Formulaire guidé</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-white/85">
+              {step === "edit" ? "Étape 1 · Formulaire guidé" : "Étape 2 · Prévisualisation"}
+            </p>
             <h2 id="guided-title" className="font-display text-[18px] font-semibold">{meta.label}</h2>
           </div>
           <button
@@ -930,10 +819,11 @@ function GuidedForm({
           </button>
         </div>
 
+        {step === "edit" ? (
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            onSubmit();
+            setStep("preview");
           }}
           className="space-y-4 p-5"
         >
@@ -1004,10 +894,72 @@ function GuidedForm({
               Annuler
             </button>
             <button type="submit" className="btn-primary btn-halo !px-4 !py-2 !text-[13px]">
-              <Check className="h-3.5 w-3.5" aria-hidden /> Lancer
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden /> Prévisualiser
             </button>
           </div>
         </form>
+        ) : (
+          <div className="space-y-4 p-5">
+            <p className="text-[12px] text-ink-soft">
+              Vérifiez le récapitulatif avant de lancer la demande à Orkestria.
+            </p>
+            <dl className="divide-y divide-line/70 overflow-hidden rounded-xl border border-line/70 bg-white">
+              <div className="flex items-start gap-3 p-3">
+                <span aria-hidden className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${meta.grad} text-white`}>
+                  <Icon className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">Type</dt>
+                  <dd className="text-[14px] font-medium text-ink">{meta.label}</dd>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3">
+                <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#fff5ea] text-[#c94a00] ring-1 ring-[#ffd7ac]">
+                  <Target className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">Portée</dt>
+                  <dd className="text-[14px] font-medium text-ink">{value.scope}</dd>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3">
+                <span aria-hidden className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#f4f0ff] text-[#4a2a9e] ring-1 ring-[#dccdff]">
+                  <FileText className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">Précisions</dt>
+                  <dd className="whitespace-pre-wrap text-[14px] text-ink">
+                    {value.detail.trim() || <span className="italic text-ink-soft">Aucune — Orkestria utilisera les réglages par défaut.</span>}
+                  </dd>
+                </div>
+              </div>
+            </dl>
+            <div className="rounded-xl border border-[#ffe0c2] bg-[#fff9f1] p-3 text-[12px] text-[#7a4a10]">
+              Une fois validée, cette demande sera envoyée dans la conversation et Orkestria commencera l'exécution.
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setStep("edit")}
+                className="chip-ghost !py-1.5 !text-[12px]"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> Modifier
+              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={onCancel} className="chip-ghost !py-1.5 !text-[12px]">
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={onSubmit}
+                  className="btn-primary btn-halo !px-4 !py-2 !text-[13px]"
+                >
+                  <Check className="h-3.5 w-3.5" aria-hidden /> Confirmer et lancer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
