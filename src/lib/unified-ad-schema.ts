@@ -122,7 +122,7 @@ export function buildAuditSummary(schema: UnifiedAdSchema): AuditSummary {
   const opportunities =
     emptyAccounts.length === schema.accounts.length && schema.accounts.length > 0
       ? [
-          "Créer une campagne Meta en pause (objectif leads ou ventes, 1 pays, 1 offre) puis valider avant activation.",
+          "Créer une campagne Meta en pause — objectif Ventes, Prospects ou Trafic uniquement (pas WhatsApp/Messenger).",
         ]
       : allOpps.slice(0, 3);
 
@@ -146,7 +146,7 @@ function pickFirstAction(issues: string[], schema: UnifiedAdSchema): string {
   }
   const empty = schema.accounts.every((a) => a.campaigns.length === 0 && a.spend === 0);
   if (empty) {
-    return "Donnez-moi : produit/offre, pays, budget/jour et URL — je prépare une campagne Meta en pause.";
+    return "Choisissez un objectif Meta : Ventes, Prospects ou Trafic — puis pays, budget/jour et URL. Je prépare la campagne en pause.";
   }
   if (issues.some((i) => i.toLowerCase().includes("whatsapp") || i.toLowerCase().includes("conversion"))) {
     return "Reliez le suivi des conversions (Pixel / GA4) pour mesurer les ventes réelles.";

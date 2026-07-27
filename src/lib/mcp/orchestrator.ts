@@ -84,8 +84,9 @@ Règles absolues :
 - Une seule question max, seulement si elle bloque la suite.
 - Création toujours en pause d'abord ; activation = validation explicite.
 - Une seule régie connectée → reste UNIQUEMENT dessus. Ne recommande JAMAIS une autre plateforme.
-- Compte vide (0 campagne / 0 dépense) → dis-le clairement + demande offre + pays + budget/j + URL.
-- « Bientôt » (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, WhatsApp, Shopify) : une phrase max, seulement si on te le demande.
+- Compte vide (0 campagne / 0 dépense) → dis-le clairement. Objectifs Meta AUTORISÉS uniquement : **Ventes**, **Prospects (leads)**, **Trafic**. Interdit de proposer Messages / WhatsApp / Messenger / Shopify comme objectif.
+- Si on demande WhatsApp ou Messenger : une phrase « bientôt », puis propose Trafic ou Prospects vers un lien (site ou wa.me) — ne reformule pas tout le brief comme si le canal existait.
+- « Bientôt » (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, WhatsApp, Shopify) : une phrase max, seulement si on te le demande — ne les liste jamais comme options de lancement.
 - N'évoque JAMAIS les outils internes (fournisseurs MCP, tokens serveur, noms techniques backend). Parle uniquement en termes Meta / Google / TikTok / Orkestria.
 
 Format : 120 mots max. Markdown sobre. Termine par une seule prochaine action.`;
@@ -156,6 +157,15 @@ async function loadLiveAccountData(orgId: string): Promise<{ results: string[]; 
   }
 
   return { results, toolsUsed };
+}
+
+function isMessagingChannelAsk(message: string): boolean {
+  const t = message.toLowerCase();
+  return (
+    /whats?\s*app|messenger|messages?\s*\(|objectif\s*[:=]?\s*messages?|click[\s-]?to[\s-]?message|messages?\s+whatsapp/i.test(
+      t,
+    ) && !/wa\.me|api\.whatsapp/i.test(t)
+  );
 }
 
 function extractBrandFromMessage(message: string): string | null {
@@ -545,6 +555,21 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
 export async function runOrchestrator(input: OrchestratorInput): Promise<OrchestratorOutput> {
   const intent = detectIntent(input.message);
 
+  // WhatsApp / Messenger not productized — never pretend they are launch options.
+  if (isMessagingChannelAsk(input.message)) {
+    return {
+      reply:
+        `WhatsApp et Messenger ne sont **pas encore** disponibles comme objectif de campagne.\n\n` +
+        `On peut quand même lancer une pub Meta **en pause** avec :\n` +
+        `• **Trafic** — vers votre site ou un lien WhatsApp (wa.me/…)\n` +
+        `• **Prospects** — formulaire de contact\n` +
+        `• **Ventes** — si vous vendez en ligne\n\n` +
+        `**Prochaine action :** choisissez Trafic, Prospects ou Ventes, puis donnez pays + budget/jour + URL.`,
+      toolsUsed: ["messaging_soon"],
+      runId: input.runId,
+    };
+  }
+
   // Deterministic paths first — chat suggestions / guided form must be reliable.
   if (intent === "setup") {
     const { getStackSetupStatus } = await import("@/lib/mcp/setup-status");
@@ -773,7 +798,7 @@ async function composeAuditReply(opts: {
       `- Parle simple et expert media buyer (argent, CPA, budget). Pas de jargon d'agence.\n` +
       `- Cite les campagnes réelles. N'invente aucun chiffre.\n` +
       `- Reste UNIQUEMENT sur les plateformes présentes dans les données d'audit. Si une seule régie (ex. Meta), ne parle PAS de Google/TikTok/Snap/Reddit.\n` +
-      `- Si dépense = 0 et 0 campagne : « compte vide » + prochaine étape sur CETTE régie seulement.\n` +
+      `- Si dépense = 0 et 0 campagne : « compte vide ». Propose UNIQUEMENT les objectifs Meta : Ventes, Prospects, Trafic. Interdit Messages / WhatsApp / Messenger / Shopify.\n` +
       `- Une seule prochaine action, concrète, liée à CE compte.\n` +
       `- Max 120 mots. Interdit : listes multi-plateformes, « diversifiez », « connectez aussi… ».\n` +
       `Structure :\n` +
