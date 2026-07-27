@@ -4,6 +4,7 @@ import {
   deleteThread,
   listThreads,
   sendChatMessage,
+  type ChatImageAttachment,
 } from "@/functions/chat";
 import { asMs } from "@/lib/time";
 
@@ -73,8 +74,15 @@ export function useOrkestriaChat(activeId: string | null, onActiveId: (id: strin
   });
 
   const sendMut = useMutation({
-    mutationFn: ({ threadId, text }: { threadId: string; text: string }) =>
-      sendChatMessage({ data: { threadId, text } }),
+    mutationFn: ({
+      threadId,
+      text,
+      attachments,
+    }: {
+      threadId: string;
+      text: string;
+      attachments?: ChatImageAttachment[];
+    }) => sendChatMessage({ data: { threadId, text, attachments } }),
     onSuccess: invalidate,
   });
 
@@ -82,7 +90,7 @@ export function useOrkestriaChat(activeId: string | null, onActiveId: (id: strin
     mutationFn: (id: string) => deleteThread({ data: { id } }),
     onSuccess: (rows) => {
       invalidate();
-      const mapped = rows.map(mapThread);
+      const mapped = (rows as Awaited<ReturnType<typeof listThreads>>).map(mapThread);
       onActiveId(mapped[0]?.id ?? "");
     },
   });
@@ -93,7 +101,8 @@ export function useOrkestriaChat(activeId: string | null, onActiveId: (id: strin
     activeThreadId,
     isSending: sendMut.isPending,
     createThread: () => createMut.mutateAsync(),
-    sendMessage: (threadId: string, text: string) => sendMut.mutateAsync({ threadId, text }),
+    sendMessage: (threadId: string, text: string, attachments?: ChatImageAttachment[]) =>
+      sendMut.mutateAsync({ threadId, text, attachments }),
     deleteThread: (id: string) => deleteMut.mutate(id),
     setThreadsLocal: (_threads: ChatThread[], _activeId: string) => {
       void _threads;

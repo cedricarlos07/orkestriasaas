@@ -10,12 +10,42 @@ import { runOrchestrator } from "@/lib/mcp/orchestrator";
 import { enforceQuotas, QuotaError, recordUsage } from "@/lib/quotas/enforce";
 
 const WELCOME =
-  "Bonjour. Je peux auditer vos pubs, faire un rapport, ou préparer une campagne Meta en pause. Par quoi on commence ?";
+  "Bonjour. Je peux auditer vos pubs, faire un rapport, préparer une campagne Meta en pause, joindre une image, ou sponsoriser un post de votre Page. Par quoi on commence ?";
+
+const MAX_ATTACHMENT_CHARS = 3_500_000; // ~2.5MB binary as base64 data URL
+
+export type ChatImageAttachment = {
+  kind: "image";
+  dataUrl?: string;
+  url?: string;
+  name?: string;
+};
 
 function threadTitle(text: string): string {
   const clean = text.trim().replace(/\s+/g, " ");
   if (!clean) return "Nouvelle conversation";
   return clean.length > 48 ? `${clean.slice(0, 48)}…` : clean;
+}
+
+function sanitizeAttachments(raw: ChatImageAttachment[] | undefined): ChatImageAttachment[] {
+  if (!raw?.length) return [];
+  return raw
+    .filter((a) => a.kind === "image" && (a.dataUrl || a.url))
+    .slice(0, 3)
+    .map((a) => {
+      if (a.dataUrl && a.dataUrl.length > MAX_ATTACHMENT_CHARS) {
+        throw new Error("Image trop lourde (max ~2,5 Mo). Compressez-la ou envoyez une URL.");
+      }
+      if (a.dataUrl && !/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(a.dataUrl)) {
+        throw new Error("Format image non supporté (PNG, JPEG, WebP, GIF).");
+      }
+      return {
+        kind: "image" as const,
+        dataUrl: a.dataUrl,
+        url: a.url?.startsWith("https://") ? a.url : undefined,
+        name: a.name?.slice(0, 80),
+      };
+    });
 }
 
 export const listThreads = createServerFn({ method: "GET" }).handler(async () => {
@@ -64,13 +94,16 @@ export const createThread = createServerFn({ method: "POST" }).handler(async () 
 });
 
 export const sendChatMessage = createServerFn({ method: "POST" })
-  .inputValidator((data: { threadId: string; text: string }) => data)
+  .inputValidator(
+    (data: { threadId: string; text: string; attachments?: ChatImageAttachment[] }) => data,
+  )
   .handler(async ({ data }) => {
     const session = await ensureSession();
     const orgId = await getActiveOrgId(session);
     const threads = await db.select().from(chatThreads).where(eq(chatThreads.id, data.threadId)).limit(1);
     if (!threads[0] || threads[0].organizationId !== orgId) throw new Error("Not found");
 
+    const attachments = sanitizeAttachments(data.attachments);
     const previous = await db
       .select()
       .from(chatMessages)
@@ -82,11 +115,15 @@ export const sendChatMessage = createServerFn({ method: "POST" })
       .map((m) => ({ role: m.role === "user" ? ("user" as const) : ("agent" as const), text: m.text }));
 
     const now = new Date();
+    const userText =
+      attachments.length > 0
+        ? `${data.text.trim() || "Voici une image pour la campagne."}\n\n[image jointe ×${attachments.length}]`
+        : data.text;
     await db.insert(chatMessages).values({
       id: uid("msg"),
       threadId: data.threadId,
       role: "user",
-      text: data.text,
+      text: userText,
       createdAt: now,
     });
 
@@ -104,6 +141,7 @@ export const sendChatMessage = createServerFn({ method: "POST" })
       skill: "analysis",
       history,
       threadId: data.threadId,
+      attachments,
     });
 
     await recordUsage({
@@ -129,7 +167,7 @@ export const sendChatMessage = createServerFn({ method: "POST" })
     const isFirstUserMessage = !previous.some((m) => m.role === "user");
     const title =
       isFirstUserMessage || threads[0].title === "Nouvelle conversation"
-        ? threadTitle(data.text)
+        ? threadTitle(data.text || "Image campagne")
         : threads[0].title;
     await db
       .update(chatThreads)

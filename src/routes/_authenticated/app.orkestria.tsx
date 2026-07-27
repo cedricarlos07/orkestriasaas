@@ -24,6 +24,8 @@ import {
   AlertTriangle,
   Lightbulb,
   ArrowRight,
+  ImagePlus,
+  Paperclip,
   type LucideIcon,
 } from "lucide-react";
 import { useOrkestriaChat } from "@/lib/orkestria-chat";
@@ -99,6 +101,14 @@ const SUGGESTIONS: { t: string; prompt: string; i: typeof BarChart3; grad: strin
     grad: "from-[#ffe6ee] via-[#ffc7d8] to-[#ffa3bd]",
     ic: "text-[#9e1e4a]",
     intent: "campaign",
+  },
+  {
+    t: "Sponsoriser un post de ma Page",
+    prompt:
+      "Je veux sponsoriser un post déjà publié sur ma Page Facebook. Liste mes posts récents et guide-moi pour un boost en pause via Pipeboard.",
+    i: Users,
+    grad: "from-[#f3e8ff] via-[#e4d4ff] to-[#d0b8ff]",
+    ic: "text-[#5b21b6]",
   },
   {
     t: "Vérifier ma configuration V1",
@@ -232,6 +242,10 @@ function OrkestriaPage() {
   } = useOrkestriaChat(activeId, setActiveId);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [input, setInput] = useState("");
+  const [pendingImages, setPendingImages] = useState<
+    { preview: string; dataUrl: string; name: string }[]
+  >([]);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | IntentKey | "other">("all");
   const [sortBy, setSortBy] = useState<"date" | "relevance">("date");
@@ -330,17 +344,43 @@ function OrkestriaPage() {
 
   const send = (raw: string) => {
     const text = raw.trim();
-    if (!text || isSending || !activeId) return;
-    const intent = detectIntent(text);
+    if ((!text && pendingImages.length === 0) || isSending || !activeId) return;
+    const intent = detectIntent(text || "campagne image");
     setSendingIntent(intent);
+    const attachments = pendingImages.map((p) => ({
+      kind: "image" as const,
+      dataUrl: p.dataUrl,
+      name: p.name,
+    }));
     setInput("");
+    setPendingImages([]);
     if (liveRef.current) liveRef.current.textContent = "Orkestria travaille sur votre demande.";
-    void sendMessage(activeId, text)
+    void sendMessage(activeId, text || "Voici une image pour la campagne Meta.", attachments)
       .then(() => {
         if (liveRef.current) liveRef.current.textContent = "Orkestria a répondu.";
         setTimeout(() => inputRef.current?.focus(), 30);
       })
       .finally(() => setSendingIntent(null));
+  };
+
+  const onPickImage = async (fileList: FileList | null) => {
+    if (!fileList?.length) return;
+    const next: { preview: string; dataUrl: string; name: string }[] = [];
+    for (const file of Array.from(fileList).slice(0, 3)) {
+      if (!file.type.startsWith("image/")) continue;
+      if (file.size > 2_500_000) {
+        window.alert(`« ${file.name} » est trop lourde (max 2,5 Mo).`);
+        continue;
+      }
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("lecture image"));
+        reader.readAsDataURL(file);
+      });
+      next.push({ preview: dataUrl, dataUrl, name: file.name });
+    }
+    if (next.length) setPendingImages((prev) => [...prev, ...next].slice(0, 3));
   };
 
   const submitForm = () => {
@@ -621,7 +661,45 @@ function OrkestriaPage() {
             className="shrink-0 border-t border-line/60 bg-white/95 px-3 py-3 backdrop-blur sm:px-4"
             aria-label="Envoyer un message à Orkestria"
           >
+            {pendingImages.length > 0 && (
+              <div className="mx-auto mb-2 flex max-w-[720px] flex-wrap gap-2">
+                {pendingImages.map((img, i) => (
+                  <div key={`${img.name}-${i}`} className="relative h-16 w-16 overflow-hidden rounded-lg border border-line">
+                    <img src={img.preview} alt={img.name} className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      aria-label="Retirer l'image"
+                      className="absolute right-0.5 top-0.5 rounded bg-black/60 p-0.5 text-white"
+                      onClick={() => setPendingImages((p) => p.filter((_, j) => j !== i))}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="mx-auto flex max-w-[720px] items-end gap-2 rounded-2xl border border-line/70 bg-white px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] focus-within:border-[#ff6c02] focus-within:ring-2 focus-within:ring-[#ff6c02]/25">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                multiple
+                onChange={(e) => {
+                  void onPickImage(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                disabled={!!pending}
+                aria-label="Joindre une image"
+                title="Joindre une image (Pipeboard)"
+                className="mb-0.5 rounded-lg p-2 text-ink-soft hover:bg-[#fff5ea] hover:text-[#c94a00] disabled:opacity-50"
+                onClick={() => fileRef.current?.click()}
+              >
+                <Paperclip className="h-4 w-4" aria-hidden />
+              </button>
               <label className="sr-only" htmlFor="ork-msg">
                 Message
               </label>
@@ -637,18 +715,28 @@ function OrkestriaPage() {
                   }
                 }}
                 rows={1}
-                placeholder={pending ? "Orkestria travaille…" : "Écrivez ici…"}
+                placeholder={
+                  pending
+                    ? "Orkestria travaille…"
+                    : pendingImages.length
+                      ? "Budget/j, pays, URL… puis Envoyer"
+                      : "Écrivez ici… (trombone = image)"
+                }
                 disabled={!!pending}
                 aria-disabled={!!pending}
                 className="max-h-28 flex-1 resize-none bg-transparent py-1.5 text-[14px] text-ink placeholder:text-ink-soft focus:outline-none disabled:opacity-60"
               />
               <button
                 type="submit"
-                disabled={!input.trim() || !!pending}
+                disabled={(!input.trim() && pendingImages.length === 0) || !!pending}
                 aria-label="Envoyer le message"
                 className="btn-primary btn-halo !p-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <ArrowUp className="h-4 w-4" aria-hidden />
+                {pendingImages.length ? (
+                  <ImagePlus className="h-4 w-4" aria-hidden />
+                ) : (
+                  <ArrowUp className="h-4 w-4" aria-hidden />
+                )}
               </button>
             </div>
           </form>

@@ -187,6 +187,66 @@ export async function routeWrite(ctx: WriteRouteContext): Promise<Record<string,
   if (isPipeboardConfigured() && ctx.connector === "meta_ads") {
     const pageId = await resolveMetaPageId(ctx.orgId, ctx.params.pageId as string | undefined);
 
+    if (ctx.action === "upload_creative") {
+      if (!accountId) throw new Error("Meta ad account id manquant");
+      if (!ctx.params.imageUrl && !(ctx.params as { file?: string }).file) {
+        throw new Error("imageUrl requis pour upload_creative");
+      }
+      const { pipeboardUploadAdImage } = await import("@/mastra/pipeboard-bridge");
+      return pipeboardUploadAdImage({
+        accountId,
+        imageUrl: ctx.params.imageUrl,
+        file: (ctx.params as { file?: string }).file,
+        name: ctx.params.name,
+      });
+    }
+
+    if (ctx.action === "create_ad") {
+      if (!accountId) throw new Error("Meta ad account id manquant");
+      if (!ctx.params.adSetId || !ctx.params.name) throw new Error("adSetId et name requis");
+      if (ctx.params.objectStoryId || (ctx.params as { object_story_id?: string }).object_story_id) {
+        const { pipeboardCreateAdCreative, pipeboardCreateAd } = await import(
+          "@/mastra/pipeboard-bridge"
+        );
+        const storyId = String(
+          ctx.params.objectStoryId ?? (ctx.params as { object_story_id?: string }).object_story_id,
+        );
+        const creative = await pipeboardCreateAdCreative({
+          accountId,
+          name: `${ctx.params.name} — post`,
+          objectStoryId: storyId,
+        });
+        const ad = await pipeboardCreateAd({
+          accountId,
+          adSetId: ctx.params.adSetId,
+          creativeId: creative.creativeId,
+          name: ctx.params.name,
+        });
+        return { adId: ad.adId, creativeId: creative.creativeId, status: "PAUSED", upstream: "pipeboard" };
+      }
+      if (!pageId) {
+        throw new Error(
+          "pageId requis — enregistrez votre Page Facebook dans Connexions ou passez pageId au tool",
+        );
+      }
+      const { pipeboardAttachImageAd } = await import("@/mastra/pipeboard-bridge");
+      if (!ctx.params.imageUrl && !ctx.params.imageHash) {
+        throw new Error("imageUrl ou imageHash requis pour create_ad Meta via Pipeboard");
+      }
+      if (!ctx.params.linkUrl) throw new Error("linkUrl requis pour create_ad Meta");
+      return pipeboardAttachImageAd({
+        accountId,
+        adSetId: ctx.params.adSetId,
+        pageId,
+        name: ctx.params.name,
+        linkUrl: ctx.params.linkUrl,
+        message: ctx.params.message,
+        headline: ctx.params.headline,
+        imageUrl: ctx.params.imageUrl,
+        imageHash: ctx.params.imageHash,
+      });
+    }
+
     if (ctx.action === "launch_meta_brief") {
       const brief = ctx.params.brief as MetaBrief | undefined;
       if (!brief?.campaign?.name || !brief.adsets?.length) {

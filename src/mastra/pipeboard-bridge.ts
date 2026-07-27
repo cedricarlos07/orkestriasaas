@@ -462,3 +462,294 @@ export function isPipeboardFamilyConnector(
 ): connector is "tiktok_ads" | "snapchat_ads" | "reddit_ads" {
   return connector === "tiktok_ads" || connector === "snapchat_ads" || connector === "reddit_ads";
 }
+
+function asRecord(v: unknown): Record<string, unknown> {
+  return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+}
+
+function pickStr(...vals: unknown[]): string | null {
+  for (const v of vals) {
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return null;
+}
+
+export function extractPipeboardImageHash(res: unknown): string {
+  const r = asRecord(res);
+  const direct = pickStr(r.image_hash, r.hash);
+  if (direct) return direct;
+  const images = r.images;
+  if (Array.isArray(images) && images[0]) {
+    const first = asRecord(images[0]);
+    const h = pickStr(first.hash, first.image_hash);
+    if (h) return h;
+  }
+  if (images && typeof images === "object" && !Array.isArray(images)) {
+    const first = Object.values(images as Record<string, unknown>)[0];
+    const h = pickStr(asRecord(first).hash);
+    if (h) return h;
+  }
+  throw new Error(`Pipeboard upload_ad_image: hash manquant — ${JSON.stringify(res).slice(0, 240)}`);
+}
+
+export function extractPipeboardId(res: unknown, ...keys: string[]): string {
+  const r = asRecord(res);
+  for (const k of keys) {
+    const v = pickStr(r[k]);
+    if (v) return v;
+  }
+  const nested = asRecord(r.creative ?? r.ad ?? r.result);
+  for (const k of keys) {
+    const v = pickStr(nested[k]);
+    if (v) return v;
+  }
+  throw new Error(`Pipeboard: id manquant (${keys.join("/")}) — ${JSON.stringify(res).slice(0, 240)}`);
+}
+
+/** Upload image to Meta via Pipeboard (URL publique ou data URL / base64). */
+export async function pipeboardUploadAdImage(input: {
+  accountId: string;
+  imageUrl?: string;
+  /** data:image/...;base64,... or raw base64 */
+  file?: string;
+  name?: string;
+  partnerUserId?: string;
+}): Promise<{ imageHash: string; upstream: "pipeboard"; raw: unknown }> {
+  requirePipeboard();
+  if (!input.imageUrl && !input.file) throw new Error("imageUrl ou file (base64) requis");
+  const args: Record<string, unknown> = { account_id: actId(input.accountId) };
+  if (input.file) args.file = input.file;
+  if (input.imageUrl) args.image_url = input.imageUrl;
+  if (input.name) args.name = input.name;
+  const raw = await callPipeboardTool("meta-ads", "upload_ad_image", args, {
+    partnerUserId: input.partnerUserId,
+  });
+  return { imageHash: extractPipeboardImageHash(raw), upstream: "pipeboard", raw };
+}
+
+/** Create a Meta ad creative via Pipeboard (image, or existing post boost). */
+export async function pipeboardCreateAdCreative(input: {
+  accountId: string;
+  name: string;
+  pageId?: string;
+  imageHash?: string;
+  objectStoryId?: string;
+  linkUrl?: string;
+  message?: string;
+  headline?: string;
+  callToAction?: string;
+  partnerUserId?: string;
+}): Promise<{ creativeId: string; upstream: "pipeboard"; raw: unknown }> {
+  requirePipeboard();
+  if (!input.objectStoryId && !input.imageHash) {
+    throw new Error("imageHash ou objectStoryId requis pour create_ad_creative");
+  }
+  const args: Record<string, unknown> = {
+    account_id: actId(input.accountId),
+    name: input.name,
+  };
+  if (input.objectStoryId) {
+    args.object_story_id = input.objectStoryId;
+  } else {
+    args.image_hash = input.imageHash;
+    if (input.pageId) args.page_id = input.pageId;
+    if (input.linkUrl) args.link_url = input.linkUrl;
+    if (input.message) args.message = input.message;
+    if (input.headline) args.headline = input.headline;
+    if (input.callToAction) args.call_to_action_type = input.callToAction;
+  }
+  const raw = await callPipeboardTool("meta-ads", "create_ad_creative", args, {
+    partnerUserId: input.partnerUserId,
+  });
+  return {
+    creativeId: extractPipeboardId(raw, "id", "creative_id"),
+    upstream: "pipeboard",
+    raw,
+  };
+}
+
+export async function pipeboardCreateAd(input: {
+  accountId: string;
+  adSetId: string;
+  creativeId: string;
+  name: string;
+  partnerUserId?: string;
+}): Promise<{ adId: string; status: "PAUSED"; upstream: "pipeboard"; raw: unknown }> {
+  requirePipeboard();
+  const raw = await callPipeboardTool(
+    "meta-ads",
+    "create_ad",
+    {
+      account_id: actId(input.accountId),
+      adset_id: input.adSetId,
+      creative_id: input.creativeId,
+      name: input.name,
+      status: "PAUSED",
+    },
+    { partnerUserId: input.partnerUserId },
+  );
+  return {
+    adId: extractPipeboardId(raw, "id", "ad_id"),
+    status: "PAUSED",
+    upstream: "pipeboard",
+    raw,
+  };
+}
+
+/**
+ * Full path: upload image (optional) → creative → ad PAUSED on an existing ad set.
+ */
+export async function pipeboardAttachImageAd(input: {
+  accountId: string;
+  adSetId: string;
+  pageId: string;
+  name: string;
+  linkUrl: string;
+  message?: string;
+  headline?: string;
+  imageUrl?: string;
+  file?: string;
+  imageHash?: string;
+  partnerUserId?: string;
+}): Promise<{
+  adId: string;
+  creativeId: string;
+  imageHash: string;
+  status: "PAUSED";
+  upstream: "pipeboard";
+}> {
+  let imageHash = input.imageHash;
+  if (!imageHash) {
+    const up = await pipeboardUploadAdImage({
+      accountId: input.accountId,
+      imageUrl: input.imageUrl,
+      file: input.file,
+      name: input.name,
+      partnerUserId: input.partnerUserId,
+    });
+    imageHash = up.imageHash;
+  }
+  const creative = await pipeboardCreateAdCreative({
+    accountId: input.accountId,
+    name: `${input.name} — créa`,
+    pageId: input.pageId,
+    imageHash,
+    linkUrl: input.linkUrl,
+    message: input.message,
+    headline: input.headline,
+    callToAction: "LEARN_MORE",
+    partnerUserId: input.partnerUserId,
+  });
+  const ad = await pipeboardCreateAd({
+    accountId: input.accountId,
+    adSetId: input.adSetId,
+    creativeId: creative.creativeId,
+    name: input.name,
+    partnerUserId: input.partnerUserId,
+  });
+  return {
+    adId: ad.adId,
+    creativeId: creative.creativeId,
+    imageHash,
+    status: "PAUSED",
+    upstream: "pipeboard",
+  };
+}
+
+/**
+ * Boost an existing Page post via Pipeboard object_story_id.
+ * Creates a paused engagement campaign + ad set + ad.
+ */
+export async function pipeboardBoostPost(input: {
+  accountId: string;
+  pageId: string;
+  objectStoryId: string;
+  name: string;
+  dailyBudget: number;
+  countries?: string[];
+  partnerUserId?: string;
+}): Promise<{
+  campaignId: string;
+  adSetId?: string;
+  adId?: string;
+  creativeId?: string;
+  status: "PAUSED";
+  upstream: "pipeboard";
+  error?: string;
+}> {
+  requirePipeboard();
+  const campaign = (await callPipeboardTool(
+    "meta-ads",
+    "create_campaign",
+    {
+      account_id: actId(input.accountId),
+      name: input.name,
+      objective: "OUTCOME_ENGAGEMENT",
+      status: "PAUSED",
+      special_ad_categories: [],
+      bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+    },
+    { partnerUserId: input.partnerUserId },
+  )) as Record<string, unknown>;
+  const campaignId = extractPipeboardId(campaign, "id", "campaign_id");
+
+  let adSetId: string | undefined;
+  try {
+    const adSet = (await callPipeboardTool(
+      "meta-ads",
+      "create_adset",
+      {
+        account_id: actId(input.accountId),
+        campaign_id: campaignId,
+        name: `${input.name} — Ad set`,
+        status: "PAUSED",
+        daily_budget: String(cents(input.dailyBudget)),
+        billing_event: "IMPRESSIONS",
+        optimization_goal: "POST_ENGAGEMENT",
+        destination_type: "ON_POST",
+        bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+        promoted_object: { page_id: input.pageId },
+        targeting: {
+          geo_locations: {
+            countries: (input.countries?.length ? input.countries : ["FR"]).map((c) =>
+              c.toUpperCase(),
+            ),
+          },
+        },
+      },
+      { partnerUserId: input.partnerUserId },
+    )) as Record<string, unknown>;
+    adSetId = extractPipeboardId(adSet, "id", "adset_id");
+  } catch (e) {
+    return {
+      campaignId,
+      status: "PAUSED",
+      upstream: "pipeboard",
+      error: e instanceof Error ? e.message : "adset failed",
+    };
+  }
+
+  const creative = await pipeboardCreateAdCreative({
+    accountId: input.accountId,
+    name: `${input.name} — post`,
+    objectStoryId: input.objectStoryId,
+    partnerUserId: input.partnerUserId,
+  });
+
+  const ad = await pipeboardCreateAd({
+    accountId: input.accountId,
+    adSetId: adSetId!,
+    creativeId: creative.creativeId,
+    name: input.name,
+    partnerUserId: input.partnerUserId,
+  });
+
+  return {
+    campaignId,
+    adSetId,
+    adId: ad.adId,
+    creativeId: creative.creativeId,
+    status: "PAUSED",
+    upstream: "pipeboard",
+  };
+}

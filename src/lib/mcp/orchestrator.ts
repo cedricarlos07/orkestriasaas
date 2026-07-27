@@ -23,6 +23,13 @@ export type OrchestratorInput = {
   threadId?: string;
   /** Previous turns of the thread, oldest first, excluding the current message. */
   history?: OrchestratorTurn[];
+  /** Optional image attachments from chat (Pipeboard upload). */
+  attachments?: Array<{
+    kind: "image";
+    dataUrl?: string;
+    url?: string;
+    name?: string;
+  }>;
 };
 
 export type OrchestratorOutput = {
@@ -33,10 +40,19 @@ export type OrchestratorOutput = {
   matchedMediaSkill?: string;
 };
 
-function detectIntent(message: string): "audit" | "report" | "campaign" | "research" | "setup" | "general" {
+function detectIntent(
+  message: string,
+): "audit" | "report" | "campaign" | "research" | "setup" | "boost" | "general" {
   const t = message.toLowerCase();
   if (/config|configuration|setup|validate|vérifier|verifier|prêt|pret|\bv1\b/.test(t)) return "setup";
   if (/concurrent|competitor|ad library|spy|espion|benchmark/.test(t)) return "research";
+  if (
+    /boost|sponsoris|promouvoir\s+(le\s+|un\s+|ce\s+)?post|post\s+(à\s+)?(booster|sponsoriser)|utiliser\s+(un\s+)?post/.test(
+      t,
+    )
+  ) {
+    return "boost";
+  }
   // Rapport before audit — "rapport ... 30 jours" must stay a report
   if (/rapport|report|hebdo|dirigeant/.test(t)) return "report";
   if (/audit|analys|diagnostic|bilan|problème|performance|résultat/.test(t)) return "audit";
@@ -198,6 +214,93 @@ function parseCampaignBrief(message: string, history?: OrchestratorTurn[]): Camp
   return brief;
 }
 
+async function handleBoostIntent(input: OrchestratorInput): Promise<OrchestratorOutput> {
+  const toolsUsed: string[] = ["boost_post"];
+  try {
+    const {
+      listOrgPagePosts,
+      boostOrgPagePost,
+      extractObjectStoryIdWithPage,
+      resolveOrgMetaIds,
+    } = await import("@/lib/mcp/meta-creatives");
+    const { pageId } = await resolveOrgMetaIds(input.orgId);
+    const brief = parseCampaignBrief(input.message, input.history);
+
+    let objectStoryId = extractObjectStoryIdWithPage(input.message, pageId);
+    // "booster #3" / "post 3" against last listed posts in history
+    if (!objectStoryId) {
+      const idx =
+        input.message.match(/(?:post|n[°o]?|#)\s*(\d{1,2})\b/i)?.[1] ||
+        input.message.match(/\b(\d{1,2})\s*$/)?.[1];
+      if (idx) {
+        const posts = await listOrgPagePosts(input.orgId, 12);
+        toolsUsed.push("list_page_posts");
+        const n = Number(idx);
+        const pick = posts[n - 1];
+        if (pick) objectStoryId = pick.objectStoryId;
+      }
+    }
+
+    const confirm =
+      /oui[,.]?\s*(boost|sponsoris|crée|creer|lance|valide)|confirme\s+le\s+boost|go\s+boost|crée\s+en\s+pause/i.test(
+        input.message,
+      );
+
+    if (objectStoryId && (confirm || (brief.dailyBudget && brief.dailyBudget > 0 && brief.confirmCreate))) {
+      const budget = brief.dailyBudget && brief.dailyBudget > 0 ? brief.dailyBudget : 10;
+      const result = await boostOrgPagePost(input.orgId, {
+        objectStoryId,
+        dailyBudget: budget,
+        countries: brief.countries ?? ["FR"],
+        name: brief.name ?? `Boost — ${objectStoryId.split("_").pop()}`,
+      });
+      toolsUsed.push("pipeboard:boost_post");
+      return {
+        reply:
+          `Boost du post **${objectStoryId}** créé en **pause** (Pipeboard).\n\n` +
+          `• Budget : **${budget} / jour**\n` +
+          `• Campagne : \`${String((result as { campaignId?: string }).campaignId ?? "")}\`\n` +
+          `• Ad : \`${String((result as { adId?: string }).adId ?? "—")}\`\n\n` +
+          `Aucune dépense tant que vous n'activez pas. Dites **« oui active »** + ad id pour lancer.`,
+        toolsUsed,
+        runId: input.runId,
+      };
+    }
+
+    const posts = await listOrgPagePosts(input.orgId, 8);
+    toolsUsed.push("list_page_posts");
+    if (!posts.length) {
+      return {
+        reply:
+          "Aucun post récent trouvé sur votre Page Facebook. Publiez d'abord un post, ou joignez une **image** pour une nouvelle créa Pipeboard.",
+        toolsUsed,
+        runId: input.runId,
+      };
+    }
+    const lines = posts
+      .map(
+        (p, i) =>
+          `${i + 1}. ${p.message.slice(0, 90)}${p.message.length > 90 ? "…" : ""}\n` +
+          `   id \`${p.objectStoryId}\`${p.createdTime ? ` · ${p.createdTime.slice(0, 10)}` : ""}`,
+      )
+      .join("\n");
+    return {
+      reply:
+        `Voici les derniers posts de votre Page — choisissez lequel sponsoriser (Pipeboard) :\n\n${lines}\n\n` +
+        `Répondez par ex. : **« booster #1 budget 15/j France oui crée en pause »**\n` +
+        `Ou collez un id \`pageId_postId\`.`,
+      toolsUsed,
+      runId: input.runId,
+    };
+  } catch (e) {
+    return {
+      reply: `Boost indisponible : ${e instanceof Error ? e.message : "erreur"}. Vérifiez Meta + Page dans Connexions, et PIPEBOARD_API_TOKEN.`,
+      toolsUsed,
+      runId: input.runId,
+    };
+  }
+}
+
 function chatToolCtx(orgId: string, userId: string) {
   return {
     keyId: "chat",
@@ -244,15 +347,75 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
       const name =
         brief.name ??
         `Orkestria — ${brief.objective ?? "trafic"} ${new Date().toISOString().slice(0, 10)}`;
-      const result = await invokeAgentTool(ctx, "create_meta_campaign", {
+      const outcome = (await invokeAgentTool(ctx, "create_meta_campaign", {
         name,
         dailyBudget: brief.dailyBudget,
         objective,
         countries: brief.countries ?? ["FR"],
         dry_run: false,
         mode: "live",
-      });
+      })) as {
+        status?: string;
+        message?: string;
+        result?: Record<string, unknown>;
+        adSetId?: string;
+        campaignId?: string;
+      };
       toolsUsed.push("create_meta_campaign");
+
+      if (outcome.status && outcome.status !== "executed" && outcome.status !== "dry_run") {
+        return {
+          reply:
+            `Campagne non créée tout de suite (statut **${outcome.status}**).\n` +
+            `${outcome.message ?? ""}\n\n` +
+            `Validez l'action dans Approvals si besoin, puis joignez l'image ensuite.`,
+          toolsUsed,
+          runId: input.runId,
+        };
+      }
+
+      const result = (outcome.result ?? outcome) as Record<string, unknown>;
+      let creativeLine = "";
+      const adSetId = String(result.adSetId ?? result.adset_id ?? outcome.adSetId ?? "");
+      const imageAtt = (input.attachments ?? []).find((a) => a.kind === "image" && (a.dataUrl || a.url));
+      const imageUrlFromMsg = brief.linkUrl?.match(/\.(png|jpe?g|webp|gif)(\?|$)/i)
+        ? brief.linkUrl
+        : undefined;
+      const landing =
+        brief.linkUrl && !/\.(png|jpe?g|webp|gif)(\?|$)/i.test(brief.linkUrl)
+          ? brief.linkUrl
+          : "https://orkestria.top";
+
+      if (adSetId && (imageAtt || imageUrlFromMsg)) {
+        try {
+          const { attachPausedImageAd } = await import("@/lib/mcp/meta-creatives");
+          const ad = await attachPausedImageAd(input.orgId, {
+            adSetId,
+            name: `${name} — annonce`,
+            linkUrl: landing,
+            attachment: imageAtt
+              ? {
+                  kind: "image",
+                  dataUrl: imageAtt.dataUrl,
+                  url: imageAtt.url,
+                  name: imageAtt.name,
+                }
+              : imageUrlFromMsg
+                ? { kind: "image", url: imageUrlFromMsg }
+                : undefined,
+          });
+          toolsUsed.push("pipeboard:upload_ad_image", "pipeboard:create_ad_creative", "pipeboard:create_ad");
+          creativeLine =
+            `\n• Annonce (pause) : **${ad.adId}** · créa ${ad.creativeId} · hash ${ad.imageHash}\n`;
+        } catch (ce) {
+          creativeLine =
+            `\n• Créa non attachée : ${ce instanceof Error ? ce.message : "erreur"} — campagne OK, ajoutez l'image ensuite.\n`;
+        }
+      } else if (!imageAtt) {
+        creativeLine =
+          `\n• Pas d'image jointe — joignez une image au prochain message ou dites **« sponsoriser un post »**.\n`;
+      }
+
       return {
         reply:
           `Campagne Meta créée en **pause** (aucune dépense).\n\n` +
@@ -260,8 +423,8 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
           `• Budget : **${brief.dailyBudget} / jour**\n` +
           `• Pays : ${(brief.countries ?? ["FR"]).join(", ")}\n` +
           `• Objectif : ${brief.objective ?? "trafic"}\n` +
-          `• Résultat : \`${JSON.stringify(result).slice(0, 280)}\`\n\n` +
-          `Prochaine action : vérifiez dans Meta Ads Manager, puis dites **« oui active »** seulement quand vous voulez dépenser.`,
+          creativeLine +
+          `\nProchaine action : vérifiez dans Meta Ads Manager, puis dites **« oui active »** + ad id seulement quand vous voulez dépenser.`,
         toolsUsed,
         runId: input.runId,
       };
@@ -279,6 +442,22 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
       reply:
         "L'activation qui dépense exige l'id de la pub (ad) Meta. Donnez l'**ad id** à activer, ou activez depuis **Campagnes** dans l'app. Je ne lance jamais la dépense sans cet id explicite.",
       toolsUsed,
+      runId: input.runId,
+    };
+  }
+
+  const hasImage = (input.attachments ?? []).some((a) => a.kind === "image" && (a.dataUrl || a.url));
+  if (hasImage && !canCreate) {
+    return {
+      reply:
+        `Image bien reçue (elle partira vers Meta via **Pipeboard** à la création).\n\n` +
+        `Il me manque encore pour créer en pause :\n` +
+        `• budget / jour (ex. 15/j)\n` +
+        `• pays (ex. France)\n` +
+        `• URL de destination\n` +
+        `• puis **« oui crée en pause »**\n\n` +
+        `Sinon : **« sponsoriser un post »** pour booster un post déjà publié sur votre Page.`,
+      toolsUsed: [...toolsUsed, "attachment:image"],
       runId: input.runId,
     };
   }
@@ -437,6 +616,10 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
 
   if (intent === "campaign") {
     return handleCampaignIntent(input);
+  }
+
+  if (intent === "boost") {
+    return handleBoostIntent(input);
   }
 
   if (intent === "audit" || intent === "report") {

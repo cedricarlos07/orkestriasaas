@@ -176,6 +176,8 @@ export type WriteActionInput = {
     headline?: string;
     imageUrl?: string;
     imageHash?: string;
+    objectStoryId?: string;
+    file?: string;
     description?: string;
     subtype?: string;
     lookalikeRatio?: number;
@@ -191,7 +193,6 @@ export type WriteActionInput = {
     audienceId?: string;
     adId?: string;
     brief?: Record<string, unknown>;
-    pageId?: string;
   };
 };
 

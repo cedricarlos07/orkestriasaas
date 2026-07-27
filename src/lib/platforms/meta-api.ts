@@ -719,6 +719,60 @@ export async function listMetaAdsInsights(
   }));
 }
 
+export type MetaPagePost = {
+  id: string;
+  /** Same as id when already pageId_postId; used as object_story_id for Pipeboard boost. */
+  objectStoryId: string;
+  message: string;
+  createdTime: string;
+  permalinkUrl?: string;
+  fullPicture?: string;
+  type?: string;
+};
+
+/** Recent published posts on a Page — for "boost existing post" UX. */
+export async function listMetaPagePosts(
+  accessToken: string,
+  pageId: string,
+  limit = 12,
+): Promise<MetaPagePost[]> {
+  const id = pageId.replace(/\D/g, "") || pageId;
+  const fields = "id,message,created_time,permalink_url,full_picture,status_type";
+  const url = new URL(`${GRAPH}/${id}/published_posts`);
+  url.searchParams.set("fields", fields);
+  url.searchParams.set("limit", String(Math.min(Math.max(limit, 1), 25)));
+  url.searchParams.set("access_token", accessToken);
+  const res = await fetch(url);
+  if (!res.ok) {
+    // Fallback: /feed often works when published_posts is restricted
+    const feed = new URL(`${GRAPH}/${id}/feed`);
+    feed.searchParams.set("fields", fields);
+    feed.searchParams.set("limit", String(Math.min(Math.max(limit, 1), 25)));
+    feed.searchParams.set("access_token", accessToken);
+    const feedRes = await fetch(feed);
+    if (!feedRes.ok) throw new Error(`Meta page posts: ${await res.text()}`);
+    return mapPagePosts(await feedRes.json(), id);
+  }
+  return mapPagePosts(await res.json(), id);
+}
+
+function mapPagePosts(data: unknown, pageId: string): MetaPagePost[] {
+  const rows = (data as { data?: Record<string, unknown>[] }).data ?? [];
+  return rows.map((r) => {
+    const rawId = String(r.id ?? "");
+    const objectStoryId = rawId.includes("_") ? rawId : `${pageId}_${rawId}`;
+    return {
+      id: rawId,
+      objectStoryId,
+      message: String(r.message ?? "").slice(0, 280) || "(sans texte)",
+      createdTime: String(r.created_time ?? ""),
+      permalinkUrl: r.permalink_url ? String(r.permalink_url) : undefined,
+      fullPicture: r.full_picture ? String(r.full_picture) : undefined,
+      type: r.status_type ? String(r.status_type) : undefined,
+    };
+  });
+}
+
 export async function setMetaAdStatus(
   accessToken: string,
   adId: string,
