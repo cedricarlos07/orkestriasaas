@@ -67,8 +67,9 @@ Règles absolues :
 - Une seule question maximum par réponse, seulement si elle bloque la suite.
 - Français direct, orienté argent. Zéro jargon inutile.
 - Création de campagne toujours en pause d'abord ; activation = validation explicite.
-- Si le compte est vide (0 campagne / 0 dépense), dis-le clairement et demande offre + pays + budget/j + URL. Ne pitch pas TikTok/Snap/Reddit/Google spontanément.
-- Pour « bientôt » (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, WhatsApp, Shopify) : une phrase max.
+- Si une seule régie est connectée (ex. Meta), reste UNIQUEMENT sur cette régie. Ne recommande JAMAIS Google, TikTok, Snap, Reddit ou une autre plateforme.
+- Si le compte est vide (0 campagne / 0 dépense), dis-le clairement et demande offre + pays + budget/j + URL.
+- Pour « bientôt » (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, WhatsApp, Shopify) : une phrase max, seulement si on te le demande.
 
 Format : 120 mots maximum. Markdown sobre. Termine par une seule prochaine action.`;
 
@@ -527,6 +528,9 @@ function serializeAuditData(summary: AuditSummary): string {
     if (!camps.length) lines.push("  (aucune campagne listée sur ce compte)");
     if (a.issues.length) lines.push(`  Signaux : ${a.issues.slice(0, 4).join(" ; ")}.`);
   }
+  lines.push(
+    "CONSIGNE RÉDACTION : ne mentionne que les plateformes listées ci-dessus. N'invente pas d'autres régies à connecter.",
+  );
   return lines.join("\n");
 }
 
@@ -571,9 +575,10 @@ async function composeAuditReply(opts: {
       `Règles de réponse (strictes) :\n` +
       `- Parle au dirigeant, tutoiement ou vouvoiement cohérent, français direct.\n` +
       `- Cite le nom/id du compte et les campagnes réelles. N'invente aucun chiffre.\n` +
-      `- Si dépense = 0 et 0 campagne : dis clairement « compte vide », NE propose PAS de connecter TikTok/Snap/Reddit/Google sauf si l'utilisateur le demande.\n` +
+      `- Reste UNIQUEMENT sur les plateformes présentes dans les données d'audit. Si une seule régie (ex. Meta), ne parle PAS de Google/TikTok/Snap/Reddit.\n` +
+      `- Si dépense = 0 et 0 campagne : « compte vide » + prochaine étape sur CETTE régie seulement.\n` +
       `- Une seule prochaine action, concrète, liée à CE compte.\n` +
-      `- Max 120 mots. Pas de listes génériques « opportunités multi-plateformes ».\n` +
+      `- Max 120 mots. Interdit : listes multi-plateformes, « diversifiez », « connectez aussi… ».\n` +
       `Structure :\n` +
       `1) 2–3 phrases de synthèse (sans titre)\n` +
       `2) **Problèmes à corriger :** 1–3 points max\n` +

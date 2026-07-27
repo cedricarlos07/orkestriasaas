@@ -68,7 +68,7 @@ export async function buildOrgContext(orgId: string, _query?: string): Promise<s
     );
   }
 
-  // Only pitch other Pipeboard platforms if the user asks — avoids generic "connectez TikTok/Snap/Reddit" spam.
+  // Never list disconnected ad platforms — the agent must stay on what the client already connected.
   if (activeConnectors.has("google_ads")) {
     lines.push("Google Ads : connecté (création Search/PMax en pause possible via Pipeboard).");
   }
@@ -81,8 +81,17 @@ export async function buildOrgContext(orgId: string, _query?: string): Promise<s
       lines.push(`${label} : connecté.`);
     }
   }
-  if (!activeConnectors.has("google_ads") && process.env.PIPEBOARD_API_TOKEN) {
-    lines.push("Autres régies (Google/TikTok/Snap/Reddit) : disponibles via Pipeboard si le client demande explicitement de les connecter — ne pas les proposer spontanément.");
+
+  const adPlatforms = [...activeConnectors].filter((c) => c !== "ga4");
+  if (adPlatforms.length === 1) {
+    const only = CONNECTORS[adPlatforms[0] as ConnectorId]?.label ?? adPlatforms[0];
+    lines.push(
+      `Règle absolue : une seule régie connectée (${only}). Reste exclusivement sur ${only}. Ne recommande JAMAIS Google, TikTok, Snap, Reddit ni une autre régie.`,
+    );
+  } else if (adPlatforms.length > 1) {
+    lines.push(
+      "Règle : ne recommande que les régies déjà connectées ci-dessus. Ne propose pas d'en ajouter d'autres spontanément.",
+    );
   }
 
   // Surface the selected Meta act when it differs from the OAuth default.
