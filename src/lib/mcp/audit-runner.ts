@@ -10,7 +10,14 @@ import {
 import { readPlatformSnapshot } from "@/lib/mcp/read-platform";
 import { uid } from "@/functions/utils";
 
-const AUDIT_CONNECTORS: ConnectorId[] = ["google_ads", "meta_ads", "tiktok_ads", "ga4"];
+const AUDIT_CONNECTORS: ConnectorId[] = [
+  "google_ads",
+  "meta_ads",
+  "tiktok_ads",
+  "snapchat_ads",
+  "reddit_ads",
+  "ga4",
+];
 
 export async function runMultichannelAudit(opts: {
   orgId: string;

@@ -72,12 +72,51 @@ function newThread(): Thread {
 
 type IntentKey = "audit" | "report" | "campaign";
 
-const SUGGESTIONS: { t: string; i: typeof BarChart3; grad: string; ic: string; intent?: IntentKey }[] = [
-  { t: "Analyse mes campagnes des 30 derniers jours", i: BarChart3, grad: "from-[#fff1e2] via-[#ffe0c2] to-[#ffcf9c]", ic: "text-[#c94a00]", intent: "audit" },
-  { t: "Fais le rapport de la semaine", i: FileText, grad: "from-[#e6f7ee] via-[#c9edd8] to-[#a9e0bf]", ic: "text-[#0f7a3c]", intent: "report" },
-  { t: "Lance une campagne pour mon nouveau menu", i: Rocket, grad: "from-[#ffe6ee] via-[#ffc7d8] to-[#ffa3bd]", ic: "text-[#9e1e4a]", intent: "campaign" },
-  { t: "Vérifier ma configuration V1", i: Cog, grad: "from-[#f0f4ff] via-[#dce4ff] to-[#c2d0ff]", ic: "text-[#1b3a8a]" },
-  { t: "Prépare un rapport dirigeant sur mes campagnes Meta", i: Users, grad: "from-[#f0e6ff] via-[#dcc7ff] to-[#c2a3ff]", ic: "text-[#4a2a9e]" },
+const SUGGESTIONS: { t: string; prompt: string; i: typeof BarChart3; grad: string; ic: string; intent?: IntentKey }[] = [
+  {
+    t: "Analyse mes campagnes des 30 derniers jours",
+    prompt:
+      "Fais un audit publicitaire sur les 30 derniers jours. Utilise les comptes connectés, donne spend/CPA/ROAS, problèmes et 3 actions prioritaires.",
+    i: BarChart3,
+    grad: "from-[#fff1e2] via-[#ffe0c2] to-[#ffcf9c]",
+    ic: "text-[#c94a00]",
+    intent: "audit",
+  },
+  {
+    t: "Fais le rapport de la semaine",
+    prompt:
+      "Prépare un rapport hebdomadaire dirigeant sur la semaine (7 derniers jours) : dépenses, résultats, CPA, ce qui marche / ce qui brûle le budget, prochaine action.",
+    i: FileText,
+    grad: "from-[#e6f7ee] via-[#c9edd8] to-[#a9e0bf]",
+    ic: "text-[#0f7a3c]",
+    intent: "report",
+  },
+  {
+    t: "Lance une campagne pour mon nouveau menu",
+    prompt:
+      "Je veux lancer une campagne Meta pour mon nouveau menu. Vérifie d'abord la config, puis guide-moi (objectif, budget/j, pays, URL) et propose une création en pause.",
+    i: Rocket,
+    grad: "from-[#ffe6ee] via-[#ffc7d8] to-[#ffa3bd]",
+    ic: "text-[#9e1e4a]",
+    intent: "campaign",
+  },
+  {
+    t: "Vérifier ma configuration V1",
+    prompt:
+      "Vérifie ma configuration V1 : Meta OAuth, Page Facebook, Pipeboard, Google Ads, recherche concurrents. Dis clairement ce qui est prêt et ce qui manque.",
+    i: Cog,
+    grad: "from-[#f0f4ff] via-[#dce4ff] to-[#c2d0ff]",
+    ic: "text-[#1b3a8a]",
+  },
+  {
+    t: "Prépare un rapport dirigeant sur mes campagnes Meta",
+    prompt:
+      "Prépare un rapport dirigeant sur mes campagnes Meta (30 derniers jours) : chiffres clés, risques, opportunités, décision recommandée en 5 lignes max.",
+    i: Users,
+    grad: "from-[#f0e6ff] via-[#dcc7ff] to-[#c2a3ff]",
+    ic: "text-[#4a2a9e]",
+    intent: "report",
+  },
 ];
 
 type FormState = {
@@ -86,27 +125,36 @@ type FormState = {
   detail: string;
 };
 
-const INTENT_META: Record<IntentKey, { label: string; icon: typeof BarChart3; scopes: string[]; detailPh: string; grad: string }> = {
+const INTENT_META: Record<IntentKey, { label: string; icon: typeof BarChart3; scopes: string[]; detailPh: string; grad: string; compose: (scope: string, detail: string) => string }> = {
   audit: {
     label: "Audit publicitaire",
     icon: BarChart3,
     scopes: ["7 derniers jours", "30 derniers jours", "90 derniers jours"],
     detailPh: "Ex : concentre-toi sur Meta et le tracking",
     grad: "from-[#ff8a2b] to-[#ff5e00]",
+    compose: (scope, detail) =>
+      `Fais un audit publicitaire sur les ${scope}. Utilise les comptes connectés et donne spend, CPA, problèmes et 3 actions.` +
+      (detail ? ` Précisions : ${detail}.` : ""),
   },
   report: {
     label: "Rapport hebdomadaire",
     icon: FileText,
     scopes: ["Cette semaine", "Semaine dernière", "Mois en cours"],
-    detailPh: "Ex : format client, mettre en avant le ROAS",
+    detailPh: "Ex : format dirigeant, mettre en avant le CPA",
     grad: "from-[#2fbf6b] to-[#0f7a3c]",
+    compose: (scope, detail) =>
+      `Prépare un rapport dirigeant pour ${scope.toLowerCase()}. Chiffres réels, ce qui marche, ce qui brûle le budget, prochaine décision.` +
+      (detail ? ` Précisions : ${detail}.` : ""),
   },
   campaign: {
     label: "Lancement de campagne",
     icon: Rocket,
     scopes: ["Notoriété", "Trafic", "Conversions / ventes"],
-    detailPh: "Ex : nouveau menu, budget $50/j, Dakar",
+    detailPh: "Ex : nouveau menu, budget 50 USD/j, Côte d'Ivoire, URL",
     grad: "from-[#ff3d78] to-[#9e1e4a]",
+    compose: (scope, detail) =>
+      `Je veux lancer une campagne Meta. Objectif : ${scope}. Vérifie la config puis guide le brief (budget/j, pays, URL) et propose une création en pause.` +
+      (detail ? ` Précisions : ${detail}.` : ""),
   },
 };
 
@@ -123,27 +171,25 @@ function detectIntent(t: string): IntentKey | null {
 function planTools(intent: IntentKey | null): ToolCall[] {
   if (intent === "audit")
     return [
-      { name: "connect_accounts", label: "Lecture des comptes publicitaires" },
-      { name: "normalize_data", label: "Normalisation des métriques 30j" },
-      { name: "tracking_check", label: "Vérification du pixel & GA4" },
-      { name: "diagnose", label: "Diagnostic dépenses / créations / audiences" },
+      { name: "audit", label: "Lecture live des comptes publicitaires" },
+      { name: "live_snapshots", label: "Normalisation spend / CPA / conversions" },
+      { name: "diagnose", label: "Diagnostic et priorités" },
     ].map((t) => ({ ...t, status: "running" as const }));
   if (intent === "report")
     return [
-      { name: "fetch_week", label: "Extraction des dépenses & résultats de la semaine" },
-      { name: "compute_kpis", label: "Calcul ROAS, CPA et marge" },
-      { name: "render_report", label: "Mise en page du rapport PDF" },
+      { name: "audit", label: "Extraction des résultats de la période" },
+      { name: "live_snapshots", label: "Calcul des KPI dirigeant" },
+      { name: "render_report", label: "Rédaction du rapport" },
     ].map((t) => ({ ...t, status: "running" as const }));
   if (intent === "campaign")
     return [
-      { name: "brief", label: "Lecture du brief et de l'objectif" },
-      { name: "audience_plan", label: "Construction des audiences Meta / Google / TikTok" },
-      { name: "budget_split", label: "Répartition du budget & enchères" },
-      { name: "creative_prep", label: "Préparation des variantes créatives" },
+      { name: "validate_setup", label: "Vérification Meta + Pipeboard" },
+      { name: "brief", label: "Construction du brief campagne" },
+      { name: "create_meta_campaign", label: "Proposition création en pause" },
     ].map((t) => ({ ...t, status: "running" as const }));
   return [
-    { name: "think", label: "Analyse de la demande", status: "running" as const },
-    { name: "lookup", label: "Recherche dans la mémoire projet", status: "running" as const },
+    { name: "validate_setup", label: "Analyse de la demande", status: "running" as const },
+    { name: "lookup", label: "Lecture du contexte compte", status: "running" as const },
   ];
 }
 
@@ -193,7 +239,7 @@ function OrkestriaPage() {
   const pending = isSending
     ? {
         text: sendingIntent ? INTENT_META[sendingIntent].label : "Orkestria analyse votre demande…",
-        tools: [] as ToolCall[],
+        tools: planTools(sendingIntent),
       }
     : null;
   const [formIntent, setFormIntent] = useState<IntentKey | null>(null);
@@ -296,8 +342,7 @@ function OrkestriaPage() {
   };
 
   const submitForm = () => {
-    const meta = INTENT_META[form.intent];
-    const composed = `${meta.label} — Portée : ${form.scope}${form.detail.trim() ? `. Précisions : ${form.detail.trim()}` : ""}.`;
+    const composed = INTENT_META[form.intent].compose(form.scope, form.detail.trim());
     setFormIntent(null);
     send(composed);
   };
@@ -459,7 +504,7 @@ function OrkestriaPage() {
           </ul>
 
           <p className="mt-2 border-t border-line/60 pt-2 text-[11px] text-ink-soft">
-            Historique enregistré dans ce navigateur.
+            Historique synchronisé sur votre compte.
           </p>
         </div>
       </aside>
@@ -527,7 +572,7 @@ function OrkestriaPage() {
                     <button
                       key={s.t}
                       type="button"
-                      onClick={() => (s.intent ? openForm(s.intent) : send(s.t))}
+                      onClick={() => (s.intent ? openForm(s.intent) : send(s.prompt))}
                       className={`card-hover group relative overflow-hidden rounded-xl border border-white/60 bg-gradient-to-br ${s.grad} p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_8px_20px_-16px_rgba(20,20,20,0.25)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40`}
                       aria-label={s.t}
                     >

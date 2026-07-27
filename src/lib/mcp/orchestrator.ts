@@ -35,18 +35,27 @@ export type OrchestratorOutput = {
 
 function detectIntent(message: string): "audit" | "report" | "campaign" | "research" | "setup" | "general" {
   const t = message.toLowerCase();
-  if (/config|configuration|setup|validate|vérifier|verifier|prêt|pret/.test(t)) return "setup";
+  if (/config|configuration|setup|validate|vérifier|verifier|prêt|pret|v1/.test(t)) return "setup";
   if (/concurrent|competitor|ad library|spy|espion|benchmark/.test(t)) return "research";
-  if (/audit|analys|diagnostic|bilan|problème/.test(t)) return "audit";
-  if (/rapport|report|performance|résultat/.test(t)) return "report";
+  if (/audit|analys|diagnostic|bilan|problème|30 derniers|7 derniers|90 derniers/.test(t)) return "audit";
+  if (/rapport|report|performance|résultat|hebdo|dirigeant/.test(t)) return "report";
   if (
-    /campagne|lancer\s+(une\s+)?(pub|campagne)|créer\s+(une\s+)?(pub|campagne)|launch|activer\s+la\s+campagne/.test(
+    /campagne|lancer\s+(une\s+)?(pub|campagne)|créer\s+(une\s+)?(pub|campagne)|launch|activer\s+la\s+campagne|lancement de campagne|nouveau menu/.test(
       t,
     )
   ) {
     return "campaign";
   }
   return "general";
+}
+
+function extractPeriod(message: string): string {
+  const t = message.toLowerCase();
+  if (/7\s*jours|cette semaine|semaine dernière/.test(t)) return "7 derniers jours";
+  if (/90\s*jours|3\s*mois/.test(t)) return "90 derniers jours";
+  if (/mois en cours|ce mois|30\s*jours/.test(t)) return "30 derniers jours";
+  if (/semaine/.test(t)) return "7 derniers jours";
+  return "30 derniers jours";
 }
 
 const DEFAULT_SYSTEM_PROMPT = `Tu es Orkestria, media buyer senior (10 ans d'agence Meta/Google) qui parle au dirigeant d'une PME.
@@ -353,41 +362,38 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
 }
 
 export async function runOrchestrator(input: OrchestratorInput): Promise<OrchestratorOutput> {
-  // Full-power path: Mastra agent + memory + Pipeboard tools
-  if (process.env.ORKESTRIA_AGENT_RUNTIME !== "legacy") {
-    const { runMastraOrchestrator } = await import("@/lib/mastra/run-chat");
-    return runMastraOrchestrator(input);
-  }
-
   const intent = detectIntent(input.message);
 
+  // Deterministic paths first — chat suggestions / guided form must be reliable.
   if (intent === "setup") {
     const { getStackSetupStatus } = await import("@/lib/mcp/setup-status");
     const stack = await getStackSetupStatus(input.orgId);
-    const autoLabel =
-      stack.meta.adkitVerify === "ok"
-        ? "OK"
-        : stack.meta.adkitVerify === "error"
+    const pipeboardLabel =
+      stack.meta.pipeboardVerify === "ok"
+        ? "OK (Pipeboard)"
+        : stack.meta.pipeboardVerify === "error"
           ? "à vérifier"
-          : "non testée";
+          : stack.google.pipeboardConfigured
+            ? "token présent — probe en cours"
+            : "PIPEBOARD_API_TOKEN manquant";
     const googleLabel = stack.google.oauthConnected
-      ? "compte client lié"
-      : stack.google.adloopHealth === "ok"
-        ? "disponible (compte agence)"
-        : stack.google.adloopConfigured
-          ? "configuration serveur en cours"
-          : "non configuré";
-    const researchLabel = stack.research.useproxyConfigured
-      ? stack.research.useproxyHealth === "ok"
-        ? "disponible"
-        : "indisponible"
-      : "non configurée";
+      ? `compte client lié${stack.google.customerId ? ` (${stack.google.customerId})` : ""}`
+      : stack.google.pipeboardConfigured
+        ? "Pipeboard OK — connectez OAuth Google Ads"
+        : "non configuré";
+    const researchLabel =
+      stack.research.adsLibraryHealth === "ok"
+        ? "Meta Ad Library OK"
+        : stack.research.adsLibraryConfigured
+          ? "Meta Ad Library à vérifier"
+          : "non configurée";
     const lines = [
       `**Meta :** ${stack.meta.oauthConnected ? "connecté" : "à connecter"}`,
       `**Page Facebook :** ${stack.meta.pageId ?? "manquante"}`,
-      `**Automatisation Meta :** ${autoLabel}`,
+      `**Pipeboard (Meta/Google/TikTok/Snap/Reddit) :** ${pipeboardLabel}`,
       `**Google Ads :** ${googleLabel}`,
       `**Recherche concurrents :** ${researchLabel}`,
+      `**Mastra Memory :** ${stack.memory.mastraConfigured ? "OK" : "DATABASE_URL / DeepSeek manquant"}`,
       "",
       stack.readyForMeta || stack.readyForCampaign
         ? "Prêt pour lancer des campagnes Meta (création en pause → activation explicite)."
@@ -425,6 +431,7 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
       orgId: input.orgId,
       userId: input.userId,
       runId: input.runId,
+      period: extractPeriod(input.message),
     });
     const reply = await composeAuditReply({
       orgId: input.orgId,
@@ -439,6 +446,12 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
       auditSummary: summary,
       runId,
     };
+  }
+
+  // Open conversation → Mastra (memory + Pipeboard tools)
+  if (process.env.ORKESTRIA_AGENT_RUNTIME !== "legacy") {
+    const { runMastraOrchestrator } = await import("@/lib/mastra/run-chat");
+    return runMastraOrchestrator(input);
   }
 
   requireOpenAiKey();

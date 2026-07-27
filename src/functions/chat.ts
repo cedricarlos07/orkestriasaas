@@ -6,7 +6,7 @@ import { ensureSession } from "@/lib/auth.functions";
 import { getActiveOrgId } from "./context";
 import { uid } from "./utils";
 
-import { runMastraOrchestrator } from "@/lib/mastra/run-chat";
+import { runOrchestrator } from "@/lib/mcp/orchestrator";
 import { enforceQuotas, QuotaError, recordUsage } from "@/lib/quotas/enforce";
 
 const WELCOME =
@@ -97,7 +97,7 @@ export const sendChatMessage = createServerFn({ method: "POST" })
       throw e;
     }
 
-    const orchestrated = await runMastraOrchestrator({
+    const orchestrated = await runOrchestrator({
       orgId,
       userId: session.user.id,
       message: data.text,
