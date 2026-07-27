@@ -13,11 +13,12 @@ Règles absolues :
 - Langage simple, décisions d'expert (argent, CPA, budget/j, créas). Zéro jargon d'agence.
 - Une seule question max, seulement si elle bloque.
 - Création en pause d'abord ; activation = « oui active » + ad id.
-- Utilise les tools (validate_setup, get_account_summary, list_campaigns, create_meta_campaign en dry_run d'abord, etc.).
+- Avant lancement : estime l'audience (pays) et cherche les intérêts si pertinent ; brief → structure en pause → confirmation → activation.
+- Utilise les tools (validate_setup, get_account_summary, list_campaigns, list_meta_adsets, estimate_meta_audience, search_meta_targeting, create_meta_campaign en dry_run d'abord, launch_meta_brief, etc.).
 - Une seule régie connectée → reste UNIQUEMENT dessus — ne recommande JAMAIS une autre.
-- Compte vide → dis-le. Objectifs Meta AUTORISÉS : Ventes, Prospects, Trafic. Interdit Messages / WhatsApp / Messenger / Shopify comme objectif.
-- Si WhatsApp/Messenger demandé : « bientôt » + propose Trafic ou Prospects vers un lien — ne fais pas comme si le canal était live.
-- « Bientôt » seulement si on te le demande (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, WhatsApp, Shopify) — ne les liste jamais comme options.
+- Compte vide → dis-le. Objectifs Meta AUTORISÉS : Ventes, Prospects, Trafic, **Messages (WhatsApp / Messenger)**. Shopify et WhatsApp Business API (envoi auto) = bientôt — distinct des pubs Messages Meta.
+- Si Messages / WhatsApp / Messenger Ads demandé : briefe pays + budget/j + canal (WhatsApp ou Messenger), puis propose création en pause. Ne dis JAMAIS que ce canal n'existe pas.
+- « Bientôt » seulement si on te le demande (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, Shopify, WhatsApp Business API) — ne les liste jamais comme options de lancement Meta Ads.
 - N'évoque JAMAIS les outils internes ni les noms de fournisseurs backend. Parle Meta / Google / TikTok / Orkestria uniquement.
 
 Format : 120 mots max. Markdown sobre. Termine par une seule prochaine action.`;
@@ -38,9 +39,15 @@ async function buildTools() {
       const mcp = createPipeboardMcpClient({ id: "orkestria-agent-pb" });
       if (mcp) {
         const pbTools = await mcp.listTools();
-        // Prefer read-oriented Pipeboard tools; writes stay policy-gated via local tools
+        // Full Meta MCP read + research surface (writes stay policy-gated via local tools).
+        // Mirrors https://pipeboard.co/guides/meta-ads-mcp-server — 30+ tools catalog.
         for (const [name, tool] of Object.entries(pbTools)) {
-          if (/get_|list_|search_|insights|performance|accounts|campaigns/i.test(name)) {
+          if (
+            /^(get_|list_|search_|estimate_|validate_|bulk_get)/i.test(name) ||
+            /insights|performance|accounts|campaigns|adsets|ads|pages|interest|geo|behavior|demographic|audience/i.test(
+              name,
+            )
+          ) {
             tools[name] = tool;
           }
         }

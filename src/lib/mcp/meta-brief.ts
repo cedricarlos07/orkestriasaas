@@ -1,4 +1,4 @@
-/** Meta brief schema — used for Pipeboard Meta campaign launches. */
+/** Meta brief schema — used for Meta campaign launches (paused-first). */
 
 export type MetaBriefAd = {
   name: string;
@@ -6,8 +6,10 @@ export type MetaBriefAd = {
   headline?: string;
   link?: string;
   cta?: string;
+  callToAction?: string;
   image?: string;
   imageUrl?: string;
+  imageHash?: string;
 };
 
 export type MetaBriefAdSet = {
@@ -23,6 +25,8 @@ export type MetaBrief = {
     name: string;
     objective?: string;
     dailyBudget?: number;
+    /** website | whatsapp | messenger — Messages Ads destinations */
+    channel?: "website" | "whatsapp" | "messenger";
   };
   adsets: MetaBriefAdSet[];
 };

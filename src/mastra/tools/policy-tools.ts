@@ -91,12 +91,14 @@ export const researchCompetitorAdsTool = createTool({
 export const createMetaCampaignTool = createTool({
   id: "create_meta_campaign",
   description:
-    "Crée une campagne Meta + ad set en pause (policy dry_run par défaut). Demander confirmation avant dry_run=false.",
+    "Crée une campagne Meta + ad set en pause (policy dry_run par défaut). channel=whatsapp|messenger pour Messages Ads. Demander confirmation avant dry_run=false.",
   inputSchema: z.object({
     name: z.string(),
     dailyBudget: z.number().positive(),
     objective: z.string().optional(),
+    channel: z.enum(["website", "whatsapp", "messenger"]).optional(),
     countries: z.array(z.string()).optional(),
+    pageId: z.string().optional(),
     dry_run: z.boolean().optional(),
     mode: z.enum(["dry_run", "approval", "live"]).optional(),
   }),

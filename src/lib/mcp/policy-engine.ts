@@ -167,10 +167,13 @@ export type WriteActionInput = {
     dailyBudget?: number;
     objective?: string;
     countries?: string[];
+    /** Meta Ads destination: website | whatsapp | messenger */
+    channel?: "website" | "whatsapp" | "messenger";
     currentDailyBudget?: number;
     adSetId?: string;
     adGroupId?: string;
     pageId?: string;
+    callToAction?: string;
     linkUrl?: string;
     message?: string;
     headline?: string;
@@ -265,6 +268,8 @@ function buildDiff(input: WriteActionInput): Record<string, unknown> {
         dailyBudget: input.params.dailyBudget,
         objective: input.params.objective ?? null,
         countries: input.params.countries ?? null,
+        channel: input.params.channel ?? null,
+        pageId: input.params.pageId ?? null,
         campaignType: input.params.campaignType ?? "default",
         finalUrl: input.params.finalUrl ?? null,
         keywords: input.params.keywords ?? null,
@@ -676,6 +681,7 @@ export async function approveAndExecute(orgId: string, approvalId: string): Prom
       dailyBudget: (after.after as number) ?? (after.dailyBudget as number) ?? undefined,
       objective: (after.objective as string) ?? undefined,
       countries: (after.countries as string[]) ?? undefined,
+      channel: (after.channel as WriteActionInput["params"]["channel"]) ?? undefined,
       adSetId: (after.adSetId as string) ?? undefined,
       adGroupId: (after.adGroupId as string) ?? undefined,
       pageId: (after.pageId as string) ?? undefined,

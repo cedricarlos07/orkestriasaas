@@ -17,7 +17,7 @@ const COMING_SOON_IF_DISCONNECTED: { connector?: ConnectorId; label: string }[] 
   { connector: "amazon_ads", label: "Amazon Ads" },
   { connector: "pinterest_ads", label: "Pinterest Ads" },
   { connector: "ga4", label: "GA4" },
-  { label: "WhatsApp Business" },
+  { label: "WhatsApp Business API (envoi auto)" },
   { label: "Shopify" },
 ];
 
@@ -243,7 +243,7 @@ export async function buildOrgContext(orgId: string, _query?: string): Promise<s
   }
 
   lines.push(
-    "Style : cite toujours le nom commercial du compte + son id, et le nom de la Page. Langage simple, expert media buyer. Objectifs Meta possibles : Ventes, Prospects, Trafic — jamais WhatsApp/Messenger/Shopify comme option.",
+    "Style : cite toujours le nom commercial du compte + son id, et le nom de la Page. Langage simple, expert media buyer. Objectifs Meta possibles : Ventes, Prospects, Trafic, Messages (WhatsApp ou Messenger). Shopify / WhatsApp Business API (envoi) = bientôt.",
   );
 
   const comingSoon = COMING_SOON_IF_DISCONNECTED.filter(

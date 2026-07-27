@@ -21,11 +21,26 @@ export const MCP_SKILLS: SkillDefinition[] = [
   {
     id: "launch",
     name: "Launch campaign",
-    description: "Validate setup, propose a media plan, then create a paused campaign.",
+    description: "Validate setup, size audience, then create a paused campaign from a brief.",
     steps: [
       { tool: "validate_setup", hint: "Check key, connections, policy, maturity matrix" },
-      { tool: "create_media_plan", hint: "Allocate budget across connected platforms" },
-      { tool: "create_campaign", hint: "Create paused campaign (dry_run=true then false)" },
+      { tool: "estimate_meta_audience", hint: "Size market (countries) before spend" },
+      { tool: "search_meta_targeting", hint: "Optional interest research" },
+      { tool: "create_meta_campaign", hint: "Create paused campaign (dry_run=true then false) — Messages: channel=whatsapp|messenger" },
+    ],
+    source: "builtin",
+  },
+  {
+    id: "brief_launch",
+    name: "Brief → campagne structurée",
+    description:
+      "SOP agence : brief standard → campagne + ad sets + ads en pause → revue → activation. Messages WhatsApp/Messenger inclus.",
+    steps: [
+      { tool: "validate_setup", hint: "Page Facebook + compte Meta OK" },
+      { tool: "upload_creative", hint: "Upload images → hashes / IDs" },
+      { tool: "launch_meta_brief", hint: "Brief { campaign, adsets[], ads[] } — tout en PAUSED" },
+      { tool: "list_meta_adsets", hint: "Vérifier la structure créée" },
+      { tool: "activate_meta_campaign", hint: "Après confirmation explicite seulement" },
     ],
     source: "builtin",
   },
@@ -36,7 +51,19 @@ export const MCP_SKILLS: SkillDefinition[] = [
     steps: [
       { tool: "detect_anomalies", hint: "Find spend without conversions / low CTR / high CPA" },
       { tool: "get_performance", hint: "Pull 30-day performance" },
+      { tool: "list_meta_ads", hint: "Drill to ad level before pausing" },
       { tool: "pause_campaign", hint: "Pause clear losers via dry_run then confirm" },
+    ],
+    source: "builtin",
+  },
+  {
+    id: "audience_size",
+    name: "Audience & geo sizing",
+    description: "Size market and refine geo/interests before launch (no spend).",
+    steps: [
+      { tool: "search_meta_geo", hint: "Resolve countries / cities" },
+      { tool: "search_meta_targeting", hint: "Interest IDs" },
+      { tool: "estimate_meta_audience", hint: "Reach estimate" },
     ],
     source: "builtin",
   },

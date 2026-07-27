@@ -244,6 +244,7 @@ export async function routeWrite(ctx: WriteRouteContext): Promise<Record<string,
         headline: ctx.params.headline,
         imageUrl: ctx.params.imageUrl,
         imageHash: ctx.params.imageHash,
+        callToAction: ctx.params.callToAction,
       });
     }
 
@@ -278,13 +279,56 @@ export async function routeWrite(ctx: WriteRouteContext): Promise<Record<string,
     if (ctx.action === "create_campaign") {
       if (!accountId) throw new Error("Meta ad account id manquant");
       if (!ctx.params.name || !ctx.params.dailyBudget) throw new Error("name et dailyBudget requis");
+      const channel = ctx.params.channel as "website" | "whatsapp" | "messenger" | undefined;
+      const messaging = channel === "whatsapp" || channel === "messenger";
+      if (messaging && !pageId) {
+        throw new Error(
+          "pageId requis pour Messages WhatsApp / Messenger — choisissez une Page Facebook dans Connexions",
+        );
+      }
       return pipeboardMetaCreateCampaign({
         accountId,
         name: ctx.params.name,
         dailyBudget: ctx.params.dailyBudget,
         objective: ctx.params.objective,
         countries: ctx.params.countries,
+        channel,
+        pageId: pageId ?? undefined,
       });
+    }
+
+    if (ctx.action === "create_ad_set") {
+      if (!accountId) throw new Error("Meta ad account id manquant");
+      if (!ctx.campaignId || !ctx.params.name || !ctx.params.dailyBudget) {
+        throw new Error("campaignId, name et dailyBudget requis");
+      }
+      const { pipeboardMetaCreateAdSet } = await import("@/mastra/pipeboard-bridge");
+      const channel = ctx.params.channel as "website" | "whatsapp" | "messenger" | undefined;
+      if ((channel === "whatsapp" || channel === "messenger") && !pageId) {
+        throw new Error("pageId requis pour ad set Messages");
+      }
+      return pipeboardMetaCreateAdSet({
+        accountId,
+        campaignId: ctx.campaignId,
+        name: ctx.params.name,
+        dailyBudget: ctx.params.dailyBudget,
+        countries: ctx.params.countries,
+        channel,
+        pageId: pageId ?? undefined,
+        optimizationGoal: ctx.params.optimizationGoal,
+      });
+    }
+
+    if (ctx.action === "enable_campaign" && ctx.campaignId) {
+      const { pipeboardMetaEnableCampaign } = await import("@/mastra/pipeboard-bridge");
+      return pipeboardMetaEnableCampaign({ campaignId: ctx.campaignId });
+    }
+
+    if (ctx.action === "enable_ad_set") {
+      const adSetId = (ctx.params.adSetId as string | undefined) ?? ctx.campaignId;
+      if (!adSetId) throw new Error("adSetId requis");
+      const { pipeboardMetaEnableAdSet } = await import("@/mastra/pipeboard-bridge");
+      return pipeboardMetaEnableAdSet({ adSetId });
     }
 
     if (ctx.action === "pause_campaign" && ctx.campaignId) {

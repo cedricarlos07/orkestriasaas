@@ -75,6 +75,7 @@ export async function attachPausedImageAd(orgId: string, input: {
   headline?: string;
   attachment?: ChatAttachment;
   imageHash?: string;
+  callToAction?: string;
 }): Promise<{ adId: string; creativeId: string; imageHash: string }> {
   if (!isPipeboardConfigured()) throw new Error("Création d'annonce temporairement indisponible.");
   const { accountId, pageId } = await resolveOrgMetaIds(orgId);
@@ -89,6 +90,7 @@ export async function attachPausedImageAd(orgId: string, input: {
     imageHash: input.imageHash,
     file: input.attachment?.dataUrl,
     imageUrl: input.attachment?.url,
+    callToAction: input.callToAction,
   });
   return { adId: res.adId, creativeId: res.creativeId, imageHash: res.imageHash };
 }

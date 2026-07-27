@@ -32,61 +32,103 @@ export async function pipeboardMetaCreateCampaign(input: {
   dailyBudget: number;
   objective?: string;
   countries?: string[];
+  /** Meta Ads destination — website (default), click-to-WhatsApp, or Messenger. */
+  channel?: "website" | "whatsapp" | "messenger";
+  pageId?: string;
   partnerUserId?: string;
 }): Promise<Record<string, unknown>> {
   requirePipeboard();
-  const objective = input.objective?.startsWith("OUTCOME_")
-    ? input.objective
-    : input.objective === "leads"
-      ? "OUTCOME_LEADS"
-      : input.objective === "sales"
-        ? "OUTCOME_SALES"
-        : "OUTCOME_TRAFFIC";
+  const channel =
+    input.channel ??
+    (input.objective === "messages" ||
+    input.objective === "whatsapp" ||
+    input.objective === "messenger" ||
+    /WHATSAPP|MESSENGER/i.test(String(input.objective ?? ""))
+      ? input.objective === "messenger" || /MESSENGER/i.test(String(input.objective ?? ""))
+        ? "messenger"
+        : "whatsapp"
+      : "website");
+  const isMessaging = channel === "whatsapp" || channel === "messenger";
 
-  const campaign = (await callPipeboardTool(
-    "meta-ads",
-    "create_campaign",
-    {
-      account_id: actId(input.accountId),
-      name: input.name,
-      objective,
-      status: "PAUSED",
-      daily_budget: cents(input.dailyBudget),
-      special_ad_categories: [],
-      bid_strategy: "LOWEST_COST_WITHOUT_CAP",
-    },
-    { partnerUserId: input.partnerUserId },
-  )) as Record<string, unknown>;
+  let objective: string;
+  if (isMessaging) {
+    // Click-to-WhatsApp / Messenger — Pipeboard: OUTCOME_ENGAGEMENT + CONVERSATIONS
+    objective =
+      input.objective?.startsWith("OUTCOME_") && input.objective !== "OUTCOME_TRAFFIC"
+        ? input.objective
+        : "OUTCOME_ENGAGEMENT";
+  } else if (input.objective?.startsWith("OUTCOME_")) {
+    objective = input.objective;
+  } else if (input.objective === "leads") {
+    objective = "OUTCOME_LEADS";
+  } else if (input.objective === "sales") {
+    objective = "OUTCOME_SALES";
+  } else {
+    objective = "OUTCOME_TRAFFIC";
+  }
+
+  // Messaging: budget on ad set only (avoid CBO double-budget). Website: keep campaign budget.
+  const campaignArgs: Record<string, unknown> = {
+    account_id: actId(input.accountId),
+    name: input.name,
+    objective,
+    status: "PAUSED",
+    special_ad_categories: [],
+    bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+  };
+  if (!isMessaging) {
+    campaignArgs.daily_budget = cents(input.dailyBudget);
+  }
+
+  const campaign = (await callPipeboardTool("meta-ads", "create_campaign", campaignArgs, {
+    partnerUserId: input.partnerUserId,
+  })) as Record<string, unknown>;
 
   const campaignId = String(
     campaign.id ?? campaign.campaign_id ?? (campaign as { campaign?: { id?: string } }).campaign?.id ?? "",
   );
 
   let adSet: Record<string, unknown> | undefined;
-  if (campaignId && input.countries?.length) {
+  if (campaignId && (input.countries?.length || isMessaging)) {
     try {
-      adSet = (await callPipeboardTool(
-        "meta-ads",
-        "create_adset",
-        {
-          account_id: actId(input.accountId),
-          campaign_id: campaignId,
-          name: `${input.name} — Ad set`,
-          status: "PAUSED",
-          daily_budget: String(cents(input.dailyBudget)),
-          billing_event: "IMPRESSIONS",
-          optimization_goal: "LINK_CLICKS",
-          bid_strategy: "LOWEST_COST_WITHOUT_CAP",
-          targeting: {
-            geo_locations: {
-              countries: input.countries.map((c) => c.toUpperCase()),
-            },
-          },
+      const countries = (input.countries?.length ? input.countries : ["CI"]).map((c) => c.toUpperCase());
+      const adsetArgs: Record<string, unknown> = {
+        account_id: actId(input.accountId),
+        campaign_id: campaignId,
+        name: `${input.name} — Ad set`,
+        status: "PAUSED",
+        daily_budget: String(cents(input.dailyBudget)),
+        billing_event: "IMPRESSIONS",
+        bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+        targeting: {
+          geo_locations: { countries },
+          targeting_automation: { advantage_audience: 0 },
         },
-        { partnerUserId: input.partnerUserId },
-      )) as Record<string, unknown>;
-    } catch {
-      // campaign created; ad set optional if targeting fails
+      };
+
+      if (isMessaging) {
+        if (!input.pageId) {
+          throw new Error("pageId requis pour une campagne Messages (WhatsApp / Messenger)");
+        }
+        adsetArgs.destination_type = channel === "whatsapp" ? "WHATSAPP" : "MESSENGER";
+        adsetArgs.optimization_goal = "CONVERSATIONS";
+        adsetArgs.promoted_object = { page_id: input.pageId };
+      } else {
+        adsetArgs.optimization_goal =
+          objective === "OUTCOME_LEADS"
+            ? "LEAD_GENERATION"
+            : objective === "OUTCOME_SALES"
+              ? "OFFSITE_CONVERSIONS"
+              : "LINK_CLICKS";
+        adsetArgs.destination_type = "WEBSITE";
+      }
+
+      adSet = (await callPipeboardTool("meta-ads", "create_adset", adsetArgs, {
+        partnerUserId: input.partnerUserId,
+      })) as Record<string, unknown>;
+    } catch (e) {
+      if (isMessaging) throw e;
+      // website: campaign created; ad set optional if targeting fails
     }
   }
 
@@ -95,6 +137,8 @@ export async function pipeboardMetaCreateCampaign(input: {
     adSetId: adSet?.id ?? adSet?.adset_id,
     status: "PAUSED",
     upstream: "pipeboard",
+    channel,
+    objective,
     campaign,
     adSet,
   };
@@ -172,17 +216,41 @@ export async function pipeboardMetaLaunchBrief(input: {
   accountId: string;
   pageId: string;
   brief: {
-    campaign: { name: string; objective?: string; dailyBudget?: number };
+    campaign: {
+      name: string;
+      objective?: string;
+      dailyBudget?: number;
+      /** website | whatsapp | messenger */
+      channel?: string;
+    };
     adsets: Array<{
       name: string;
       dailyBudget: number;
       countries?: string[];
-      ads?: Array<{ name: string; message?: string; headline?: string; link?: string; image?: string }>;
+      ads?: Array<{
+        name: string;
+        message?: string;
+        headline?: string;
+        link?: string;
+        image?: string;
+        imageUrl?: string;
+        imageHash?: string;
+        callToAction?: string;
+        cta?: string;
+      }>;
     }>;
   };
   partnerUserId?: string;
 }): Promise<Record<string, unknown>> {
   requirePipeboard();
+  const channelRaw = (input.brief.campaign.channel ?? "").toLowerCase();
+  const objectiveRaw = (input.brief.campaign.objective ?? "").toLowerCase();
+  const channel: "website" | "whatsapp" | "messenger" =
+    channelRaw === "whatsapp" || /whatsapp|messages?/.test(objectiveRaw)
+      ? "whatsapp"
+      : channelRaw === "messenger" || /messenger/.test(objectiveRaw)
+        ? "messenger"
+        : "website";
   const daily = input.brief.campaign.dailyBudget ?? input.brief.adsets[0]?.dailyBudget ?? 10;
   const created = await pipeboardMetaCreateCampaign({
     accountId: input.accountId,
@@ -190,9 +258,256 @@ export async function pipeboardMetaLaunchBrief(input: {
     dailyBudget: daily,
     objective: input.brief.campaign.objective,
     countries: input.brief.adsets[0]?.countries,
+    channel,
+    pageId: input.pageId,
     partnerUserId: input.partnerUserId,
   });
-  return { ...created, pageId: input.pageId, note: "Créé en pause" };
+
+  const adSetId = String(created.adSetId ?? "");
+  const adsCreated: Array<Record<string, unknown>> = [];
+  const firstAds = input.brief.adsets[0]?.ads ?? [];
+  const isMsg = channel === "whatsapp" || channel === "messenger";
+  const defaultCta = isMsg
+    ? channel === "messenger"
+      ? "MESSAGE_PAGE"
+      : "WHATSAPP_MESSAGE"
+    : "LEARN_MORE";
+
+  if (adSetId && firstAds.length) {
+    for (const ad of firstAds.slice(0, 5)) {
+      const image = ad.image ?? ad.imageUrl;
+      if (!image && !ad.imageHash) continue;
+      try {
+        const attached = await pipeboardAttachImageAd({
+          accountId: input.accountId,
+          adSetId,
+          pageId: input.pageId,
+          name: ad.name || `${input.brief.campaign.name} — ad`,
+          linkUrl: ad.link || (isMsg ? "https://www.facebook.com" : "https://orkestria.top"),
+          message: ad.message,
+          headline: ad.headline,
+          imageUrl: image,
+          imageHash: ad.imageHash,
+          callToAction: ad.callToAction ?? ad.cta ?? defaultCta,
+          partnerUserId: input.partnerUserId,
+        });
+        adsCreated.push(attached);
+      } catch (e) {
+        adsCreated.push({
+          error: e instanceof Error ? e.message : "créa échouée",
+          name: ad.name,
+        });
+      }
+    }
+  }
+
+  // Extra ABO ad sets (beyond the first created with the campaign)
+  const extraAdSets: Array<Record<string, unknown>> = [];
+  for (const aset of input.brief.adsets.slice(1, 4)) {
+    try {
+      const extra = await pipeboardMetaCreateAdSet({
+        accountId: input.accountId,
+        campaignId: String(created.campaignId),
+        name: aset.name,
+        dailyBudget: aset.dailyBudget,
+        countries: aset.countries ?? input.brief.adsets[0]?.countries ?? ["FR"],
+        channel,
+        pageId: input.pageId,
+        partnerUserId: input.partnerUserId,
+      });
+      extraAdSets.push(extra);
+    } catch (e) {
+      extraAdSets.push({
+        error: e instanceof Error ? e.message : "ad set échoué",
+        name: aset.name,
+      });
+    }
+  }
+
+  return {
+    ...created,
+    pageId: input.pageId,
+    channel,
+    ads: adsCreated,
+    extraAdSets,
+    status: "PAUSED",
+    note: "Structure créée en pause — confirmez avant activation",
+  };
+}
+
+/** Standalone paused Meta ad set (website or Messages destination). */
+export async function pipeboardMetaCreateAdSet(input: {
+  accountId: string;
+  campaignId: string;
+  name: string;
+  dailyBudget: number;
+  countries?: string[];
+  channel?: "website" | "whatsapp" | "messenger";
+  pageId?: string;
+  optimizationGoal?: string;
+  partnerUserId?: string;
+}): Promise<Record<string, unknown>> {
+  requirePipeboard();
+  const channel = input.channel ?? "website";
+  const isMessaging = channel === "whatsapp" || channel === "messenger";
+  const countries = (input.countries?.length ? input.countries : ["FR"]).map((c) => c.toUpperCase());
+  const args: Record<string, unknown> = {
+    account_id: actId(input.accountId),
+    campaign_id: input.campaignId,
+    name: input.name,
+    status: "PAUSED",
+    daily_budget: String(cents(input.dailyBudget)),
+    billing_event: "IMPRESSIONS",
+    bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+    targeting: {
+      geo_locations: { countries },
+      targeting_automation: { advantage_audience: 0 },
+    },
+  };
+  if (isMessaging) {
+    if (!input.pageId) throw new Error("pageId requis pour ad set Messages");
+    args.destination_type = channel === "whatsapp" ? "WHATSAPP" : "MESSENGER";
+    args.optimization_goal = input.optimizationGoal ?? "CONVERSATIONS";
+    args.promoted_object = { page_id: input.pageId };
+  } else {
+    args.destination_type = "WEBSITE";
+    args.optimization_goal = input.optimizationGoal ?? "LINK_CLICKS";
+  }
+  const raw = (await callPipeboardTool("meta-ads", "create_adset", args, {
+    partnerUserId: input.partnerUserId,
+  })) as Record<string, unknown>;
+  return {
+    adSetId: String(raw.id ?? raw.adset_id ?? ""),
+    status: "PAUSED",
+    upstream: "pipeboard",
+    channel,
+    raw,
+  };
+}
+
+export async function pipeboardMetaEnableCampaign(input: {
+  campaignId: string;
+  partnerUserId?: string;
+}): Promise<Record<string, unknown>> {
+  requirePipeboard();
+  const result = await callPipeboardTool(
+    "meta-ads",
+    "update_campaign",
+    { campaign_id: input.campaignId, status: "ACTIVE" },
+    { partnerUserId: input.partnerUserId },
+  );
+  return { campaignId: input.campaignId, status: "ACTIVE", upstream: "pipeboard", result };
+}
+
+export async function pipeboardMetaEnableAdSet(input: {
+  adSetId: string;
+  partnerUserId?: string;
+}): Promise<Record<string, unknown>> {
+  requirePipeboard();
+  const result = await callPipeboardTool(
+    "meta-ads",
+    "update_adset",
+    { adset_id: input.adSetId, status: "ACTIVE" },
+    { partnerUserId: input.partnerUserId },
+  );
+  return { adSetId: input.adSetId, status: "ACTIVE", upstream: "pipeboard", result };
+}
+
+export async function pipeboardMetaListAdSets(input: {
+  accountId: string;
+  campaignId?: string;
+  partnerUserId?: string;
+}): Promise<unknown> {
+  requirePipeboard();
+  const args: Record<string, unknown> = {
+    account_id: actId(input.accountId),
+    limit: 50,
+  };
+  if (input.campaignId) args.campaign_id = input.campaignId;
+  return callPipeboardTool("meta-ads", "get_adsets", args, { partnerUserId: input.partnerUserId });
+}
+
+export async function pipeboardMetaListAds(input: {
+  accountId: string;
+  campaignId?: string;
+  adSetId?: string;
+  partnerUserId?: string;
+}): Promise<unknown> {
+  requirePipeboard();
+  const args: Record<string, unknown> = {
+    account_id: actId(input.accountId),
+    limit: 50,
+  };
+  if (input.campaignId) args.campaign_id = input.campaignId;
+  if (input.adSetId) args.adset_id = input.adSetId;
+  return callPipeboardTool("meta-ads", "get_ads", args, { partnerUserId: input.partnerUserId });
+}
+
+export async function pipeboardMetaGetAccountPages(input: {
+  accountId: string;
+  partnerUserId?: string;
+}): Promise<unknown> {
+  requirePipeboard();
+  return callPipeboardTool(
+    "meta-ads",
+    "get_account_pages",
+    { account_id: actId(input.accountId) },
+    { partnerUserId: input.partnerUserId },
+  );
+}
+
+export async function pipeboardMetaEstimateAudience(input: {
+  accountId: string;
+  targeting: Record<string, unknown>;
+  optimizationGoal?: string;
+  partnerUserId?: string;
+}): Promise<unknown> {
+  requirePipeboard();
+  return callPipeboardTool(
+    "meta-ads",
+    "estimate_audience_size",
+    {
+      account_id: actId(input.accountId),
+      targeting_spec: input.targeting,
+      optimization_goal: input.optimizationGoal ?? "REACH",
+    },
+    { partnerUserId: input.partnerUserId },
+  );
+}
+
+export async function pipeboardMetaSearchGeo(input: {
+  query: string;
+  locationTypes?: string[];
+  partnerUserId?: string;
+}): Promise<unknown> {
+  requirePipeboard();
+  return callPipeboardTool(
+    "meta-ads",
+    "search_geo_locations",
+    {
+      query: input.query,
+      location_types: input.locationTypes ?? ["country", "city", "region"],
+    },
+    { partnerUserId: input.partnerUserId },
+  );
+}
+
+export async function pipeboardMetaDuplicateCampaign(input: {
+  campaignId: string;
+  name?: string;
+  partnerUserId?: string;
+}): Promise<unknown> {
+  requirePipeboard();
+  return callPipeboardTool(
+    "meta-ads",
+    "duplicate_campaign",
+    {
+      campaign_id: input.campaignId,
+      name_suffix: input.name ?? " — copie",
+      status_option: "PAUSED",
+    },
+    { partnerUserId: input.partnerUserId },
+  );
 }
 
 export async function pipeboardGoogleCreateCampaign(input: {
@@ -608,6 +923,8 @@ export async function pipeboardAttachImageAd(input: {
   imageUrl?: string;
   file?: string;
   imageHash?: string;
+  /** LEARN_MORE (site) | WHATSAPP_MESSAGE | MESSAGE_PAGE */
+  callToAction?: string;
   partnerUserId?: string;
 }): Promise<{
   adId: string;
@@ -635,7 +952,7 @@ export async function pipeboardAttachImageAd(input: {
     linkUrl: input.linkUrl,
     message: input.message,
     headline: input.headline,
-    callToAction: "LEARN_MORE",
+    callToAction: input.callToAction ?? "LEARN_MORE",
     partnerUserId: input.partnerUserId,
   });
   const ad = await pipeboardCreateAd({

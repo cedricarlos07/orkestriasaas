@@ -447,13 +447,21 @@ const launchTools: AgentTool[] = [
   writeTool(
     "create_meta_campaign",
     "create_campaign",
-    "Create a Meta (Facebook/Instagram) campaign + paused ad set. Production path.",
+    "Create a Meta campaign + paused ad set. Use channel=whatsapp|messenger for Click-to-Message (Messages objective).",
     "launch",
     {
       name: { type: "string" },
       dailyBudget: { type: "number" },
-      objective: { type: "string", description: "Default OUTCOME_TRAFFIC" },
+      objective: {
+        type: "string",
+        description: "OUTCOME_TRAFFIC | OUTCOME_LEADS | OUTCOME_SALES | OUTCOME_ENGAGEMENT (messages)",
+      },
+      channel: {
+        type: "string",
+        description: "website (default) | whatsapp | messenger — Messages Ads destinations",
+      },
       countries: { type: "array", items: { type: "string" } },
+      pageId: { type: "string", description: "Required for whatsapp/messenger channel" },
       accountId: { type: "string" },
     },
     ["name", "dailyBudget"],
@@ -463,7 +471,9 @@ const launchTools: AgentTool[] = [
         name: str(args.name),
         dailyBudget: num(args.dailyBudget),
         objective: str(args.objective) ?? "OUTCOME_TRAFFIC",
+        channel: (str(args.channel) as "website" | "whatsapp" | "messenger" | undefined) ?? undefined,
         countries: Array.isArray(args.countries) ? (args.countries as string[]) : undefined,
+        pageId: str(args.pageId),
       },
     }),
     "meta_ads",
@@ -600,7 +610,7 @@ const launchTools: AgentTool[] = [
   writeTool(
     "create_ad_set",
     "create_ad_set",
-    "Create a paused ad set / ad group (Meta, TikTok) or DRAFT LinkedIn campaign under a parent.",
+    "Create a paused Meta ad set (channel=website|whatsapp|messenger) or TikTok/LinkedIn equivalent.",
     "launch",
     {
       campaignId: { type: "string" },
@@ -608,6 +618,8 @@ const launchTools: AgentTool[] = [
       dailyBudget: { type: "number" },
       countries: { type: "array", items: { type: "string" } },
       optimizationGoal: { type: "string" },
+      channel: { type: "string", description: "website | whatsapp | messenger" },
+      pageId: { type: "string" },
       accountId: { type: "string" },
     },
     ["campaignId", "name", "dailyBudget"],
@@ -619,6 +631,8 @@ const launchTools: AgentTool[] = [
         dailyBudget: num(args.dailyBudget),
         countries: Array.isArray(args.countries) ? (args.countries as string[]) : undefined,
         optimizationGoal: str(args.optimizationGoal),
+        channel: (str(args.channel) as "website" | "whatsapp" | "messenger" | undefined) ?? undefined,
+        pageId: str(args.pageId),
       },
     }),
   ),
@@ -1154,7 +1168,7 @@ const measureTools: AgentTool[] = [
   },
   {
     name: "search_meta_targeting",
-    description: "Search Meta interest targeting  (lecture seule). Use before launch_meta_brief.",
+    description: "Search Meta interest targeting (lecture seule). Use before launch_meta_brief.",
     family: "measure",
     inputSchema: {
       type: "object",
@@ -1174,6 +1188,154 @@ const measureTools: AgentTool[] = [
       return callPipeboardTool("meta-ads", "search_interests", {
         query,
         type: str(args.type) ?? "adinterest",
+      });
+    },
+  },
+  {
+    name: "estimate_meta_audience",
+    description:
+      "Estime la taille d'audience Meta avant lancement (geo + intérêts). Lecture seule — guide audience sizing.",
+    family: "measure",
+    inputSchema: {
+      type: "object",
+      properties: {
+        countries: { type: "array", items: { type: "string" }, description: "ISO codes e.g. FR, CI" },
+        interestIds: { type: "array", items: { type: "string" } },
+        ageMin: { type: "number" },
+        ageMax: { type: "number" },
+        accountId: { type: "string" },
+      },
+      required: ["countries"],
+    },
+    handler: async (ctx, args) => {
+      if (!isPipeboardConfigured()) throw new Error("Estimation d'audience temporairement indisponible");
+      const { tokens } = await getTokensFor(ctx.organizationId, "meta_ads");
+      const accountId = str(args.accountId) ?? tokens.accountId ?? "";
+      if (!accountId) throw new Error("compte Meta manquant");
+      const countries = Array.isArray(args.countries)
+        ? (args.countries as string[]).map((c) => String(c).toUpperCase())
+        : ["FR"];
+      const targeting: Record<string, unknown> = {
+        geo_locations: { countries },
+        age_min: num(args.ageMin) ?? 18,
+        age_max: num(args.ageMax) ?? 65,
+      };
+      if (Array.isArray(args.interestIds) && args.interestIds.length) {
+        targeting.flexible_spec = [
+          {
+            interests: (args.interestIds as string[]).map((id) => ({ id: String(id) })),
+          },
+        ];
+      }
+      const { pipeboardMetaEstimateAudience } = await import("@/mastra/pipeboard-bridge");
+      return pipeboardMetaEstimateAudience({ accountId, targeting });
+    },
+  },
+  {
+    name: "search_meta_geo",
+    description: "Recherche géo Meta (pays, villes, régions) avant ciblage.",
+    family: "measure",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+      },
+      required: ["query"],
+    },
+    handler: async (_ctx, args) => {
+      const query = str(args.query);
+      if (!query) throw new Error("query requis");
+      if (!isPipeboardConfigured()) throw new Error("Recherche géo temporairement indisponible");
+      const { pipeboardMetaSearchGeo } = await import("@/mastra/pipeboard-bridge");
+      return pipeboardMetaSearchGeo({ query });
+    },
+  },
+  {
+    name: "list_meta_adsets",
+    description: "Liste les ad sets Meta (optionnellement filtrés par campagne).",
+    family: "measure",
+    inputSchema: {
+      type: "object",
+      properties: {
+        campaignId: { type: "string" },
+        accountId: { type: "string" },
+      },
+    },
+    handler: async (ctx, args) => {
+      if (!isPipeboardConfigured()) throw new Error("Lecture ad sets temporairement indisponible");
+      const { tokens } = await getTokensFor(ctx.organizationId, "meta_ads");
+      const accountId = str(args.accountId) ?? tokens.accountId ?? "";
+      if (!accountId) throw new Error("compte Meta manquant");
+      const { pipeboardMetaListAdSets } = await import("@/mastra/pipeboard-bridge");
+      return pipeboardMetaListAdSets({
+        accountId,
+        campaignId: str(args.campaignId) ?? undefined,
+      });
+    },
+  },
+  {
+    name: "list_meta_ads",
+    description: "Liste les pubs Meta (filtre campagne ou ad set).",
+    family: "measure",
+    inputSchema: {
+      type: "object",
+      properties: {
+        campaignId: { type: "string" },
+        adSetId: { type: "string" },
+        accountId: { type: "string" },
+      },
+    },
+    handler: async (ctx, args) => {
+      if (!isPipeboardConfigured()) throw new Error("Lecture ads temporairement indisponible");
+      const { tokens } = await getTokensFor(ctx.organizationId, "meta_ads");
+      const accountId = str(args.accountId) ?? tokens.accountId ?? "";
+      if (!accountId) throw new Error("compte Meta manquant");
+      const { pipeboardMetaListAds } = await import("@/mastra/pipeboard-bridge");
+      return pipeboardMetaListAds({
+        accountId,
+        campaignId: str(args.campaignId) ?? undefined,
+        adSetId: str(args.adSetId) ?? undefined,
+      });
+    },
+  },
+  {
+    name: "list_meta_pages",
+    description: "Pages Facebook liées au compte pub Meta.",
+    family: "measure",
+    inputSchema: {
+      type: "object",
+      properties: { accountId: { type: "string" } },
+    },
+    handler: async (ctx, args) => {
+      if (!isPipeboardConfigured()) throw new Error("Lecture pages temporairement indisponible");
+      const { tokens } = await getTokensFor(ctx.organizationId, "meta_ads");
+      const accountId = str(args.accountId) ?? tokens.accountId ?? "";
+      if (!accountId) throw new Error("compte Meta manquant");
+      const { pipeboardMetaGetAccountPages } = await import("@/mastra/pipeboard-bridge");
+      return pipeboardMetaGetAccountPages({ accountId });
+    },
+  },
+  {
+    name: "duplicate_meta_campaign",
+    description:
+      "Duplique une campagne Meta en pause (scaling / A-B). Plan Meta premium peut être requis.",
+    family: "optimize",
+    inputSchema: {
+      type: "object",
+      properties: {
+        campaignId: { type: "string" },
+        name: { type: "string" },
+      },
+      required: ["campaignId"],
+    },
+    handler: async (_ctx, args) => {
+      const campaignId = str(args.campaignId);
+      if (!campaignId) throw new Error("campaignId requis");
+      if (!isPipeboardConfigured()) throw new Error("Duplication temporairement indisponible");
+      const { pipeboardMetaDuplicateCampaign } = await import("@/mastra/pipeboard-bridge");
+      return pipeboardMetaDuplicateCampaign({
+        campaignId,
+        name: str(args.name) ?? undefined,
       });
     },
   },
@@ -1202,6 +1364,23 @@ const measureTools: AgentTool[] = [
       return callPipeboardTool("meta-ads", "get_insights", {
         object_id: objectId,
         time_range: str(args.window) ?? "last_3d",
+      });
+    },
+  },
+  {
+    name: "bulk_meta_insights",
+    description: "Insights Meta multi-comptes en un appel (si disponible).",
+    family: "measure",
+    inputSchema: {
+      type: "object",
+      properties: {
+        window: { type: "string", description: "last_7d | last_30d" },
+      },
+    },
+    handler: async (_ctx, args) => {
+      if (!isPipeboardConfigured()) throw new Error("Insights bulk temporairement indisponibles");
+      return callPipeboardTool("meta-ads", "bulk_get_insights", {
+        time_range: str(args.window) ?? "last_7d",
       });
     },
   },

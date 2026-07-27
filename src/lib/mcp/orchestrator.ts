@@ -57,7 +57,7 @@ function detectIntent(
   if (/rapport|report|hebdo|dirigeant/.test(t)) return "report";
   if (/audit|analys|diagnostic|bilan|problème|performance|résultat/.test(t)) return "audit";
   if (
-    /campagne|lancer\s+(une\s+)?(pub|campagne)|créer\s+(une\s+)?(pub|campagne)|launch|activer\s+la\s+campagne|lancement de campagne|nouveau menu/.test(
+    /campagne|lancer\s+(une\s+)?(pub|campagne)|créer\s+(une\s+)?(pub|campagne)|launch|activer\s+la\s+campagne|lancement de campagne|nouveau menu|whats?\s*app|messenger|messages?\s+ads|click[\s-]?to[\s-]?(whatsapp|message)/.test(
       t,
     )
   ) {
@@ -83,10 +83,11 @@ Règles absolues :
 - Langage simple (dirigeant PME), décisions d'expert media buyer (argent, CPA, budget/j, créas). Zéro jargon d'agence.
 - Une seule question max, seulement si elle bloque la suite.
 - Création toujours en pause d'abord ; activation = validation explicite.
+- Avant lancement : estime l'audience (pays) si le brief le permet ; structure brief → pause → confirmation → activation.
 - Une seule régie connectée → reste UNIQUEMENT dessus. Ne recommande JAMAIS une autre plateforme.
-- Compte vide (0 campagne / 0 dépense) → dis-le clairement. Objectifs Meta AUTORISÉS uniquement : **Ventes**, **Prospects (leads)**, **Trafic**. Interdit de proposer Messages / WhatsApp / Messenger / Shopify comme objectif.
-- Si on demande WhatsApp ou Messenger : une phrase « bientôt », puis propose Trafic ou Prospects vers un lien (site ou wa.me) — ne reformule pas tout le brief comme si le canal existait.
-- « Bientôt » (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, WhatsApp, Shopify) : une phrase max, seulement si on te le demande — ne les liste jamais comme options de lancement.
+- Compte vide (0 campagne / 0 dépense) → dis-le clairement. Objectifs Meta AUTORISÉS : **Ventes**, **Prospects (leads)**, **Trafic**, **Messages (WhatsApp ou Messenger)**. Shopify et WhatsApp Business API (envoi auto) = bientôt — ce n'est PAS la même chose que les pubs Messages Meta.
+- Si on demande WhatsApp / Messenger / Messages Ads : briefe pays + budget/j + canal (WhatsApp ou Messenger), puis création en pause. Ne dis JAMAIS que WhatsApp ou Messenger Ads n'existent pas.
+- « Bientôt » (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, Shopify, WhatsApp Business API) : une phrase max, seulement si on te le demande — ne les liste jamais comme options de lancement Meta Ads.
 - N'évoque JAMAIS les outils internes (fournisseurs MCP, tokens serveur, noms techniques backend). Parle uniquement en termes Meta / Google / TikTok / Orkestria.
 
 Format : 120 mots max. Markdown sobre. Termine par une seule prochaine action.`;
@@ -159,15 +160,6 @@ async function loadLiveAccountData(orgId: string): Promise<{ results: string[]; 
   return { results, toolsUsed };
 }
 
-function isMessagingChannelAsk(message: string): boolean {
-  const t = message.toLowerCase();
-  return (
-    /whats?\s*app|messenger|messages?\s*\(|objectif\s*[:=]?\s*messages?|click[\s-]?to[\s-]?message|messages?\s+whatsapp/i.test(
-      t,
-    ) && !/wa\.me|api\.whatsapp/i.test(t)
-  );
-}
-
 function extractBrandFromMessage(message: string): string | null {
   const quoted = message.match(/["«]([^"»]+)["»]/);
   if (quoted?.[1]) return quoted[1].trim();
@@ -177,13 +169,37 @@ function extractBrandFromMessage(message: string): string | null {
 
 type CampaignBrief = {
   name?: string;
-  objective?: "traffic" | "leads" | "sales";
+  objective?: "traffic" | "leads" | "sales" | "messages";
+  /** Meta destination for Messages Ads */
+  channel?: "website" | "whatsapp" | "messenger";
   dailyBudget?: number;
   countries?: string[];
   linkUrl?: string;
   confirmCreate?: boolean;
   confirmActivate?: boolean;
 };
+
+function metaCreateParams(brief: CampaignBrief): {
+  objective: string;
+  channel?: "website" | "whatsapp" | "messenger";
+  label: string;
+} {
+  if (brief.objective === "messages" || brief.channel === "whatsapp" || brief.channel === "messenger") {
+    const channel = brief.channel === "messenger" ? "messenger" : "whatsapp";
+    return {
+      objective: "OUTCOME_ENGAGEMENT",
+      channel,
+      label: channel === "messenger" ? "Messages · Messenger" : "Messages · WhatsApp",
+    };
+  }
+  if (brief.objective === "leads") {
+    return { objective: "OUTCOME_LEADS", channel: "website", label: "Prospects" };
+  }
+  if (brief.objective === "sales") {
+    return { objective: "OUTCOME_SALES", channel: "website", label: "Ventes" };
+  }
+  return { objective: "OUTCOME_TRAFFIC", channel: "website", label: "Trafic" };
+}
 
 function parseCampaignBrief(message: string, history?: OrchestratorTurn[]): CampaignBrief {
   const blob = [...(history ?? []).map((h) => h.text), message].join("\n");
@@ -195,9 +211,20 @@ function parseCampaignBrief(message: string, history?: OrchestratorTurn[]): Camp
     blob.match(/budget\s*(?:journalier|daily)?\s*[:=]?\s*(\d+[.,]?\d*)/i);
   if (budget?.[1]) brief.dailyBudget = Number(budget[1].replace(",", "."));
 
-  if (/lead|prospect|formulaire/.test(lower)) brief.objective = "leads";
+  // Messages Ads before leads/traffic — WhatsApp/Messenger are live Meta destinations
+  if (
+    /whats?\s*app|messenger|messages?\s*(ads|meta)?|click[\s-]?to[\s-]?(whatsapp|message)|conversations?\s+(whats|meta|messenger)/i.test(
+      lower,
+    ) && !/wa\.me|api\.whatsapp|business\s+api|envoi\s+auto/i.test(lower)
+  ) {
+    brief.objective = "messages";
+    brief.channel = /messenger/i.test(lower) && !/whats?\s*app/i.test(lower) ? "messenger" : "whatsapp";
+  } else if (/lead|prospect|formulaire/.test(lower)) brief.objective = "leads";
   else if (/achat|vente|purchase|conversion|catalogue/.test(lower)) brief.objective = "sales";
   else if (/trafic|traffic|visite|clics?/.test(lower)) brief.objective = "traffic";
+
+  if (/messenger/i.test(lower) && brief.objective === "messages") brief.channel = "messenger";
+  if (/whats?\s*app/i.test(lower) && brief.objective === "messages") brief.channel = "whatsapp";
 
   const countries: string[] = [];
   if (/\b(france|français|fr)\b/i.test(blob)) countries.push("FR");
@@ -205,6 +232,9 @@ function parseCampaignBrief(message: string, history?: OrchestratorTurn[]): Camp
   if (/\b(suisse|ch)\b/i.test(blob)) countries.push("CH");
   if (/\b(canada|ca)\b/i.test(blob)) countries.push("CA");
   if (/\b(usa|états-unis|etats-unis|us)\b/i.test(blob)) countries.push("US");
+  if (/\b(côte\s*d['']?ivoire|cote\s*d['']?ivoire|ivory\s*coast|\bci\b)/i.test(blob)) countries.push("CI");
+  if (/\b(sénégal|senegal|\bsn\b)/i.test(blob)) countries.push("SN");
+  if (/\b(maroc|\bma\b)/i.test(blob)) countries.push("MA");
   if (countries.length) brief.countries = [...new Set(countries)];
 
   const url = blob.match(/https?:\/\/[^\s)>\]]+/i);
@@ -349,19 +379,15 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
 
   if (canCreate) {
     try {
-      const objective =
-        brief.objective === "leads"
-          ? "OUTCOME_LEADS"
-          : brief.objective === "sales"
-            ? "OUTCOME_SALES"
-            : "OUTCOME_TRAFFIC";
+      const meta = metaCreateParams(brief);
       const name =
         brief.name ??
-        `Orkestria — ${brief.objective ?? "trafic"} ${new Date().toISOString().slice(0, 10)}`;
+        `Orkestria — ${meta.label} ${new Date().toISOString().slice(0, 10)}`;
       const outcome = (await invokeAgentTool(ctx, "create_meta_campaign", {
         name,
         dailyBudget: brief.dailyBudget,
-        objective,
+        objective: meta.objective,
+        channel: meta.channel,
         countries: brief.countries ?? ["FR"],
         dry_run: false,
         mode: "live",
@@ -392,10 +418,13 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
       const imageUrlFromMsg = brief.linkUrl?.match(/\.(png|jpe?g|webp|gif)(\?|$)/i)
         ? brief.linkUrl
         : undefined;
+      const isMsg = meta.channel === "whatsapp" || meta.channel === "messenger";
       const landing =
         brief.linkUrl && !/\.(png|jpe?g|webp|gif)(\?|$)/i.test(brief.linkUrl)
           ? brief.linkUrl
-          : "https://orkestria.top";
+          : isMsg
+            ? "https://www.facebook.com"
+            : "https://orkestria.top";
 
       if (adSetId && (imageAtt || imageUrlFromMsg)) {
         try {
@@ -404,6 +433,11 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
             adSetId,
             name: `${name} — annonce`,
             linkUrl: landing,
+            callToAction: isMsg
+              ? meta.channel === "messenger"
+                ? "MESSAGE_PAGE"
+                : "WHATSAPP_MESSAGE"
+              : "LEARN_MORE",
             attachment: imageAtt
               ? {
                   kind: "image",
@@ -433,7 +467,7 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
           `• Nom : **${name}**\n` +
           `• Budget : **${brief.dailyBudget} / jour**\n` +
           `• Pays : ${(brief.countries ?? ["FR"]).join(", ")}\n` +
-          `• Objectif : ${brief.objective ?? "trafic"}\n` +
+          `• Objectif : ${meta.label}\n` +
           creativeLine +
           `\nProchaine action : vérifiez dans Meta Ads Manager, puis dites **« oui active »** + ad id seulement quand vous voulez dépenser.`,
         toolsUsed,
@@ -480,26 +514,22 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
     Boolean(brief.countries?.length || brief.objective)
   ) {
     try {
-      const objective =
-        brief.objective === "leads"
-          ? "OUTCOME_LEADS"
-          : brief.objective === "sales"
-            ? "OUTCOME_SALES"
-            : "OUTCOME_TRAFFIC";
+      const meta = metaCreateParams(brief);
       const name =
         brief.name ??
-        `Orkestria — ${brief.objective ?? "trafic"} ${new Date().toISOString().slice(0, 10)}`;
+        `Orkestria — ${meta.label} ${new Date().toISOString().slice(0, 10)}`;
       const preview = await invokeAgentTool(ctx, "create_meta_campaign", {
         name,
         dailyBudget: brief.dailyBudget,
-        objective,
+        objective: meta.objective,
+        channel: meta.channel,
         countries: brief.countries ?? ["FR"],
         dry_run: true,
       });
       toolsUsed.push("create_meta_campaign:dry_run");
       dryRunBlock =
         `\n\n--- Aperçu création (dry_run, rien créé) ---\n` +
-        `Nom: ${name} | Budget/j: ${brief.dailyBudget} | Pays: ${(brief.countries ?? ["FR"]).join(",")} | Objectif: ${brief.objective ?? "trafic"}\n` +
+        `Nom: ${name} | Budget/j: ${brief.dailyBudget} | Pays: ${(brief.countries ?? ["FR"]).join(",")} | Objectif: ${meta.label}\n` +
         `${JSON.stringify(preview).slice(0, 400)}\n` +
         `Si OK, l'utilisateur doit répondre exactement : « oui crée en pause ».`;
     } catch (e) {
@@ -554,21 +584,6 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
 
 export async function runOrchestrator(input: OrchestratorInput): Promise<OrchestratorOutput> {
   const intent = detectIntent(input.message);
-
-  // WhatsApp / Messenger not productized — never pretend they are launch options.
-  if (isMessagingChannelAsk(input.message)) {
-    return {
-      reply:
-        `WhatsApp et Messenger ne sont **pas encore** disponibles comme objectif de campagne.\n\n` +
-        `On peut quand même lancer une pub Meta **en pause** avec :\n` +
-        `• **Trafic** — vers votre site ou un lien WhatsApp (wa.me/…)\n` +
-        `• **Prospects** — formulaire de contact\n` +
-        `• **Ventes** — si vous vendez en ligne\n\n` +
-        `**Prochaine action :** choisissez Trafic, Prospects ou Ventes, puis donnez pays + budget/jour + URL.`,
-      toolsUsed: ["messaging_soon"],
-      runId: input.runId,
-    };
-  }
 
   // Deterministic paths first — chat suggestions / guided form must be reliable.
   if (intent === "setup") {
@@ -798,7 +813,7 @@ async function composeAuditReply(opts: {
       `- Parle simple et expert media buyer (argent, CPA, budget). Pas de jargon d'agence.\n` +
       `- Cite les campagnes réelles. N'invente aucun chiffre.\n` +
       `- Reste UNIQUEMENT sur les plateformes présentes dans les données d'audit. Si une seule régie (ex. Meta), ne parle PAS de Google/TikTok/Snap/Reddit.\n` +
-      `- Si dépense = 0 et 0 campagne : « compte vide ». Propose UNIQUEMENT les objectifs Meta : Ventes, Prospects, Trafic. Interdit Messages / WhatsApp / Messenger / Shopify.\n` +
+      `- Si dépense = 0 et 0 campagne : « compte vide ». Propose les objectifs Meta : Ventes, Prospects, Trafic, Messages (WhatsApp ou Messenger). Shopify / WhatsApp Business API (envoi) = bientôt.\n` +
       `- Une seule prochaine action, concrète, liée à CE compte.\n` +
       `- Max 120 mots. Interdit : listes multi-plateformes, « diversifiez », « connectez aussi… ».\n` +
       `Structure :\n` +
