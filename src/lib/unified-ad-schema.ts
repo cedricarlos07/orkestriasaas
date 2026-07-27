@@ -91,17 +91,44 @@ export function buildAuditSummary(schema: UnifiedAdSchema): AuditSummary {
   const cpa = totals.conversions > 0 ? totals.spend / totals.conversions : null;
   const allIssues = schema.accounts.flatMap((a) => a.issues);
   const allOpps = schema.accounts.flatMap((a) => a.opportunities);
+  const emptyAccounts = schema.accounts.filter((a) => a.campaigns.length === 0 && a.spend === 0);
+  const named = schema.accounts
+    .map((a) => a.accountName || a.accountId)
+    .filter(Boolean)
+    .slice(0, 2);
 
-  const situation =
-    schema.accounts.length === 0
-      ? "Aucun compte publicitaire connecté. Reliez Meta, Google ou TikTok pour lancer une analyse."
-      : `Vos campagnes tournent sur ${schema.accounts.length} plateforme(s). Dépense totale sur la période : ${formatMoney(totals.spend, totals.currency)} pour ${totals.conversions} conversion(s).`;
+  let situation: string;
+  if (schema.accounts.length === 0) {
+    situation =
+      "Aucun compte publicitaire connecté. Reliez Meta depuis Connexions pour lancer une analyse.";
+  } else if (emptyAccounts.length === schema.accounts.length) {
+    situation =
+      `Compte${named.length ? ` ${named.join(", ")}` : ""} connecté, mais **aucune campagne** et **0 dépense** sur la période. ` +
+      `Ce n'est pas un problème de tracking — le compte est vide. Prochaine étape : créer une première campagne en pause.`;
+  } else {
+    situation = `Sur ${schema.accounts.length} plateforme(s) : ${formatMoney(totals.spend, totals.currency)} dépensés, ${totals.conversions} conversion(s)${cpa != null ? `, CPA ~${Math.round(cpa)} ${totals.currency}` : ""}.`;
+  }
+
+  const problems =
+    emptyAccounts.length === schema.accounts.length && schema.accounts.length > 0
+      ? [
+          "Aucune campagne active ni en pause sur le compte connecté — rien à optimiser tant qu'une première pub n'existe pas.",
+          ...allIssues.slice(0, 2),
+        ]
+      : allIssues.slice(0, 3);
+
+  const opportunities =
+    emptyAccounts.length === schema.accounts.length && schema.accounts.length > 0
+      ? [
+          "Créer une campagne Meta en pause (objectif leads ou ventes, 1 pays, 1 offre) puis valider avant activation.",
+        ]
+      : allOpps.slice(0, 3);
 
   return {
     situation,
-    problems: allIssues.slice(0, 3),
-    opportunities: allOpps.slice(0, 3),
-    firstAction: pickFirstAction(allIssues, schema),
+    problems,
+    opportunities,
+    firstAction: pickFirstAction(problems, schema),
     accounts: schema.accounts,
     totals: { ...totals, cpa, roas: null },
   };
@@ -113,13 +140,14 @@ function formatMoney(n: number, currency: string) {
 
 function pickFirstAction(issues: string[], schema: UnifiedAdSchema): string {
   if (!schema.accounts.length) {
-    return "Connectez au moins une plateforme publicitaire (Meta, Google, TikTok) depuis Connexions.";
+    return "Connectez Meta Ads depuis Connexions, puis choisissez la Page Facebook.";
+  }
+  const empty = schema.accounts.every((a) => a.campaigns.length === 0 && a.spend === 0);
+  if (empty) {
+    return "Donnez-moi : produit/offre, pays, budget/jour et URL — je prépare une campagne Meta en pause.";
   }
   if (issues.some((i) => i.toLowerCase().includes("whatsapp") || i.toLowerCase().includes("conversion"))) {
-    return "Reliez le suivi WhatsApp ou GA4 pour mesurer les commandes réelles — vous verrez enfin votre rentabilité.";
-  }
-  if (!schema.accounts.some((a) => a.platform === "Google Analytics")) {
-    return "Connectez Google Analytics 4 pour croiser vos dépenses publicitaires avec les ventes réelles.";
+    return "Reliez le suivi des conversions (Pixel / GA4) pour mesurer les ventes réelles.";
   }
   return "Consolidez le budget sur la campagne la plus rentable identifiée par l'audit.";
 }

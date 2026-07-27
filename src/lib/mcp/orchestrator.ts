@@ -35,10 +35,11 @@ export type OrchestratorOutput = {
 
 function detectIntent(message: string): "audit" | "report" | "campaign" | "research" | "setup" | "general" {
   const t = message.toLowerCase();
-  if (/config|configuration|setup|validate|vérifier|verifier|prêt|pret|v1/.test(t)) return "setup";
+  if (/config|configuration|setup|validate|vérifier|verifier|prêt|pret|\bv1\b/.test(t)) return "setup";
   if (/concurrent|competitor|ad library|spy|espion|benchmark/.test(t)) return "research";
-  if (/audit|analys|diagnostic|bilan|problème|30 derniers|7 derniers|90 derniers/.test(t)) return "audit";
-  if (/rapport|report|performance|résultat|hebdo|dirigeant/.test(t)) return "report";
+  // Rapport before audit — "rapport ... 30 jours" must stay a report
+  if (/rapport|report|hebdo|dirigeant/.test(t)) return "report";
+  if (/audit|analys|diagnostic|bilan|problème|performance|résultat/.test(t)) return "audit";
   if (
     /campagne|lancer\s+(une\s+)?(pub|campagne)|créer\s+(une\s+)?(pub|campagne)|launch|activer\s+la\s+campagne|lancement de campagne|nouveau menu/.test(
       t,
@@ -58,19 +59,18 @@ function extractPeriod(message: string): string {
   return "30 derniers jours";
 }
 
-const DEFAULT_SYSTEM_PROMPT = `Tu es Orkestria, media buyer senior (10 ans d'agence Meta/Google) qui parle au dirigeant d'une PME.
+const DEFAULT_SYSTEM_PROMPT = `Tu es Orkestria, media buyer senior qui parle au dirigeant d'une PME.
 
 Règles absolues :
 - Ne demande JAMAIS de connecter un compte déjà listé comme connecté dans le contexte.
-- Tu CONNAIS le compte : cite les noms de campagnes, statuts, dépenses et CPA du contexte. Si une donnée manque, dis-le franchement — n'invente aucun chiffre.
-- Une seule question maximum par réponse, et seulement si elle bloque la suite.
-- Réponds en français, ton direct et concret, orienté argent (dépense, coût par client, rentabilité). Zéro jargon technique inutile.
-- Une création de campagne se fait toujours en pause d'abord ; l'activation qui dépense exige une validation explicite de l'utilisateur (« oui active » / « confirme »).
-- Pour les plateformes marquées « bientôt » (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, WhatsApp, Shopify), dis simplement qu'elles arrivent — ne propose pas de les connecter.
-- Meta, Google, TikTok, Snapchat et Reddit Ads sont live via Pipeboard — propose de les connecter si absents du contexte.
-- Si le brief est incomplet pour créer, demande UNIQUEMENT le champ manquant le plus bloquant (objectif, budget/j, pays, URL, message).
+- Cite les noms de campagnes, statuts, dépenses et CPA du contexte. Si une donnée manque, dis-le — n'invente aucun chiffre.
+- Une seule question maximum par réponse, seulement si elle bloque la suite.
+- Français direct, orienté argent. Zéro jargon inutile.
+- Création de campagne toujours en pause d'abord ; activation = validation explicite.
+- Si le compte est vide (0 campagne / 0 dépense), dis-le clairement et demande offre + pays + budget/j + URL. Ne pitch pas TikTok/Snap/Reddit/Google spontanément.
+- Pour « bientôt » (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, WhatsApp, Shopify) : une phrase max.
 
-Format : 180 mots maximum. Markdown sobre — phrases courtes, une liste à puces si utile, **gras** pour les chiffres clés. Termine par une seule prochaine action claire.`;
+Format : 120 mots maximum. Markdown sobre. Termine par une seule prochaine action.`;
 
 export async function loadOrchestratorPrompt(): Promise<string> {
   const rows = await db
@@ -568,13 +568,16 @@ async function composeAuditReply(opts: {
       `${prompt}\n\n` +
       `--- Contexte du compte (source de vérité) ---\n${orgContext}\n\n` +
       `--- Données d'audit réelles (${intent === "report" ? "rapport" : "audit"}) ---\n${auditData}${skillBlock}\n\n` +
-      `Tâche : produis une analyse ${intent === "report" ? "de rapport" : "d'audit"} précise et concrète à partir des chiffres ci-dessus UNIQUEMENT. ` +
-      `Nomme les campagnes et leur statut. Si dépense nulle, distingue « aucune campagne » vs « campagnes en pause » vs « actives sans delivery ». ` +
-      `N'invente aucun chiffre. Structure STRICTEMENT la réponse ainsi (titres en gras exacts) :\n` +
-      `1) 2–4 phrases de synthèse (sans titre)\n` +
-      `2) **Problèmes à corriger :** puis liste numérotée\n` +
-      `3) **Opportunités :** puis liste numérotée\n` +
-      `4) **Première action recommandée :** une seule phrase actionnable.`;
+      `Règles de réponse (strictes) :\n` +
+      `- Parle au dirigeant, tutoiement ou vouvoiement cohérent, français direct.\n` +
+      `- Cite le nom/id du compte et les campagnes réelles. N'invente aucun chiffre.\n` +
+      `- Si dépense = 0 et 0 campagne : dis clairement « compte vide », NE propose PAS de connecter TikTok/Snap/Reddit/Google sauf si l'utilisateur le demande.\n` +
+      `- Une seule prochaine action, concrète, liée à CE compte.\n` +
+      `- Max 120 mots. Pas de listes génériques « opportunités multi-plateformes ».\n` +
+      `Structure :\n` +
+      `1) 2–3 phrases de synthèse (sans titre)\n` +
+      `2) **Problèmes à corriger :** 1–3 points max\n` +
+      `3) **Première action recommandée :** une phrase (demande les infos manquantes si besoin : offre, pays, budget/j, URL)`;
 
     const history = (opts.history ?? []).slice(-6).map((turn) => ({
       role: turn.role === "user" ? ("user" as const) : ("assistant" as const),

@@ -10,7 +10,7 @@ import { runOrchestrator } from "@/lib/mcp/orchestrator";
 import { enforceQuotas, QuotaError, recordUsage } from "@/lib/quotas/enforce";
 
 const WELCOME =
-  "Bonjour 👋 Dites-moi ce que je peux faire pour vous aujourd'hui. Vous pouvez me demander un audit, un rapport, ou de lancer une campagne.";
+  "Bonjour. Je peux auditer vos pubs, faire un rapport, ou préparer une campagne Meta en pause. Par quoi on commence ?";
 
 function threadTitle(text: string): string {
   const clean = text.trim().replace(/\s+/g, " ");

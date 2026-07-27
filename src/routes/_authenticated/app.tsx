@@ -106,11 +106,13 @@ function AppLayout() {
     .join("")
     .toUpperCase();
 
+  const isChat = location.pathname.startsWith("/app/orkestria");
+
   return (
-    <div className="flex min-h-screen bg-surface-2">
+    <div className="flex h-dvh overflow-hidden bg-surface-2">
       {/* Sidebar */}
       <aside
-        className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r border-line/70 bg-white transition-[width] duration-200 lg:flex ${
+        className={`hidden h-full shrink-0 flex-col border-r border-line/70 bg-white transition-[width] duration-200 lg:flex ${
           collapsed ? "w-[72px]" : "w-[264px]"
         }`}
       >
@@ -337,8 +339,8 @@ function AppLayout() {
       )}
 
       {/* Main */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-2 border-b border-line/70 bg-white/90 px-3 backdrop-blur sm:gap-4 sm:px-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b border-line/70 bg-white/90 px-3 backdrop-blur sm:gap-4 sm:px-6">
           <button
             onClick={() => setMobileNav(true)}
             aria-label="Ouvrir le menu"
@@ -357,7 +359,11 @@ function AppLayout() {
           <NotificationsBell />
           <AccountMenu profile={profile} initials={initials} isAdmin={isAdmin} />
         </header>
-        <main className="flex-1 min-w-0 p-4 sm:p-6 md:p-8">
+        <main
+          className={`min-h-0 min-w-0 flex-1 ${
+            isChat ? "flex flex-col overflow-hidden p-0" : "overflow-y-auto p-4 sm:p-6 md:p-8"
+          }`}
+        >
           <Outlet />
         </main>
       </div>

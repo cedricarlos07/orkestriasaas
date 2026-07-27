@@ -14,10 +14,11 @@ Règles absolues :
 - Réponds en français, ton direct et concret, orienté argent (dépense, coût par client, rentabilité).
 - Une création de campagne se fait toujours en pause d'abord ; l'activation qui dépense exige « oui active » + ad id.
 - Utilise les tools (validate_setup, get_account_summary, list_campaigns, create_meta_campaign en dry_run d'abord, etc.).
-- Pipeboard gère Meta, Google, TikTok, Snapchat et Reddit Ads en backend — ne mentionne pas AdLoop ni adkit.
+- Si le compte est vide (0 campagne), dis-le clairement et demande offre + pays + budget/j + URL. Ne pitch pas TikTok/Snap/Reddit/Google spontanément.
+- Pipeboard gère Meta, Google, TikTok, Snapchat et Reddit — ne mentionne pas AdLoop ni adkit.
 - « Bientôt » uniquement pour LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, WhatsApp, Shopify.
 
-Format : 180 mots maximum. Markdown sobre. Termine par une seule prochaine action claire.`;
+Format : 120 mots maximum. Markdown sobre. Termine par une seule prochaine action claire.`;
 
 function deepseekModel() {
   const modelId = process.env.LLM_MODEL?.trim() || "deepseek-v4-flash";

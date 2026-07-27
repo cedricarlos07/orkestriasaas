@@ -68,11 +68,9 @@ export async function buildOrgContext(orgId: string, _query?: string): Promise<s
     );
   }
 
-  // Pipeboard family is production — never mark these « bientôt ».
+  // Only pitch other Pipeboard platforms if the user asks — avoids generic "connectez TikTok/Snap/Reddit" spam.
   if (activeConnectors.has("google_ads")) {
     lines.push("Google Ads : connecté (création Search/PMax en pause possible via Pipeboard).");
-  } else if (process.env.PIPEBOARD_API_TOKEN) {
-    lines.push("Google Ads : Pipeboard configuré — connectez OAuth pour lier un compte client.");
   }
   for (const [id, label] of [
     ["tiktok_ads", "TikTok Ads"],
@@ -80,10 +78,11 @@ export async function buildOrgContext(orgId: string, _query?: string): Promise<s
     ["reddit_ads", "Reddit Ads"],
   ] as const) {
     if (activeConnectors.has(id)) {
-      lines.push(`${label} : connecté (création campagne en pause via Pipeboard).`);
-    } else if (process.env.PIPEBOARD_API_TOKEN) {
-      lines.push(`${label} : disponible via Pipeboard — connectez OAuth pour lier un compte.`);
+      lines.push(`${label} : connecté.`);
     }
+  }
+  if (!activeConnectors.has("google_ads") && process.env.PIPEBOARD_API_TOKEN) {
+    lines.push("Autres régies (Google/TikTok/Snap/Reddit) : disponibles via Pipeboard si le client demande explicitement de les connecter — ne pas les proposer spontanément.");
   }
 
   // Surface the selected Meta act when it differs from the OAuth default.

@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowUp,
-  Paperclip,
   Sparkles,
   BarChart3,
   FileText,
@@ -57,7 +56,8 @@ type Thread = {
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-const WELCOME = "Bonjour 👋 Dites-moi ce que je peux faire pour vous aujourd'hui. Vous pouvez me demander un audit, un rapport, ou de lancer une campagne.";
+const WELCOME =
+  "Bonjour. Je peux auditer vos pubs, faire un rapport, ou préparer une campagne Meta en pause. Par quoi on commence ?";
 
 function newThread(): Thread {
   return {
@@ -263,8 +263,10 @@ function OrkestriaPage() {
   }, [serverThreads, activeId]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [active?.messages.length, pending]);
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [active?.messages.length, pending, activeId]);
   useEffect(() => {
     inputRef.current?.focus();
   }, [activeId]);
@@ -348,21 +350,29 @@ function OrkestriaPage() {
   };
 
   return (
-    <div className="mx-auto grid h-[calc(100dvh-8rem)] max-w-[1200px] grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
+    <div className="mx-auto grid h-full min-h-0 w-full max-w-[1200px] grid-cols-1 gap-0 lg:grid-cols-[260px_1fr] lg:gap-4 lg:p-4">
       {/* --- Thread sidebar --- */}
       <aside
         aria-label="Historique des conversations"
-        className={`${sidebarOpenMobile ? "block" : "hidden"} lg:block`}
+        className={`${sidebarOpenMobile ? "flex" : "hidden"} min-h-0 flex-col lg:flex`}
       >
-        <div className="card-hover relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_14px_30px_-22px_rgba(20,20,20,0.25)]"
+        <div
+          className="card-hover relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-none border-0 border-white/70 p-3 shadow-none lg:rounded-2xl lg:border lg:shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_14px_30px_-22px_rgba(20,20,20,0.25)]"
           style={{ backgroundImage: "linear-gradient(180deg,#ffffff 0%,#faf7f2 100%)" }}
         >
           <button
             onClick={createThread}
-            className="btn-primary btn-halo w-full !justify-start !px-3 !py-2 !text-[13px]"
+            className="btn-primary btn-halo w-full shrink-0 !justify-start !px-3 !py-2 !text-[13px]"
             aria-label="Créer une nouvelle conversation"
           >
             <Plus className="h-4 w-4" aria-hidden /> Nouvelle conversation
+          </button>
+          <button
+            type="button"
+            className="mt-2 chip-ghost w-full shrink-0 !justify-center lg:hidden"
+            onClick={() => setSidebarOpenMobile(false)}
+          >
+            Retour au chat
           </button>
 
           <label className="mt-3 flex items-center gap-2 rounded-lg border border-line/70 bg-white px-2.5 py-1.5 text-[12px] text-ink-soft focus-within:border-[#ff6c02] focus-within:ring-2 focus-within:ring-[#ff6c02]/25">
@@ -510,11 +520,14 @@ function OrkestriaPage() {
       </aside>
 
       {/* --- Chat column --- */}
-      <section aria-label="Conversation Orkestria" className="flex min-w-0 flex-col">
-        <header className="mb-4 flex items-center gap-3 anim-fade-up">
+      <section
+        aria-label="Conversation Orkestria"
+        className={`${sidebarOpenMobile ? "hidden" : "flex"} min-h-0 min-w-0 flex-1 flex-col lg:flex`}
+      >
+        <header className="flex shrink-0 items-center gap-3 border-b border-line/50 bg-white/80 px-4 py-3 backdrop-blur lg:mb-0 lg:rounded-t-2xl lg:border lg:border-b-0 lg:border-white/70">
           <button
             type="button"
-            onClick={() => setSidebarOpenMobile((v) => !v)}
+            onClick={() => setSidebarOpenMobile(true)}
             aria-label="Afficher l'historique des conversations"
             aria-expanded={sidebarOpenMobile}
             className="lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-white text-ink shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40"
@@ -523,14 +536,17 @@ function OrkestriaPage() {
           </button>
           <span
             aria-hidden
-            className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff8a2b] to-[#ff5e00] text-white shadow-[0_10px_24px_-10px_rgba(255,108,2,0.6),inset_0_1px_0_rgba(255,255,255,0.35)]"
+            className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff8a2b] to-[#ff5e00] text-white shadow-[0_10px_24px_-10px_rgba(255,108,2,0.6),inset_0_1px_0_rgba(255,255,255,0.35)]"
           >
-            <Sparkles className="h-5 w-5" />
-            <span className="absolute -inset-1 -z-10 rounded-2xl bg-[#ff6c02]/25 blur-xl anim-pulse-dot" />
+            <Sparkles className="h-4 w-4" />
           </span>
-          <div className="min-w-0">
-            <p className="text-[12px] font-medium uppercase tracking-wider text-[#c94a00]">Conversation centrale</p>
-            <h1 className="mt-0.5 truncate font-display text-[26px] font-semibold text-ink">{active?.title ?? "Orkestria"}</h1>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-[#c94a00]">Orkestria</p>
+            <h1 className="truncate font-display text-[18px] font-semibold text-ink sm:text-[20px]">
+              {active?.title && active.title !== "Nouvelle conversation"
+                ? active.title
+                : "Votre media buyer"}
+            </h1>
           </div>
         </header>
 
@@ -538,103 +554,105 @@ function OrkestriaPage() {
         <div ref={liveRef} aria-live="polite" aria-atomic="true" className="sr-only" />
 
         <div
-          ref={scrollRef}
-          role="log"
-          aria-live="polite"
-          aria-relevant="additions"
-          className="card-hover relative flex-1 space-y-4 overflow-y-auto rounded-2xl border border-white/70 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_18px_38px_-24px_rgba(20,20,20,0.25)]"
+          className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white lg:rounded-b-2xl lg:border lg:border-t-0 lg:border-white/70 lg:shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_18px_38px_-24px_rgba(20,20,20,0.25)]"
           style={{
             backgroundImage:
-              "radial-gradient(120% 80% at 0% 0%, rgba(255,140,60,0.08) 0%, rgba(255,140,60,0) 45%), radial-gradient(120% 80% at 100% 100%, rgba(120,80,255,0.06) 0%, rgba(120,80,255,0) 45%), linear-gradient(180deg, #ffffff 0%, #fbfaf7 100%)",
+              "radial-gradient(120% 80% at 0% 0%, rgba(255,140,60,0.06) 0%, rgba(255,140,60,0) 45%), linear-gradient(180deg, #ffffff 0%, #fbfaf7 100%)",
           }}
         >
           <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-2xl opacity-[0.18] mix-blend-overlay"
-            style={{
-              backgroundImage:
-                "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.15 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>\")",
-            }}
-          />
-          <div className="relative space-y-4">
-            {active?.messages.map((m) => (
-              <MessageBubble key={m.id} m={m} />
-            ))}
-
-            {/* Typing / tools indicator */}
-            {pending && <PendingBlock text={pending.text} tools={pending.tools} />}
-
-            {/* Suggestions + guided form */}
-            {!pending && active && active.messages.length === 1 && (
-              <div className="space-y-3 pt-2">
-                <div className="stagger grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                  {SUGGESTIONS.map((s) => (
-                    <button
-                      key={s.t}
-                      type="button"
-                      onClick={() => (s.intent ? openForm(s.intent) : send(s.prompt))}
-                      className={`card-hover group relative overflow-hidden rounded-xl border border-white/60 bg-gradient-to-br ${s.grad} p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_8px_20px_-16px_rgba(20,20,20,0.25)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40`}
-                      aria-label={s.t}
-                    >
-                      <div aria-hidden className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-full bg-white/40 blur-xl" />
-                      <div className="relative flex items-start gap-2.5">
-                        <span aria-hidden className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/85 ${s.ic} ring-1 ring-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]`}>
-                          <s.i className="h-4 w-4" />
-                        </span>
-                        <span className="pt-1 text-[13px] font-medium text-ink">{s.t}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-
-                <GuidedLauncher onPick={openForm} />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Composer */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            send(input);
-          }}
-          className="mt-3 flex items-end gap-2 rounded-2xl border border-white/70 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_24px_-18px_rgba(20,20,20,0.25)] focus-within:border-[#ff6c02] focus-within:ring-2 focus-within:ring-[#ff6c02]/25 transition"
-          style={{ backgroundImage: "linear-gradient(180deg,#ffffff 0%,#faf7f2 100%)" }}
-          aria-label="Envoyer un message à Orkestria"
-        >
-          <button type="button" className="chip-ghost !p-2" aria-label="Joindre un fichier">
-            <Paperclip className="h-4 w-4" aria-hidden />
-          </button>
-          <label className="sr-only" htmlFor="ork-msg">
-            Message
-          </label>
-          <textarea
-            id="ork-msg"
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send(input);
-              }
-            }}
-            rows={1}
-            placeholder={pending ? "Orkestria travaille…" : "Parlez à Orkestria… (Entrée pour envoyer, Maj+Entrée pour une nouvelle ligne)"}
-            disabled={!!pending}
-            aria-disabled={!!pending}
-            className="max-h-32 flex-1 resize-none bg-transparent text-[14px] text-ink placeholder:text-ink-soft focus:outline-none disabled:opacity-60"
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || !!pending}
-            aria-label="Envoyer le message"
-            className="btn-primary btn-halo !p-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            ref={scrollRef}
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions"
+            className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6"
           >
-            <ArrowUp className="h-4 w-4" aria-hidden />
-          </button>
-        </form>
+            <div className="relative mx-auto max-w-[720px] space-y-4">
+              {(active?.messages ?? [])
+                .filter((m, idx, arr) => {
+                  // Hide welcome once the user has started talking
+                  if (m.role === "agent" && m.text === WELCOME && arr.some((x) => x.role === "user")) {
+                    return false;
+                  }
+                  return true;
+                })
+                .map((m) => (
+                  <MessageBubble key={m.id} m={m} />
+                ))}
+
+              {pending && <PendingBlock text={pending.text} tools={pending.tools} />}
+
+              {!pending && active && active.messages.every((m) => m.role === "agent") && (
+                <div className="space-y-3 pt-1">
+                  <div className="stagger grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                    {SUGGESTIONS.map((s) => (
+                      <button
+                        key={s.t}
+                        type="button"
+                        onClick={() => (s.intent ? openForm(s.intent) : send(s.prompt))}
+                        className={`card-hover group relative overflow-hidden rounded-xl border border-white/60 bg-gradient-to-br ${s.grad} p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_8px_20px_-16px_rgba(20,20,20,0.25)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40`}
+                        aria-label={s.t}
+                      >
+                        <div aria-hidden className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-full bg-white/40 blur-xl" />
+                        <div className="relative flex items-start gap-2.5">
+                          <span
+                            aria-hidden
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/85 ${s.ic} ring-1 ring-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]`}
+                          >
+                            <s.i className="h-4 w-4" />
+                          </span>
+                          <span className="pt-1 text-[13px] font-medium text-ink">{s.t}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <GuidedLauncher onPick={openForm} />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Composer — always visible at bottom */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              send(input);
+            }}
+            className="shrink-0 border-t border-line/60 bg-white/95 px-3 py-3 backdrop-blur sm:px-4"
+            aria-label="Envoyer un message à Orkestria"
+          >
+            <div className="mx-auto flex max-w-[720px] items-end gap-2 rounded-2xl border border-line/70 bg-white px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] focus-within:border-[#ff6c02] focus-within:ring-2 focus-within:ring-[#ff6c02]/25">
+              <label className="sr-only" htmlFor="ork-msg">
+                Message
+              </label>
+              <textarea
+                id="ork-msg"
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    send(input);
+                  }
+                }}
+                rows={1}
+                placeholder={pending ? "Orkestria travaille…" : "Écrivez ici…"}
+                disabled={!!pending}
+                aria-disabled={!!pending}
+                className="max-h-28 flex-1 resize-none bg-transparent py-1.5 text-[14px] text-ink placeholder:text-ink-soft focus:outline-none disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                disabled={!input.trim() || !!pending}
+                aria-label="Envoyer le message"
+                className="btn-primary btn-halo !p-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ArrowUp className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+          </form>
+        </div>
       </section>
 
       {/* Guided form modal */}
