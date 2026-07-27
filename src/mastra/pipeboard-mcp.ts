@@ -46,7 +46,7 @@ export function pipeboardServerFor(connector: ConnectorId): PipeboardServer | nu
 
 export function pipeboardAuthHeaders(partnerUserId?: string): Record<string, string> {
   const token = process.env.PIPEBOARD_API_TOKEN?.trim();
-  if (!token) throw new Error("PIPEBOARD_API_TOKEN requis — https://pipeboard.co/api-tokens");
+  if (!token) throw new Error("Service publicitaire temporairement indisponible.");
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
     Accept: "application/json, text/event-stream",
@@ -110,7 +110,7 @@ export async function callPipeboardTool(
   });
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`Pipeboard ${server}/${toolName} HTTP ${res.status}: ${text.slice(0, 400)}`);
+    throw new Error(`Régie ${server}/${toolName} HTTP ${res.status}: ${text.slice(0, 400)}`);
   }
   let data: {
     result?: { content?: { type: string; text?: string }[]; isError?: boolean; structuredContent?: unknown };
@@ -119,13 +119,13 @@ export async function callPipeboardTool(
   try {
     data = JSON.parse(text) as typeof data;
   } catch {
-    throw new Error(`Pipeboard ${server}/${toolName}: réponse non-JSON — ${text.slice(0, 200)}`);
+    throw new Error(`Régie ${server}/${toolName}: réponse non-JSON — ${text.slice(0, 200)}`);
   }
-  if (data.error?.message) throw new Error(`Pipeboard ${server}/${toolName}: ${data.error.message}`);
+  if (data.error?.message) throw new Error(`Régie ${server}/${toolName}: ${data.error.message}`);
   const result = data.result;
   if (result?.isError) {
     const errText = result.content?.map((c) => c.text).filter(Boolean).join("\n") || "tool error";
-    throw new Error(`Pipeboard ${server}/${toolName}: ${errText}`);
+    throw new Error(`Régie ${server}/${toolName}: ${errText}`);
   }
   if (result?.structuredContent != null) return result.structuredContent;
   const joined = result?.content?.map((c) => c.text).filter(Boolean).join("\n") ?? text;

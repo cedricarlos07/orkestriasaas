@@ -471,7 +471,7 @@ const launchTools: AgentTool[] = [
   writeTool(
     "launch_meta_brief",
     "launch_meta_brief",
-    "Create a full Meta funnel via Pipeboard (campaign + ad sets PAUSED).",
+    "Create a full Meta funnel (campagne + ad sets en pause).",
     "launch",
     {
       brief: {
@@ -494,7 +494,7 @@ const launchTools: AgentTool[] = [
   writeTool(
     "activate_meta_campaign",
     "activate_meta_chain",
-    "Go live via Pipeboard update_ad (ad ACTIVE). Spend-gated — dry_run first.",
+    "Go live (annonce ACTIVE). Spend-gated — dry_run first.",
     "launch",
     {
       adId: { type: "string", description: "Meta ad id to activate (chain goes live)" },
@@ -534,7 +534,7 @@ const launchTools: AgentTool[] = [
   writeTool(
     "create_reddit_campaign",
     "create_campaign",
-    "Create a Reddit PAUSED campaign via Pipeboard.",
+    "Create a Reddit PAUSED campaign .",
     "launch",
     {
       name: { type: "string" },
@@ -556,7 +556,7 @@ const launchTools: AgentTool[] = [
   writeTool(
     "create_tiktok_campaign",
     "create_campaign",
-    "Create a TikTok PAUSED campaign via Pipeboard.",
+    "Create a TikTok PAUSED campaign .",
     "launch",
     {
       name: { type: "string" },
@@ -578,7 +578,7 @@ const launchTools: AgentTool[] = [
   writeTool(
     "create_snap_campaign",
     "create_campaign",
-    "Create a Snapchat PAUSED campaign via Pipeboard.",
+    "Create a Snapchat PAUSED campaign .",
     "launch",
     {
       name: { type: "string" },
@@ -1154,7 +1154,7 @@ const measureTools: AgentTool[] = [
   },
   {
     name: "search_meta_targeting",
-    description: "Search Meta interest targeting via Pipeboard (read-only). Use before launch_meta_brief.",
+    description: "Search Meta interest targeting  (lecture seule). Use before launch_meta_brief.",
     family: "measure",
     inputSchema: {
       type: "object",
@@ -1169,7 +1169,7 @@ const measureTools: AgentTool[] = [
       const query = str(args.query);
       if (!query) throw new Error("query requis");
       if (!isPipeboardConfigured()) {
-        throw new Error("PIPEBOARD_API_TOKEN requis pour search_meta_targeting");
+        throw new Error("Recherche d'intérêts Meta temporairement indisponible");
       }
       return callPipeboardTool("meta-ads", "search_interests", {
         query,
@@ -1179,7 +1179,7 @@ const measureTools: AgentTool[] = [
   },
   {
     name: "optimize_meta_ads",
-    description: "Insights / recommandations Meta via Pipeboard (read-only).",
+    description: "Insights / recommandations Meta  (read-only).",
     family: "measure",
     inputSchema: {
       type: "object",
@@ -1194,7 +1194,7 @@ const measureTools: AgentTool[] = [
     },
     handler: async (ctx, args) => {
       if (!isPipeboardConfigured()) {
-        throw new Error("PIPEBOARD_API_TOKEN requis pour optimize_meta_ads");
+        throw new Error("Insights Meta temporairement indisponibles");
       }
       const { tokens } = await getTokensFor(ctx.organizationId, "meta_ads");
       const accountId = str(args.accountId) ?? tokens.accountId ?? "";

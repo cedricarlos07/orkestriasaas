@@ -45,22 +45,17 @@ const MATURITY: Record<ConnectorId, CapabilityMaturity> = {
 };
 
 const NOTES: Partial<Record<ConnectorId, string>> = {
-  google_ads:
-    "Pipeboard Google Ads MCP (remote). Fallback API native OAuth pour lectures.",
-  meta_ads:
-    "Meta via Pipeboard Meta Ads MCP (create_campaign PAUSED + update_ad). Reads OAuth natif ou Pipeboard.",
-  ga4: "Read-only analytics. Writes are rejected.",
-  linkedin_ads: "Pas sur Pipeboard — DRAFT create experimental (API native).",
-  tiktok_ads:
-    "Pipeboard TikTok Ads MCP — create/pause/budget PAUSED. OAuth client pour lier advertiser_id.",
-  snapchat_ads:
-    "Pipeboard Snap Ads MCP — create/pause/budget PAUSED. OAuth client pour lier ad_account_id.",
-  reddit_ads:
-    "Pipeboard Reddit Ads MCP — create/pause/budget PAUSED. OAuth client pour lier le compte.",
-  microsoft_ads: "Pas sur Pipeboard — SOAP v13 experimental.",
-  x_ads: "Pas sur Pipeboard — Ads API experimental.",
-  amazon_ads: "Pas sur Pipeboard — Sponsored Products experimental.",
-  pinterest_ads: "Pas sur Pipeboard — create PAUSED experimental.",
+  google_ads: "Google Ads en production (Search/PMax en pause). Lectures OAuth.",
+  meta_ads: "Meta en production (campagnes/annonces en pause, activation explicite).",
+  ga4: "Analytics en lecture seule.",
+  linkedin_ads: "Bientôt — création DRAFT expérimentale.",
+  tiktok_ads: "TikTok en production (création/pause/budget en pause).",
+  snapchat_ads: "Snapchat en production (création/pause/budget en pause).",
+  reddit_ads: "Reddit en production (création/pause/budget en pause).",
+  microsoft_ads: "Bientôt — expérimental.",
+  x_ads: "Bientôt — expérimental.",
+  amazon_ads: "Bientôt — expérimental.",
+  pinterest_ads: "Bientôt — création en pause expérimentale.",
 };
 
 const DOCS: Partial<Record<ConnectorId, string>> = {

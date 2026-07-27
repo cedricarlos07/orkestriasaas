@@ -32,7 +32,7 @@ async function runTool(
 
 export const validateSetupTool = createTool({
   id: "validate_setup",
-  description: "Vérifie si Meta/Google/TikTok/Snap/Reddit sont prêts (OAuth, Pipeboard).",
+  description: "Vérifie si Meta/Google/TikTok/Snap/Reddit sont prêts (OAuth + stack).",
   inputSchema: z.object({}),
   execute: async (_input, ctx) => runTool("validate_setup", {}, ctx?.requestContext),
 });
@@ -91,7 +91,7 @@ export const researchCompetitorAdsTool = createTool({
 export const createMetaCampaignTool = createTool({
   id: "create_meta_campaign",
   description:
-    "Crée une campagne Meta + ad set en PAUSE via Pipeboard (policy dry_run par défaut). Demander confirmation avant dry_run=false.",
+    "Crée une campagne Meta + ad set en pause (policy dry_run par défaut). Demander confirmation avant dry_run=false.",
   inputSchema: z.object({
     name: z.string(),
     dailyBudget: z.number().positive(),

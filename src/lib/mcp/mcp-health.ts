@@ -11,11 +11,11 @@ import { probeMetaAdLibraryHealth } from "@/lib/platforms/meta-ad-library";
 import { uid } from "@/functions/utils";
 
 const PIPEBOARD_LABELS: Record<PipeboardServer, string> = {
-  "meta-ads": "Pipeboard Meta Ads MCP",
-  "google-ads": "Pipeboard Google Ads MCP",
-  "tiktok-ads": "Pipeboard TikTok Ads MCP",
-  "snap-ads": "Pipeboard Snap Ads MCP",
-  "reddit-ads": "Pipeboard Reddit Ads MCP",
+  "meta-ads": "Meta Ads",
+  "google-ads": "Google Ads",
+  "tiktok-ads": "TikTok Ads",
+  "snap-ads": "Snap Ads",
+  "reddit-ads": "Reddit Ads",
 };
 
 export async function probeMcpHealth(): Promise<void> {

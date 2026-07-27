@@ -21,7 +21,7 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
     family: "Core",
     tools: [
       { name: "whoami", desc: "Workspace et scopes de la clé" },
-      { name: "validate_setup", desc: "Connexions + stack V1 (Pipeboard, Mastra Memory) + policy + maturity" },
+      { name: "validate_setup", desc: "Connexions + stack V1 + policy + maturity" },
       { name: "list_capabilities", desc: "Matrice honnête create/read/pause par régie" },
       { name: "list_connections", desc: "Statut de connexion + maturity des régies" },
       { name: "list_ad_accounts", desc: "Comptes publicitaires accessibles sur une plateforme" },
@@ -32,15 +32,15 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
   {
     family: "Launch",
     tools: [
-      { name: "launch_meta_brief", desc: "Meta funnel complet via Pipeboard (PAUSED) — dry_run d'abord" },
-      { name: "activate_meta_campaign", desc: "Activation Pipeboard (update_ad ACTIVE) — spend gated" },
-      { name: "create_search_campaign", desc: "Google Search via Pipeboard MCP (PAUSED)" },
-      { name: "create_pmax_campaign", desc: "Google PMax via Pipeboard MCP" },
-      { name: "create_meta_campaign", desc: "Meta campagne + ad set PAUSED via Pipeboard" },
+      { name: "launch_meta_brief", desc: "Meta funnel complet (en pause) — dry_run d'abord" },
+      { name: "activate_meta_campaign", desc: "Activation Meta (ACTIVE) — spend gated" },
+      { name: "create_search_campaign", desc: "Google Search (en pause)" },
+      { name: "create_pmax_campaign", desc: "Google PMax " },
+      { name: "create_meta_campaign", desc: "Meta campagne + ad set PAUSED" },
       { name: "create_linkedin_campaign", desc: "LinkedIn DRAFT (experimental)" },
-      { name: "create_reddit_campaign", desc: "Reddit PAUSED via Pipeboard" },
-      { name: "create_tiktok_campaign", desc: "TikTok PAUSED via Pipeboard" },
-      { name: "create_snap_campaign", desc: "Snapchat PAUSED via Pipeboard" },
+      { name: "create_reddit_campaign", desc: "Reddit PAUSED" },
+      { name: "create_tiktok_campaign", desc: "TikTok PAUSED" },
+      { name: "create_snap_campaign", desc: "Snapchat PAUSED" },
       { name: "create_campaign", desc: "Campagne générique — vérifier list_capabilities avant" },
       { name: "create_ad_set", desc: "Ad set Meta/TikTok ou campagne DRAFT LinkedIn" },
       { name: "create_ad", desc: "Annonce / créatif Meta, TikTok, LinkedIn" },
@@ -63,8 +63,8 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
       { name: "reallocate_budget", desc: "Déplace du budget entre deux campagnes" },
       { name: "add_keywords", desc: "Ajoute des mots-clés (Google, Microsoft, Amazon SP)" },
       { name: "add_negative_keywords", desc: "Mots-clés négatifs (Google, Microsoft)" },
-      { name: "search_meta_targeting", desc: "Intérêts Meta via Pipeboard" },
-      { name: "optimize_meta_ads", desc: "Insights / recommandations via Pipeboard" },
+      { name: "search_meta_targeting", desc: "Intérêts Meta" },
+      { name: "optimize_meta_ads", desc: "Insights / recommandations" },
     ],
   },
   {
@@ -188,12 +188,12 @@ function DocsPage() {
                 <tr>
                   <td className="px-4 py-3 font-medium text-emerald-700">production</td>
                   <td className="px-4 py-3 text-ink">Meta, Google, TikTok, Snap, Reddit</td>
-                  <td className="px-4 py-3 text-ink-soft">Pipeboard MCP (PAUSED) · Research Meta Ad Library</td>
+                  <td className="px-4 py-3 text-ink-soft">Orkestria (en pause) · Research Meta Ad Library</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3 font-medium text-amber-700">experimental</td>
                   <td className="px-4 py-3 text-ink">LinkedIn, Microsoft, X, Amazon, Pinterest</td>
-                  <td className="px-4 py-3 text-ink-soft">Pas sur Pipeboard — best-effort native</td>
+                  <td className="px-4 py-3 text-ink-soft">Bientôt — best-effort native</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3 font-medium text-ink-soft">reporting</td>

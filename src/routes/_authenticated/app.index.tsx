@@ -129,7 +129,7 @@ function Today() {
           <CheckCircle2 className="mr-1 inline h-4 w-4" />
           Meta prêt pour les campagnes.
           {setup.google.pipeboardHealth === "ok" &&
-            " Google, TikTok, Snap et Reddit Ads disponibles via Pipeboard."}
+            " Google, TikTok, Snap et Reddit Ads disponibles."}
           {setup.research.adsLibraryHealth === "ok" && " Recherche concurrents active."}
         </div>
       )}

@@ -143,10 +143,10 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
       googlePipeboardHealth = "error";
       pipeboardError = probe.error ?? `meta=${probe.meta} google=${probe.google}`;
       googlePipeboardError = pipeboardError;
-      missingSteps.push("Vérifier PIPEBOARD_API_TOKEN (Pipeboard MCP)");
+      missingSteps.push("Vérifier la connexion stack pubs (Meta/Google/TikTok)");
     }
   } else {
-    missingSteps.push("Configurer PIPEBOARD_API_TOKEN pour Meta/Google/TikTok/Snap/Reddit");
+    missingSteps.push("Finaliser la configuration serveur des régies publicitaires");
   }
 
   const adsLibraryConfigured = isMetaAdLibraryConfigured();

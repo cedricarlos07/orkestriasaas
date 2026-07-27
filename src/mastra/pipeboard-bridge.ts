@@ -22,9 +22,7 @@ function cents(dailyBudget: number): number {
 
 export function requirePipeboard(): void {
   if (!isPipeboardConfigured()) {
-    throw new Error(
-      "Pipeboard non configuré — définissez PIPEBOARD_API_TOKEN (https://pipeboard.co/api-tokens)",
-    );
+    throw new Error("Service publicitaire temporairement indisponible. Réessayez plus tard.");
   }
 }
 
@@ -194,7 +192,7 @@ export async function pipeboardMetaLaunchBrief(input: {
     countries: input.brief.adsets[0]?.countries,
     partnerUserId: input.partnerUserId,
   });
-  return { ...created, pageId: input.pageId, note: "Créé via Pipeboard (PAUSED)" };
+  return { ...created, pageId: input.pageId, note: "Créé en pause" };
 }
 
 export async function pipeboardGoogleCreateCampaign(input: {
@@ -489,7 +487,7 @@ export function extractPipeboardImageHash(res: unknown): string {
     const h = pickStr(asRecord(first).hash);
     if (h) return h;
   }
-  throw new Error(`Pipeboard upload_ad_image: hash manquant — ${JSON.stringify(res).slice(0, 240)}`);
+  throw new Error(`Upload image : hash manquant — ${JSON.stringify(res).slice(0, 240)}`);
 }
 
 export function extractPipeboardId(res: unknown, ...keys: string[]): string {
@@ -503,7 +501,7 @@ export function extractPipeboardId(res: unknown, ...keys: string[]): string {
     const v = pickStr(nested[k]);
     if (v) return v;
   }
-  throw new Error(`Pipeboard: id manquant (${keys.join("/")}) — ${JSON.stringify(res).slice(0, 240)}`);
+  throw new Error(`Création Meta : id manquant (${keys.join("/")}) — ${JSON.stringify(res).slice(0, 240)}`);
 }
 
 /** Upload image to Meta via Pipeboard (URL publique ou data URL / base64). */

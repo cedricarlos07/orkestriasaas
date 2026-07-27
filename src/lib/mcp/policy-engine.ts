@@ -378,7 +378,7 @@ function buildDiff(input: WriteActionInput): Record<string, unknown> {
         platform: "meta_ads",
         pageId: input.params.pageId ?? null,
         brief: brief ?? null,
-        note: "Exécuté via Pipeboard Meta MCP (create_campaign / update_ad). Dry-run = aperçu local sans écriture.",
+        note: "Exécuté sur Meta (campagne / annonce). Dry-run = aperçu local sans écriture.",
       };
     }
     case "activate_meta_chain":
@@ -553,7 +553,7 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
       accountId: accountId || null,
       connectionId: conn.id,
       params: input.params,
-      note: "Aperçu local — aucune écriture Pipeboard en dry_run",
+      note: "Aperçu local — aucune écriture en dry_run",
     };
 
     await logRun({

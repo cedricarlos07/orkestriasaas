@@ -55,7 +55,7 @@ export async function uploadChatImageToMeta(
   attachment: ChatAttachment,
 ): Promise<{ imageHash: string }> {
   if (!isPipeboardConfigured()) {
-    throw new Error("PIPEBOARD_API_TOKEN manquant — upload créa indisponible");
+    throw new Error("Upload de créa temporairement indisponible — réessayez ou contactez le support.");
   }
   const { accountId } = await resolveOrgMetaIds(orgId);
   const up = await pipeboardUploadAdImage({
@@ -76,7 +76,7 @@ export async function attachPausedImageAd(orgId: string, input: {
   attachment?: ChatAttachment;
   imageHash?: string;
 }): Promise<{ adId: string; creativeId: string; imageHash: string }> {
-  if (!isPipeboardConfigured()) throw new Error("PIPEBOARD_API_TOKEN manquant");
+  if (!isPipeboardConfigured()) throw new Error("Création d'annonce temporairement indisponible.");
   const { accountId, pageId } = await resolveOrgMetaIds(orgId);
   const res = await pipeboardAttachImageAd({
     accountId,
@@ -99,7 +99,7 @@ export async function boostOrgPagePost(orgId: string, input: {
   dailyBudget: number;
   countries?: string[];
 }): Promise<Record<string, unknown>> {
-  if (!isPipeboardConfigured()) throw new Error("PIPEBOARD_API_TOKEN manquant");
+  if (!isPipeboardConfigured()) throw new Error("Boost de post temporairement indisponible.");
   const { accountId, pageId } = await resolveOrgMetaIds(orgId);
   return pipeboardBoostPost({
     accountId,

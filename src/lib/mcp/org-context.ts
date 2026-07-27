@@ -212,7 +212,7 @@ export async function buildOrgContext(orgId: string, _query?: string): Promise<s
     lines.push(
       gid
         ? `Google Ads : connecté — ${labelAccount(g?.accountName, gid)}.`
-        : "Google Ads : connecté (création Search/PMax en pause possible via Pipeboard).",
+        : "Google Ads : connecté (création Search/PMax en pause possible).",
     );
   }
   for (const [id, label] of [

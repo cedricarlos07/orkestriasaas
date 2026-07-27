@@ -211,7 +211,7 @@ function Connections() {
             <div>
               <p className="text-[14px] font-medium text-ink">Google Ads</p>
               <p className="text-[12px] text-ink-soft">
-                Connectez votre compte Google Ads — campagnes Search/PMax via Pipeboard.
+                Connectez votre compte Google Ads — campagnes Search et Performance Max.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -491,8 +491,8 @@ function Connections() {
                         <p className="text-[12px] text-ink-soft">
                           {live
                             ? linked
-                              ? "Connecté · Pipeboard"
-                              : "Disponible via Pipeboard"
+                              ? "Connecté"
+                              : "Disponible"
                             : "Bientôt"}
                         </p>
                       </div>

@@ -231,7 +231,7 @@ export async function routeWrite(ctx: WriteRouteContext): Promise<Record<string,
       }
       const { pipeboardAttachImageAd } = await import("@/mastra/pipeboard-bridge");
       if (!ctx.params.imageUrl && !ctx.params.imageHash) {
-        throw new Error("imageUrl ou imageHash requis pour create_ad Meta via Pipeboard");
+        throw new Error("imageUrl ou imageHash requis pour créer une annonce Meta");
       }
       if (!ctx.params.linkUrl) throw new Error("linkUrl requis pour create_ad Meta");
       return pipeboardAttachImageAd({
@@ -455,8 +455,6 @@ async function executeAdapterWrite(
     }
     case "launch_meta_brief":
     case "activate_meta_chain":
-      throw new Error(
-        `Action ${action} nécessite PIPEBOARD_API_TOKEN — https://pipeboard.co/api-tokens`,
-      );
+      throw new Error(`Action temporairement indisponible. Réessayez plus tard.`);
   }
 }

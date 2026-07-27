@@ -17,7 +17,7 @@ const PLATFORMS = [
     icon: Chrome,
     color: "#4285F4",
   },
-  { id: "tiktok", label: "TikTok Ads", desc: "Via Pipeboard", icon: Music2, color: "#111" },
+  { id: "tiktok", label: "TikTok Ads", desc: "Publicités TikTok", icon: Music2, color: "#111" },
   { id: "ga4", label: "Google Analytics", desc: "Bientôt · mesure des ventes", icon: BarChart3, color: "#F9AB00" },
 ];
 
@@ -77,7 +77,7 @@ function Step() {
       <StepHeader
         eyebrow="Étape 3 · Connexions"
         title="Connectez vos comptes publicitaires"
-        desc="Meta, Google et TikTok via Pipeboard. Connectez au moins Meta pour commencer."
+        desc="Meta, Google et TikTok. Connectez au moins Meta pour commencer."
       />
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {PLATFORMS.map(({ id, label, desc, icon: Icon, color }) => {

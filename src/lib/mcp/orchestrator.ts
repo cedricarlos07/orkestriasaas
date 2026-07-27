@@ -86,6 +86,7 @@ Règles absolues :
 - Une seule régie connectée → reste UNIQUEMENT dessus. Ne recommande JAMAIS une autre plateforme.
 - Compte vide (0 campagne / 0 dépense) → dis-le clairement + demande offre + pays + budget/j + URL.
 - « Bientôt » (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, WhatsApp, Shopify) : une phrase max, seulement si on te le demande.
+- N'évoque JAMAIS les outils internes (fournisseurs MCP, tokens serveur, noms techniques backend). Parle uniquement en termes Meta / Google / TikTok / Orkestria.
 
 Format : 120 mots max. Markdown sobre. Termine par une seule prochaine action.`;
 
@@ -254,10 +255,10 @@ async function handleBoostIntent(input: OrchestratorInput): Promise<Orchestrator
         countries: brief.countries ?? ["FR"],
         name: brief.name ?? `Boost — ${objectStoryId.split("_").pop()}`,
       });
-      toolsUsed.push("pipeboard:boost_post");
+      toolsUsed.push("boost_post");
       return {
         reply:
-          `Boost du post **${objectStoryId}** créé en **pause** (Pipeboard).\n\n` +
+          `Boost du post **${objectStoryId}** créé en **pause**.\n\n` +
           `• Budget : **${budget} / jour**\n` +
           `• Campagne : \`${String((result as { campaignId?: string }).campaignId ?? "")}\`\n` +
           `• Ad : \`${String((result as { adId?: string }).adId ?? "—")}\`\n\n` +
@@ -272,7 +273,7 @@ async function handleBoostIntent(input: OrchestratorInput): Promise<Orchestrator
     if (!posts.length) {
       return {
         reply:
-          "Aucun post récent trouvé sur votre Page Facebook. Publiez d'abord un post, ou joignez une **image** pour une nouvelle créa Pipeboard.",
+          "Aucun post récent trouvé sur votre Page Facebook. Publiez d'abord un post, ou joignez une **image** pour une nouvelle créa.",
         toolsUsed,
         runId: input.runId,
       };
@@ -286,7 +287,7 @@ async function handleBoostIntent(input: OrchestratorInput): Promise<Orchestrator
       .join("\n");
     return {
       reply:
-        `Voici les derniers posts de votre Page — choisissez lequel sponsoriser (Pipeboard) :\n\n${lines}\n\n` +
+        `Voici les derniers posts de votre Page — choisissez lequel sponsoriser :\n\n${lines}\n\n` +
         `Répondez par ex. : **« booster #1 budget 15/j France oui crée en pause »**\n` +
         `Ou collez un id \`pageId_postId\`.`,
       toolsUsed,
@@ -294,7 +295,7 @@ async function handleBoostIntent(input: OrchestratorInput): Promise<Orchestrator
     };
   } catch (e) {
     return {
-      reply: `Boost indisponible : ${e instanceof Error ? e.message : "erreur"}. Vérifiez Meta + Page dans Connexions, et PIPEBOARD_API_TOKEN.`,
+      reply: `Boost indisponible : ${e instanceof Error ? e.message : "erreur"}. Vérifiez Meta et votre Page dans Connexions.`,
       toolsUsed,
       runId: input.runId,
     };
@@ -404,7 +405,7 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
                 ? { kind: "image", url: imageUrlFromMsg }
                 : undefined,
           });
-          toolsUsed.push("pipeboard:upload_ad_image", "pipeboard:create_ad_creative", "pipeboard:create_ad");
+          toolsUsed.push("upload_ad_image", "create_ad_creative", "create_ad");
           creativeLine =
             `\n• Annonce (pause) : **${ad.adId}** · créa ${ad.creativeId} · hash ${ad.imageHash}\n`;
         } catch (ce) {
@@ -450,7 +451,7 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
   if (hasImage && !canCreate) {
     return {
       reply:
-        `Image bien reçue (elle partira vers Meta via **Pipeboard** à la création).\n\n` +
+        `Image bien reçue (elle sera utilisée pour l'annonce Meta à la création).\n\n` +
         `Il me manque encore pour créer en pause :\n` +
         `• budget / jour (ex. 15/j)\n` +
         `• pays (ex. France)\n` +
@@ -548,18 +549,18 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
   if (intent === "setup") {
     const { getStackSetupStatus } = await import("@/lib/mcp/setup-status");
     const stack = await getStackSetupStatus(input.orgId);
-    const pipeboardLabel =
+    const stackLabel =
       stack.meta.pipeboardVerify === "ok"
-        ? "OK (Pipeboard)"
+        ? "OK"
         : stack.meta.pipeboardVerify === "error"
           ? "à vérifier"
           : stack.google.pipeboardConfigured
-            ? "token présent — probe en cours"
-            : "PIPEBOARD_API_TOKEN manquant";
+            ? "en cours"
+            : "non prêt";
     const googleLabel = stack.google.oauthConnected
       ? `compte client lié${stack.google.customerId ? ` (${stack.google.customerId})` : ""}`
       : stack.google.pipeboardConfigured
-        ? "Pipeboard OK — connectez OAuth Google Ads"
+        ? "prêt — connectez OAuth Google Ads"
         : "non configuré";
     const researchLabel =
       stack.research.adsLibraryHealth === "ok"
@@ -582,10 +583,10 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
     const lines = [
       `**Meta :** ${stack.meta.oauthConnected ? `connecté — ${accLabel}` : "à connecter"}`,
       `**Page Facebook :** ${pageLabel}`,
-      `**Pipeboard (Meta/Google/TikTok/Snap/Reddit) :** ${pipeboardLabel}`,
+      `**Stack pubs (Meta/Google/TikTok/Snap/Reddit) :** ${stackLabel}`,
       `**Google Ads :** ${googleLabel}`,
       `**Recherche concurrents :** ${researchLabel}`,
-      `**Mastra Memory :** ${stack.memory.mastraConfigured ? "OK" : "DATABASE_URL / DeepSeek manquant"}`,
+      `**Mémoire agent :** ${stack.memory.mastraConfigured ? "OK" : "à configurer"}`,
       "",
       stack.readyForMeta || stack.readyForCampaign
         ? "Prêt pour lancer des campagnes Meta (création en pause → activation explicite)."

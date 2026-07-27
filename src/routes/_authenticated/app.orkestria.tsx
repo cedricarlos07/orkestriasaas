@@ -105,7 +105,7 @@ const SUGGESTIONS: { t: string; prompt: string; i: typeof BarChart3; grad: strin
   {
     t: "Sponsoriser un post de ma Page",
     prompt:
-      "Je veux sponsoriser un post déjà publié sur ma Page Facebook. Liste mes posts récents et guide-moi pour un boost en pause via Pipeboard.",
+      "Je veux sponsoriser un post déjà publié sur ma Page Facebook. Liste mes posts récents et guide-moi pour un boost en pause.",
     i: Users,
     grad: "from-[#f3e8ff] via-[#e4d4ff] to-[#d0b8ff]",
     ic: "text-[#5b21b6]",
@@ -113,7 +113,7 @@ const SUGGESTIONS: { t: string; prompt: string; i: typeof BarChart3; grad: strin
   {
     t: "Vérifier ma configuration V1",
     prompt:
-      "Vérifie ma configuration V1 : Meta OAuth, Page Facebook, Pipeboard, Google Ads, recherche concurrents. Dis clairement ce qui est prêt et ce qui manque.",
+      "Vérifie ma configuration V1 : Meta OAuth, Page Facebook, Google Ads, recherche concurrents. Dis clairement ce qui est prêt et ce qui manque.",
     i: Cog,
     grad: "from-[#f0f4ff] via-[#dce4ff] to-[#c2d0ff]",
     ic: "text-[#1b3a8a]",
@@ -193,7 +193,7 @@ function planTools(intent: IntentKey | null): ToolCall[] {
     ].map((t) => ({ ...t, status: "running" as const }));
   if (intent === "campaign")
     return [
-      { name: "validate_setup", label: "Vérification Meta + Pipeboard" },
+      { name: "validate_setup", label: "Vérification Meta + connexions" },
       { name: "brief", label: "Construction du brief campagne" },
       { name: "create_meta_campaign", label: "Proposition création en pause" },
     ].map((t) => ({ ...t, status: "running" as const }));
@@ -694,7 +694,7 @@ function OrkestriaPage() {
                 type="button"
                 disabled={!!pending}
                 aria-label="Joindre une image"
-                title="Joindre une image (Pipeboard)"
+                title="Joindre une image"
                 className="mb-0.5 rounded-lg p-2 text-ink-soft hover:bg-[#fff5ea] hover:text-[#c94a00] disabled:opacity-50"
                 onClick={() => fileRef.current?.click()}
               >
