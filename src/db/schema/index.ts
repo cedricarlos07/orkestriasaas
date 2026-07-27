@@ -205,7 +205,7 @@ export const organizationMetadata = pgTable("organization_metadata", {
   writeBlocked: boolean("write_blocked").default(false),
   /** Legacy column — unused after AdLoop Cloud removal. */
   adloopApiKeyEncrypted: text("adloop_api_key_encrypted"),
-  /** Facebook Page ID for Meta ad creatives (adkit). */
+  /** Facebook Page ID for Meta ad creatives (Pipeboard / Graph). */
   metaPageId: text("meta_page_id"),
   /** Stripe Billing (live) */
   stripeCustomerId: text("stripe_customer_id"),

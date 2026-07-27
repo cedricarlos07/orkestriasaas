@@ -6,8 +6,7 @@ import { ensureSession } from "@/lib/auth.functions";
 import { getActiveOrgId } from "./context";
 import { uid } from "./utils";
 
-import { runOrchestrator } from "@/lib/mcp/orchestrator";
-import { persistChatTurn } from "@/lib/mcp/mem0-bridge";
+import { runMastraOrchestrator } from "@/lib/mastra/run-chat";
 import { enforceQuotas, QuotaError, recordUsage } from "@/lib/quotas/enforce";
 
 const WELCOME =
@@ -98,12 +97,13 @@ export const sendChatMessage = createServerFn({ method: "POST" })
       throw e;
     }
 
-    const orchestrated = await runOrchestrator({
+    const orchestrated = await runMastraOrchestrator({
       orgId,
       userId: session.user.id,
       message: data.text,
       skill: "analysis",
       history,
+      threadId: data.threadId,
     });
 
     await recordUsage({
@@ -125,8 +125,6 @@ export const sendChatMessage = createServerFn({ method: "POST" })
       })),
       createdAt: new Date(now.getTime() + 500),
     });
-
-    persistChatTurn(orgId, data.text, orchestrated.reply, { threadId: data.threadId });
 
     const isFirstUserMessage = !previous.some((m) => m.role === "user");
     const title =

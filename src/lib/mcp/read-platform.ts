@@ -2,7 +2,6 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { connections } from "@/db/schema/index";
 import { CONNECTORS, type ConnectorId } from "@/lib/oauth/connectors";
-import { ADLOOP_CONNECTION_ID, isAdloopHealthy } from "@/lib/mcp/adloop-org";
 import { routeReadSnapshot } from "@/lib/mcp/execution-router";
 import type { UnifiedAccountSnapshot } from "@/lib/unified-ad-schema";
 
@@ -47,21 +46,6 @@ export async function readSnapshotsForOrg(
       snapshots.push(snapshot);
     } catch {
       // skip failed connector
-    }
-  }
-
-  const hasGoogleConn = conns.some((c) => c.connector === "google_ads");
-  if (!hasGoogleConn && (await isAdloopHealthy())) {
-    try {
-      const { snapshot } = await routeReadSnapshot({
-        orgId,
-        connector: "google_ads",
-        connectionId: ADLOOP_CONNECTION_ID,
-        period,
-      });
-      snapshots.push(snapshot);
-    } catch {
-      // AdLoop MCC default unavailable
     }
   }
 

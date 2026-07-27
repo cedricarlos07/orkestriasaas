@@ -27,7 +27,7 @@ import {
 import { getAdapter } from "@/lib/platforms/adapter";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 import { routeReadSnapshot, routeResearch } from "@/lib/mcp/execution-router";
-import { ADLOOP_CONNECTION_ID, isAdloopHealthy, syntheticAdloopConnection } from "@/lib/mcp/adloop-org";
+import { callPipeboardTool, isPipeboardConfigured } from "@/mastra/pipeboard-mcp";
 import type { UnifiedAccountSnapshot } from "@/lib/unified-ad-schema";
 import { isLlmConfigured, llmChatCompletion } from "@/lib/llm/client";
 
@@ -78,12 +78,6 @@ async function getTokensFor(orgId: string, connector: ConnectorId) {
     const tokens = await ensureFreshTokens(conn.id, orgId, connector);
     return { conn, tokens };
   }
-  if (connector === "google_ads" && (await isAdloopHealthy())) {
-    return {
-      conn: syntheticAdloopConnection(orgId),
-      tokens: { accessToken: "", accountId: "" },
-    };
-  }
   if (!hasOAuthCredentials(connector)) {
     throw new Error(
       `${CONNECTORS[connector].label} : connexion non configurée (identifiants OAuth ${CONNECTORS[connector].oauth.clientIdEnv} absents côté serveur).`,
@@ -99,7 +93,7 @@ async function fetchSnapshot(orgId: string, connector: ConnectorId, accountId?: 
     accountId ??
     (await resolveActiveAdAccountId(orgId, connector)) ??
     tokens.accountId;
-  if (!acct && conn.id !== ADLOOP_CONNECTION_ID) {
+  if (!acct) {
     throw new Error(`${CONNECTORS[connector].label} : aucun compte publicitaire sélectionné.`);
   }
   const { snapshot } = await routeReadSnapshot({
@@ -136,12 +130,8 @@ async function fetchAllSnapshots(orgId: string, period?: string): Promise<Unifie
     }
   }
   const hasGoogle = rows.some((r) => r.connector === "google_ads");
-  if (!hasGoogle && (await isAdloopHealthy())) {
-    try {
-      snapshots.push(await fetchSnapshot(orgId, "google_ads", undefined, period));
-    } catch {
-      /* AdLoop MCC default unavailable */
-    }
+  if (!hasGoogle) {
+    // Google snapshot only when OAuth connection exists
   }
   return snapshots;
 }
@@ -481,7 +471,7 @@ const launchTools: AgentTool[] = [
   writeTool(
     "launch_meta_brief",
     "launch_meta_brief",
-    "Create a full Meta funnel via upstream adkit (launch_brief). Everything PAUSED. dry_run calls adkit without --go.",
+    "Create a full Meta funnel via Pipeboard (campaign + ad sets PAUSED).",
     "launch",
     {
       brief: {
@@ -504,7 +494,7 @@ const launchTools: AgentTool[] = [
   writeTool(
     "activate_meta_campaign",
     "activate_meta_chain",
-    "Go live via adkit activate_ad (ad + ad set + campaign). Spend-gated — dry_run first.",
+    "Go live via Pipeboard update_ad (ad ACTIVE). Spend-gated — dry_run first.",
     "launch",
     {
       adId: { type: "string", description: "Meta ad id to activate (chain goes live)" },
@@ -544,7 +534,7 @@ const launchTools: AgentTool[] = [
   writeTool(
     "create_reddit_campaign",
     "create_campaign",
-    "Create a Reddit PAUSED campaign (experimental — requires funding instrument).",
+    "Create a Reddit PAUSED campaign via Pipeboard.",
     "launch",
     {
       name: { type: "string" },
@@ -562,6 +552,50 @@ const launchTools: AgentTool[] = [
       },
     }),
     "reddit_ads",
+  ),
+  writeTool(
+    "create_tiktok_campaign",
+    "create_campaign",
+    "Create a TikTok PAUSED campaign via Pipeboard.",
+    "launch",
+    {
+      name: { type: "string" },
+      dailyBudget: { type: "number" },
+      objective: { type: "string" },
+      accountId: { type: "string" },
+    },
+    ["name", "dailyBudget"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: {
+        name: str(args.name),
+        dailyBudget: num(args.dailyBudget),
+        objective: str(args.objective),
+      },
+    }),
+    "tiktok_ads",
+  ),
+  writeTool(
+    "create_snap_campaign",
+    "create_campaign",
+    "Create a Snapchat PAUSED campaign via Pipeboard.",
+    "launch",
+    {
+      name: { type: "string" },
+      dailyBudget: { type: "number" },
+      objective: { type: "string" },
+      accountId: { type: "string" },
+    },
+    ["name", "dailyBudget"],
+    (args) => ({
+      accountId: str(args.accountId),
+      params: {
+        name: str(args.name),
+        dailyBudget: num(args.dailyBudget),
+        objective: str(args.objective),
+      },
+    }),
+    "snapchat_ads",
   ),
   writeTool(
     "create_ad_set",
@@ -1120,7 +1154,7 @@ const measureTools: AgentTool[] = [
   },
   {
     name: "search_meta_targeting",
-    description: "Search Meta interest or job-title IDs via adkit (read-only). Use before launch_meta_brief.",
+    description: "Search Meta interest targeting via Pipeboard (read-only). Use before launch_meta_brief.",
     family: "measure",
     inputSchema: {
       type: "object",
@@ -1131,25 +1165,21 @@ const measureTools: AgentTool[] = [
       },
       required: ["query"],
     },
-    handler: async (ctx, args) => {
+    handler: async (_ctx, args) => {
       const query = str(args.query);
       if (!query) throw new Error("query requis");
-      const { tokens } = await getTokensFor(ctx.organizationId, "meta_ads");
-      const { buildAdkitEnv, adkitSearchTargeting } = await import("@/lib/mcp/adkit-bridge");
-      const { resolveMetaPageId } = await import("@/lib/mcp/meta-org");
-      const pageId = await resolveMetaPageId(ctx.organizationId, null);
-      const env = buildAdkitEnv({
-        accessToken: tokens.accessToken,
-        accountId: str(args.accountId) ?? tokens.accountId ?? "",
-        pageId: pageId ?? undefined,
-        allowSpend: false,
+      if (!isPipeboardConfigured()) {
+        throw new Error("PIPEBOARD_API_TOKEN requis pour search_meta_targeting");
+      }
+      return callPipeboardTool("meta-ads", "search_interests", {
+        query,
+        type: str(args.type) ?? "adinterest",
       });
-      return adkitSearchTargeting(env, query, str(args.type) ?? "adinterest");
     },
   },
   {
     name: "optimize_meta_ads",
-    description: "adkit optimize_report — KILL/SCALE/KEEP recommendations (read-only, no changes).",
+    description: "Insights / recommandations Meta via Pipeboard (read-only).",
     family: "measure",
     inputSchema: {
       type: "object",
@@ -1163,22 +1193,15 @@ const measureTools: AgentTool[] = [
       },
     },
     handler: async (ctx, args) => {
+      if (!isPipeboardConfigured()) {
+        throw new Error("PIPEBOARD_API_TOKEN requis pour optimize_meta_ads");
+      }
       const { tokens } = await getTokensFor(ctx.organizationId, "meta_ads");
-      const { buildAdkitEnv, adkitOptimizeReport } = await import("@/lib/mcp/adkit-bridge");
-      const { resolveMetaPageId } = await import("@/lib/mcp/meta-org");
-      const pageId = await resolveMetaPageId(ctx.organizationId, null);
-      const env = buildAdkitEnv({
-        accessToken: tokens.accessToken,
-        accountId: str(args.accountId) ?? tokens.accountId ?? "",
-        pageId: pageId ?? undefined,
-        allowSpend: false,
-      });
-      return adkitOptimizeReport(env, {
-        campaign_id: str(args.campaignId),
-        window: str(args.window) ?? "last_3d",
-        target_cpl: num(args.targetCpl),
-        target_roas: num(args.targetRoas),
-        lead_form_id: str(args.leadFormId),
+      const accountId = str(args.accountId) ?? tokens.accountId ?? "";
+      const objectId = str(args.campaignId) || accountId;
+      return callPipeboardTool("meta-ads", "get_insights", {
+        object_id: objectId,
+        time_range: str(args.window) ?? "last_3d",
       });
     },
   },

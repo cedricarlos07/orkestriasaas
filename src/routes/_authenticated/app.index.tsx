@@ -128,8 +128,9 @@ function Today() {
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-[13px] text-emerald-900">
           <CheckCircle2 className="mr-1 inline h-4 w-4" />
           Meta prêt pour les campagnes.
-          {setup.google.adloopHealth === "ok" && " Google Ads disponible."}
-          {setup.research.useproxyHealth === "ok" && " Recherche concurrents active."}
+          {setup.google.pipeboardHealth === "ok" &&
+            " Google, TikTok, Snap et Reddit Ads disponibles via Pipeboard."}
+          {setup.research.adsLibraryHealth === "ok" && " Recherche concurrents active."}
         </div>
       )}
 

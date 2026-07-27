@@ -29,13 +29,16 @@ export const getOAuthAvailability = createServerFn({ method: "GET" }).handler(as
       process.env.FACEBOOK_CLIENT_ID?.trim() && process.env.FACEBOOK_CLIENT_SECRET?.trim(),
     ),
     writeEnabled: process.env.MCP_WRITE_ENABLED === "true",
-    adloopConfigured: process.env.ADLOOP_ENABLED !== "false",
+    pipeboardConfigured: Boolean(process.env.PIPEBOARD_API_TOKEN?.trim()),
+    /** @deprecated */
+    adloopConfigured: Boolean(process.env.PIPEBOARD_API_TOKEN?.trim()),
     passwordResetConfigured: isMailConfigured(),
     useproxyConfigured: Boolean(process.env.META_APP_ID?.trim() && process.env.META_APP_SECRET?.trim()),
     useproxyUrl: "graph.facebook.com/ads_archive",
     adsLibraryConfigured: Boolean(process.env.META_APP_ID?.trim() && process.env.META_APP_SECRET?.trim()),
     adsLibraryUpstream: "meta_ads_archive",
-    adkitCommand: process.env.ADKIT_MCP_COMMAND ?? "adkit-mcp",
+    /** @deprecated */
+    adkitCommand: "pipeboard-meta-mcp",
     baseUrl: process.env.BETTER_AUTH_URL ?? "http://localhost:8080",
   };
 });

@@ -3,16 +3,19 @@ import { db } from "@/db";
 import { auditRuns, businessMemory, connections } from "@/db/schema/index";
 import { CONNECTORS, type ConnectorId } from "@/lib/oauth/connectors";
 import { resolveMetaPageId } from "@/lib/mcp/meta-org";
-import { searchOrgMemories } from "@/lib/mcp/mem0-bridge";
 import type { AuditSummary } from "@/lib/unified-ad-schema";
 
 /** Memory keys that hold plumbing, not business facts the agent should read. */
 const INTERNAL_KEYS = new Set(["linked_ad_accounts"]);
 
-/** Platforms not yet productized when disconnected — never list ones already connected. */
+/** Platforms not yet productized when disconnected — never list ones already connected.
+ * Pipeboard family (Meta, Google, TikTok, Snap, Reddit) is live — not listed here. */
 const COMING_SOON_IF_DISCONNECTED: { connector?: ConnectorId; label: string }[] = [
-  { connector: "tiktok_ads", label: "TikTok Ads" },
   { connector: "linkedin_ads", label: "LinkedIn Ads" },
+  { connector: "microsoft_ads", label: "Microsoft Ads" },
+  { connector: "x_ads", label: "X Ads" },
+  { connector: "amazon_ads", label: "Amazon Ads" },
+  { connector: "pinterest_ads", label: "Pinterest Ads" },
   { connector: "ga4", label: "GA4" },
   { label: "WhatsApp Business" },
   { label: "Shopify" },
@@ -29,7 +32,7 @@ function compact(value: unknown, max = 240): string {
  * Injected in the system prompt so the agent stops asking for accounts that are
  * already connected.
  */
-export async function buildOrgContext(orgId: string, mem0Query?: string): Promise<string> {
+export async function buildOrgContext(orgId: string, _query?: string): Promise<string> {
   const [conns, memory, audits, pageId] = await Promise.all([
     db.select().from(connections).where(eq(connections.organizationId, orgId)),
     db.select().from(businessMemory).where(eq(businessMemory.organizationId, orgId)),
@@ -65,11 +68,22 @@ export async function buildOrgContext(orgId: string, mem0Query?: string): Promis
     );
   }
 
-  // Google Ads is production via AdLoop — never mark it « bientôt » when connected or available.
+  // Pipeboard family is production — never mark these « bientôt ».
   if (activeConnectors.has("google_ads")) {
-    lines.push("Google Ads : connecté (création Search/PMax en pause possible).");
-  } else if (process.env.ADLOOP_MCP_COMMAND) {
-    lines.push("Google Ads : disponible via le compte agence (AdLoop) — peut être utilisé pour Search/PMax.");
+    lines.push("Google Ads : connecté (création Search/PMax en pause possible via Pipeboard).");
+  } else if (process.env.PIPEBOARD_API_TOKEN) {
+    lines.push("Google Ads : Pipeboard configuré — connectez OAuth pour lier un compte client.");
+  }
+  for (const [id, label] of [
+    ["tiktok_ads", "TikTok Ads"],
+    ["snapchat_ads", "Snapchat Ads"],
+    ["reddit_ads", "Reddit Ads"],
+  ] as const) {
+    if (activeConnectors.has(id)) {
+      lines.push(`${label} : connecté (création campagne en pause via Pipeboard).`);
+    } else if (process.env.PIPEBOARD_API_TOKEN) {
+      lines.push(`${label} : disponible via Pipeboard — connectez OAuth pour lier un compte.`);
+    }
   }
 
   // Surface the selected Meta act when it differs from the OAuth default.
@@ -122,13 +136,6 @@ export async function buildOrgContext(orgId: string, mem0Query?: string): Promis
         .map((m) => `${m.key}=${compact(m.value)}`)
         .join(" | ")}`,
     );
-  }
-
-  if (mem0Query?.trim()) {
-    const mem0Facts = await searchOrgMemories(orgId, mem0Query, 5);
-    if (mem0Facts.length) {
-      lines.push(`Mémoire Orkestria (faits appris) : ${mem0Facts.join(" · ")}`);
-    }
   }
 
   return lines.join("\n");

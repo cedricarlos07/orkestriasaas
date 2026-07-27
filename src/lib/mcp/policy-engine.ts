@@ -12,7 +12,6 @@ import {
 import type { ConnectorId } from "@/lib/oauth/connectors";
 import { CONNECTORS, hasOAuthCredentials } from "@/lib/oauth/connectors";
 import { uid } from "@/functions/utils";
-import type { MetaBrief } from "@/lib/mcp/meta-brief";
 
 export type ExecutionMode = "dry_run" | "approval" | "live";
 
@@ -211,13 +210,6 @@ async function resolveConnection(orgId: string, connector: ConnectorId) {
   const conn = rows.find((c) => c.connector === connector && c.status === "connectée");
   if (conn) return conn;
 
-  if (connector === "google_ads") {
-    const { isAdloopHealthy, syntheticAdloopConnection } = await import("@/lib/mcp/adloop-org");
-    if (await isAdloopHealthy()) {
-      return syntheticAdloopConnection(orgId);
-    }
-  }
-
   if (!hasOAuthCredentials(connector)) {
     throw new Error(
       `Connexion ${CONNECTORS[connector].label} non configurée : les identifiants OAuth (${CONNECTORS[connector].oauth.clientIdEnv}) ne sont pas définis côté serveur.`,
@@ -385,7 +377,7 @@ function buildDiff(input: WriteActionInput): Record<string, unknown> {
         platform: "meta_ads",
         pageId: input.params.pageId ?? null,
         brief: brief ?? null,
-        note: "Exécuté via adkit-mcp (launch_brief). Dry-run = adkit plan sans --go.",
+        note: "Exécuté via Pipeboard Meta MCP (create_campaign / update_ad). Dry-run = aperçu local sans écriture.",
       };
     }
     case "activate_meta_chain":
@@ -553,50 +545,19 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
   const accountId = input.accountId ?? "";
 
   if (mode === "dry_run") {
-    let adkitPreview: unknown;
-    let adloopPreview: unknown;
-    if (input.action === "launch_meta_brief" && input.connector === "meta_ads") {
-      const brief = input.params.brief as MetaBrief | undefined;
-      if (brief?.campaign?.name && brief.adsets?.length) {
-        const { ensureFreshTokens } = await import("@/lib/platforms/token-refresh");
-        const { adkitLaunchBrief, buildAdkitEnv } = await import("@/lib/mcp/adkit-bridge");
-        const { resolveMetaPageId } = await import("@/lib/mcp/meta-org");
-        const tokens = await ensureFreshTokens(conn.id, input.orgId, input.connector);
-        const acct = accountId || tokens.accountId || "";
-        const pageId = await resolveMetaPageId(input.orgId, input.params.pageId as string | undefined);
-        if (pageId) {
-          const env = buildAdkitEnv({
-            accessToken: tokens.accessToken,
-            accountId: acct,
-            pageId,
-            allowSpend: false,
-          });
-          adkitPreview = await adkitLaunchBrief(env, brief, { go: false, pageId, accountId: acct });
-        }
-      }
-    }
-
-    if (input.action === "create_campaign" && input.connector === "google_ads") {
-      const { adloopDraftCampaign } = await import("@/lib/mcp/clients/adloop");
-      const { getOrgGoogleCustomerId } = await import("@/lib/mcp/adloop-org");
-      if (input.params.name && input.params.dailyBudget) {
-        const customerId = (accountId || (await getOrgGoogleCustomerId(input.orgId)) || "").replace(/\D/g, "");
-        adloopPreview = await adloopDraftCampaign({
-          name: input.params.name,
-          dailyBudget: input.params.dailyBudget,
-          campaignType: input.params.campaignType,
-          customerId: customerId || undefined,
-          finalUrl: input.params.finalUrl,
-          keywords: input.params.keywords,
-          headlines: input.params.headlines,
-          descriptions: input.params.descriptions,
-        });
-      }
-    }
+    const pipeboardPreview = {
+      upstream: "pipeboard",
+      action: input.action,
+      connector: input.connector,
+      accountId: accountId || null,
+      connectionId: conn.id,
+      params: input.params,
+      note: "Aperçu local — aucune écriture Pipeboard en dry_run",
+    };
 
     await logRun({
       orgId: input.orgId, apiKeyId: input.apiKeyId, connector: input.connector, tool: input.action,
-      mode: "dry_run", status: "ok", params: diff, result: { wouldExecute: true, adkitPreview, adloopPreview }, latencyMs: Date.now() - start,
+      mode: "dry_run", status: "ok", params: diff, result: { wouldExecute: true, pipeboardPreview }, latencyMs: Date.now() - start,
     });
     const { getCapability } = await import("@/lib/mcp/capability-matrix");
     const capability = getCapability(input.connector);
@@ -618,8 +579,7 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
           params: input.params,
           dry_run: false,
         },
-        ...(adkitPreview ? { adkit: adkitPreview } : {}),
-        ...(adloopPreview ? { adloop: adloopPreview } : {}),
+        pipeboard: pipeboardPreview,
       },
     };
   }

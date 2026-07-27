@@ -3,8 +3,8 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { connections } from "@/db/schema/index";
 import { ensureSession } from "@/lib/auth.functions";
-import { getOrgGoogleCustomerId, isAdloopServerConfigured } from "@/lib/mcp/adloop-org";
-import { probeAdloopHealth } from "@/lib/mcp/clients/adloop";
+import { isPipeboardConfigured, probePipeboardMcp } from "@/mastra/pipeboard-mcp";
+import { resolveActiveAdAccountId } from "@/lib/mcp/resolve-ad-account";
 import { hasOAuthCredentials } from "@/lib/oauth/connectors";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 import { getActiveOrgId } from "./context";
@@ -27,34 +27,32 @@ export const getGoogleSetupStatus = createServerFn({ method: "GET" }).handler(as
     }
   }
 
-  const customerId = await getOrgGoogleCustomerId(orgId);
-  const adloopConfigured = isAdloopServerConfigured();
-  let adloopHealth: { ok: boolean; error?: string } = { ok: false, error: "AdLoop non configuré" };
-  if (adloopConfigured) {
-    const probe = await probeAdloopHealth();
-    adloopHealth = { ok: probe.ok, error: probe.error };
+  const customerId = await resolveActiveAdAccountId(orgId, "google_ads");
+  const pipeboardConfigured = isPipeboardConfigured();
+  let pipeboardHealth: { ok: boolean; error?: string } = {
+    ok: false,
+    error: "PIPEBOARD_API_TOKEN non configuré",
+  };
+  if (pipeboardConfigured) {
+    const probe = await probePipeboardMcp();
+    pipeboardHealth = { ok: probe.ok, error: probe.error };
   }
 
   const oauthConfigured = hasOAuthCredentials("google_ads");
-  const agencyReady = adloopConfigured && adloopHealth.ok;
-  /** Google is ready when the org linked OAuth OR the server agency AdLoop stack is healthy. */
-  const googleReady = oauthConnected || agencyReady;
+  const googleReady = oauthConnected && pipeboardConfigured && pipeboardHealth.ok;
 
   return {
     oauthConnected,
     oauthConfigured,
     tokenError,
-    account: oauthConnected
-      ? (googleConn?.externalAccount ?? null)
-      : agencyReady
-        ? (process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID?.replace(/\D/g, "") ||
-            process.env.ADLOOP_CUSTOMER_ID?.replace(/\D/g, "") ||
-            "compte agence")
-        : null,
+    account: oauthConnected ? (googleConn?.externalAccount ?? null) : null,
     customerId,
-    adloopConfigured,
-    adloopHealth,
-    agencyReady,
+    pipeboardConfigured,
+    pipeboardHealth,
+    /** @deprecated aliases for UI compatibility */
+    adloopConfigured: pipeboardConfigured,
+    adloopHealth: pipeboardHealth,
+    agencyReady: pipeboardConfigured && pipeboardHealth.ok,
     googleReady,
   };
 });

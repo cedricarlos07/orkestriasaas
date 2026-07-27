@@ -203,7 +203,7 @@ function Connections() {
         </div>
       ) : null}
 
-      {/* Google Ads — bientôt (en attente validation Google API) */}
+      {/* Google Ads */}
       <section className="rounded-2xl border border-line/70 bg-white p-5">
         <div className="flex items-start gap-3">
           <GoogleAdsIcon className="mt-0.5 h-5 w-5 shrink-0" />
@@ -211,13 +211,29 @@ function Connections() {
             <div>
               <p className="text-[14px] font-medium text-ink">Google Ads</p>
               <p className="text-[12px] text-ink-soft">
-                Connexion client Google Ads — prévue dès validation de l’accès API Google. Meta Ads reste disponible.
+                Connectez votre compte Google Ads — campagnes Search/PMax via Pipeboard.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-1 text-[12px] font-medium text-ink-soft">
-                Bientôt
-              </span>
+              {byConnector("google_ads")?.status === "connectée" ? (
+                <>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Connecté
+                  </span>
+                  <button
+                    type="button"
+                    className="chip-ghost text-[12px]"
+                    disabled={disconnecting}
+                    onClick={() => void disconnectConnector("google_ads")}
+                  >
+                    {disconnecting ? "Déconnexion…" : "Déconnecter"}
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="btn-primary text-[13px]" onClick={() => void connect("google_ads")}>
+                  Connecter Google Ads
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -448,16 +464,23 @@ function Connections() {
       ) : (
         groups.map((g) => {
           const items = Object.values(CONNECTORS).filter(
-            (c) => c.group === g.filter && c.id !== "meta_ads" && c.id !== "google_ads",
+            (c) =>
+              c.group === g.filter &&
+              c.id !== "meta_ads" &&
+              c.id !== "google_ads",
           );
           if (!items.length) return null;
+          const PIPEBOARD_LIVE = new Set(["tiktok_ads", "snapchat_ads", "reddit_ads"]);
           return (
             <section key={g.title} className="rounded-2xl border border-line/70 bg-white">
               <div className="border-b border-line/60 px-5 py-3 text-[12px] uppercase tracking-wider text-ink-soft">
                 {g.title}
               </div>
               <ul className="divide-y divide-line/60">
-                {items.map((cfg) => (
+                {items.map((cfg) => {
+                  const live = PIPEBOARD_LIVE.has(cfg.id);
+                  const linked = byConnector(cfg.id)?.status === "connectée";
+                  return (
                   <li key={cfg.id} className="flex items-center justify-between gap-4 px-5 py-4">
                     <div className="flex items-center gap-3">
                       <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface-2">
@@ -465,12 +488,40 @@ function Connections() {
                       </span>
                       <div>
                         <p className="text-[14px] font-medium text-ink">{cfg.label}</p>
-                        <p className="text-[12px] text-ink-soft">Bientôt</p>
+                        <p className="text-[12px] text-ink-soft">
+                          {live
+                            ? linked
+                              ? "Connecté · Pipeboard"
+                              : "Disponible via Pipeboard"
+                            : "Bientôt"}
+                        </p>
                       </div>
                     </div>
-                    <span className="chip-ghost text-[12px] text-ink-soft">Bientôt</span>
+                    {live ? (
+                      linked ? (
+                        <button
+                          type="button"
+                          className="chip-ghost text-[12px]"
+                          disabled={disconnecting}
+                          onClick={() => void disconnectConnector(cfg.id)}
+                        >
+                          Déconnecter
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-primary text-[13px]"
+                          onClick={() => void connect(cfg.id).catch((e) => alert(e instanceof Error ? e.message : String(e)))}
+                        >
+                          Connecter
+                        </button>
+                      )
+                    ) : (
+                      <span className="chip-ghost text-[12px] text-ink-soft">Bientôt</span>
+                    )}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </section>
           );

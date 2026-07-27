@@ -1,21 +1,22 @@
 import type { TokenPayload } from "@/lib/crypto/tokens";
 import type { ConnectorId } from "@/lib/oauth/connectors";
+import { isPipeboardConfigured } from "@/mastra/pipeboard-mcp";
 import {
-  ADLOOP_CONNECTION_ID,
-  getOrgGoogleCustomerId,
-  isAdloopConnection,
-  isAdloopServerConfigured,
-} from "@/lib/mcp/adloop-org";
-import {
-  adloopCreateCampaign,
-  adloopGetCampaignPerformance,
-} from "@/lib/mcp/clients/adloop";
-import {
-  adkitActivateAd,
-  adkitLaunchBrief,
-  adkitPauseAd,
-  buildAdkitEnv,
-} from "@/lib/mcp/adkit-bridge";
+  isPipeboardFamilyConnector,
+  pipeboardFamilyCreateCampaign,
+  pipeboardFamilyPauseCampaign,
+  pipeboardFamilySnapshot,
+  pipeboardFamilyUpdateBudget,
+  pipeboardGoogleCreateCampaign,
+  pipeboardGoogleSnapshot,
+  pipeboardMetaActivateAd,
+  pipeboardMetaCreateCampaign,
+  pipeboardMetaLaunchBrief,
+  pipeboardMetaPauseAd,
+  pipeboardMetaPauseCampaign,
+  pipeboardMetaSnapshot,
+  pipeboardMetaUpdateBudget,
+} from "@/mastra/pipeboard-bridge";
 import { researchCompetitorAds } from "@/lib/mcp/clients/useproxy";
 import { resolveMetaPageId } from "@/lib/mcp/meta-org";
 import { resolveActiveAdAccountId } from "@/lib/mcp/resolve-ad-account";
@@ -23,6 +24,7 @@ import type { WriteActionInput, WriteActionName } from "@/lib/mcp/policy-engine"
 import { getAdapter } from "@/lib/platforms/adapter";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 import type { UnifiedAccountSnapshot } from "@/lib/unified-ad-schema";
+import type { MetaBrief } from "@/lib/mcp/meta-brief";
 
 export type ReadRouteContext = {
   orgId: string;
@@ -37,25 +39,63 @@ export type WriteRouteContext = WriteActionInput & {
 };
 
 async function resolveGoogleCustomerId(orgId: string, accountId?: string): Promise<string> {
-  return (accountId || (await getOrgGoogleCustomerId(orgId)) || "").replace(/\D/g, "");
+  if (accountId) return accountId.replace(/\D/g, "");
+  const preferred = await resolveActiveAdAccountId(orgId, "google_ads");
+  return (preferred || "").replace(/\D/g, "");
 }
 
 export async function routeReadSnapshot(ctx: ReadRouteContext): Promise<{
   snapshot: UnifiedAccountSnapshot;
-  upstream: "adloop" | "native";
+  upstream: "pipeboard" | "native";
 }> {
   const period = ctx.period ?? "30 derniers jours";
 
-  if (ctx.connector === "google_ads" && isAdloopServerConfigured()) {
+  if (isPipeboardConfigured() && ctx.connector === "meta_ads") {
+    const tokens = await ensureFreshTokens(ctx.connectionId, ctx.orgId, ctx.connector).catch(() => null);
+    const accountId =
+      ctx.accountId ||
+      (await resolveActiveAdAccountId(ctx.orgId, "meta_ads")) ||
+      tokens?.accountId ||
+      "";
+    if (accountId) {
+      try {
+        const snapshot = await pipeboardMetaSnapshot({ accountId });
+        return { snapshot: { ...snapshot, period }, upstream: "pipeboard" };
+      } catch {
+        // fall through to native
+      }
+    }
+  }
+
+  if (isPipeboardConfigured() && ctx.connector === "google_ads") {
     const customerId = await resolveGoogleCustomerId(ctx.orgId, ctx.accountId);
-    try {
-      const snapshot = await adloopGetCampaignPerformance({
-        customer_id: customerId || undefined,
-        period,
-      });
-      return { snapshot, upstream: "adloop" };
-    } catch (e) {
-      if (isAdloopConnection(ctx.connectionId)) throw e;
+    if (customerId) {
+      try {
+        const snapshot = await pipeboardGoogleSnapshot({ customerId });
+        return { snapshot: { ...snapshot, period }, upstream: "pipeboard" };
+      } catch {
+        // fall through to native
+      }
+    }
+  }
+
+  if (isPipeboardConfigured() && isPipeboardFamilyConnector(ctx.connector)) {
+    const tokens = await ensureFreshTokens(ctx.connectionId, ctx.orgId, ctx.connector).catch(() => null);
+    const accountId =
+      ctx.accountId ||
+      (await resolveActiveAdAccountId(ctx.orgId, ctx.connector)) ||
+      tokens?.accountId ||
+      "";
+    if (accountId) {
+      try {
+        const snapshot = await pipeboardFamilySnapshot({
+          connector: ctx.connector,
+          accountId,
+        });
+        return { snapshot: { ...snapshot, period }, upstream: "pipeboard" };
+      } catch {
+        // fall through to native
+      }
     }
   }
 
@@ -78,21 +118,62 @@ export async function routeResearch(
 }
 
 export async function routeWrite(ctx: WriteRouteContext): Promise<Record<string, unknown>> {
-  if (ctx.connector === "google_ads" && isAdloopServerConfigured() && ctx.action === "create_campaign") {
+  if (isPipeboardConfigured() && ctx.connector === "google_ads" && ctx.action === "create_campaign") {
     const p = ctx.params;
     if (!p.name || !p.dailyBudget) throw new Error("name et dailyBudget requis");
     const customerId = await resolveGoogleCustomerId(ctx.orgId, ctx.accountId);
-    const result = await adloopCreateCampaign({
+    if (!customerId) throw new Error("Google Ads customer id manquant — connectez un compte");
+    return pipeboardGoogleCreateCampaign({
+      customerId,
       name: p.name,
       dailyBudget: p.dailyBudget,
       campaignType: p.campaignType,
-      customerId: customerId || undefined,
       finalUrl: p.finalUrl,
-      keywords: p.keywords,
+      keywords: p.keywords?.map((k) => (typeof k === "string" ? k : k.text)),
       headlines: p.headlines,
       descriptions: p.descriptions,
     });
-    return { ...result, upstream: "adloop" };
+  }
+
+  if (
+    isPipeboardConfigured() &&
+    isPipeboardFamilyConnector(ctx.connector) &&
+    (ctx.action === "create_campaign" ||
+      ctx.action === "pause_campaign" ||
+      ctx.action === "update_budget")
+  ) {
+    const tokensEarly = await ensureFreshTokens(ctx.connectionId, ctx.orgId, ctx.connector).catch(
+      () => null,
+    );
+    const familyAccountId =
+      ctx.accountId ||
+      (await resolveActiveAdAccountId(ctx.orgId, ctx.connector)) ||
+      tokensEarly?.accountId ||
+      "";
+    if (ctx.action === "create_campaign") {
+      if (!familyAccountId) throw new Error(`Compte ${ctx.connector} manquant — connectez un compte`);
+      if (!ctx.params.name || !ctx.params.dailyBudget) throw new Error("name et dailyBudget requis");
+      return pipeboardFamilyCreateCampaign({
+        connector: ctx.connector,
+        accountId: familyAccountId,
+        name: ctx.params.name,
+        dailyBudget: ctx.params.dailyBudget,
+        objective: ctx.params.objective,
+      });
+    }
+    if (ctx.action === "pause_campaign" && ctx.campaignId) {
+      return pipeboardFamilyPauseCampaign({
+        connector: ctx.connector,
+        campaignId: ctx.campaignId,
+      });
+    }
+    if (ctx.action === "update_budget" && ctx.campaignId && ctx.params.dailyBudget) {
+      return pipeboardFamilyUpdateBudget({
+        connector: ctx.connector,
+        campaignId: ctx.campaignId,
+        dailyBudget: ctx.params.dailyBudget,
+      });
+    }
   }
 
   const adapter = getAdapter(ctx.connector);
@@ -103,14 +184,8 @@ export async function routeWrite(ctx: WriteRouteContext): Promise<Record<string,
     tokens.accountId ||
     "";
 
-  if (ctx.connector === "meta_ads") {
+  if (isPipeboardConfigured() && ctx.connector === "meta_ads") {
     const pageId = await resolveMetaPageId(ctx.orgId, ctx.params.pageId as string | undefined);
-    const env = buildAdkitEnv({
-      accessToken: tokens.accessToken,
-      accountId,
-      pageId: pageId ?? undefined,
-      allowSpend: ctx.action === "activate_meta_chain",
-    });
 
     if (ctx.action === "launch_meta_brief") {
       const brief = ctx.params.brief as MetaBrief | undefined;
@@ -122,17 +197,45 @@ export async function routeWrite(ctx: WriteRouteContext): Promise<Record<string,
           "pageId requis — enregistrez votre Page Facebook dans Connexions ou passez pageId au tool",
         );
       }
-      return adkitLaunchBrief(env, brief, { go: true, pageId, accountId });
+      if (!accountId) throw new Error("Meta ad account id manquant");
+      return pipeboardMetaLaunchBrief({
+        accountId,
+        pageId,
+        brief: brief as Parameters<typeof pipeboardMetaLaunchBrief>[0]["brief"],
+      });
     }
 
     if (ctx.action === "activate_meta_chain") {
       const adId = ctx.params.adId as string;
       if (!adId) throw new Error("adId requis");
-      return adkitActivateAd(env, adId);
+      return pipeboardMetaActivateAd({ adId });
     }
 
     if (ctx.action === "pause_ad" && ctx.params.adId) {
-      return adkitPauseAd(env, ctx.params.adId);
+      return pipeboardMetaPauseAd({ adId: ctx.params.adId as string });
+    }
+
+    if (ctx.action === "create_campaign") {
+      if (!accountId) throw new Error("Meta ad account id manquant");
+      if (!ctx.params.name || !ctx.params.dailyBudget) throw new Error("name et dailyBudget requis");
+      return pipeboardMetaCreateCampaign({
+        accountId,
+        name: ctx.params.name,
+        dailyBudget: ctx.params.dailyBudget,
+        objective: ctx.params.objective,
+        countries: ctx.params.countries,
+      });
+    }
+
+    if (ctx.action === "pause_campaign" && ctx.campaignId) {
+      return pipeboardMetaPauseCampaign({ campaignId: ctx.campaignId });
+    }
+
+    if (ctx.action === "update_budget" && ctx.campaignId && ctx.params.dailyBudget) {
+      return pipeboardMetaUpdateBudget({
+        campaignId: ctx.campaignId,
+        dailyBudget: ctx.params.dailyBudget,
+      });
     }
   }
 
@@ -290,7 +393,10 @@ async function executeAdapterWrite(
       await adapter.pauseAd(tokens, accountId, input.params.adId);
       return { adId: input.params.adId, status: "PAUSED" };
     }
+    case "launch_meta_brief":
+    case "activate_meta_chain":
+      throw new Error(
+        `Action ${action} nécessite PIPEBOARD_API_TOKEN — https://pipeboard.co/api-tokens`,
+      );
   }
 }
-
-export { ADLOOP_CONNECTION_ID };

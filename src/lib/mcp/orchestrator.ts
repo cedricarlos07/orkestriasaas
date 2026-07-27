@@ -19,6 +19,8 @@ export type OrchestratorInput = {
   message: string;
   skill?: string;
   runId?: string;
+  /** Mastra memory thread id (chat thread). */
+  threadId?: string;
   /** Previous turns of the thread, oldest first, excluding the current message. */
   history?: OrchestratorTurn[];
 };
@@ -55,7 +57,8 @@ Règles absolues :
 - Une seule question maximum par réponse, et seulement si elle bloque la suite.
 - Réponds en français, ton direct et concret, orienté argent (dépense, coût par client, rentabilité). Zéro jargon technique inutile.
 - Une création de campagne se fait toujours en pause d'abord ; l'activation qui dépense exige une validation explicite de l'utilisateur (« oui active » / « confirme »).
-- Pour les plateformes marquées « bientôt », dis simplement qu'elles arrivent — ne propose pas de les connecter.
+- Pour les plateformes marquées « bientôt » (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, WhatsApp, Shopify), dis simplement qu'elles arrivent — ne propose pas de les connecter.
+- Meta, Google, TikTok, Snapchat et Reddit Ads sont live via Pipeboard — propose de les connecter si absents du contexte.
 - Si le brief est incomplet pour créer, demande UNIQUEMENT le champ manquant le plus bloquant (objectif, budget/j, pays, URL, message).
 
 Format : 180 mots maximum. Markdown sobre — phrases courtes, une liste à puces si utile, **gras** pour les chiffres clés. Termine par une seule prochaine action claire.`;
@@ -72,7 +75,14 @@ export async function loadOrchestratorPrompt(): Promise<string> {
   return DEFAULT_SYSTEM_PROMPT;
 }
 
-const LIVE_READ_CONNECTORS: ConnectorId[] = ["meta_ads", "google_ads", "tiktok_ads", "ga4"];
+const LIVE_READ_CONNECTORS: ConnectorId[] = [
+  "meta_ads",
+  "google_ads",
+  "tiktok_ads",
+  "snapchat_ads",
+  "reddit_ads",
+  "ga4",
+];
 
 /** Load live account snapshots for every connected ad platform. */
 async function loadLiveAccountData(orgId: string): Promise<{ results: string[]; toolsUsed: string[] }> {
@@ -343,6 +353,12 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
 }
 
 export async function runOrchestrator(input: OrchestratorInput): Promise<OrchestratorOutput> {
+  // Full-power path: Mastra agent + memory + Pipeboard tools
+  if (process.env.ORKESTRIA_AGENT_RUNTIME !== "legacy") {
+    const { runMastraOrchestrator } = await import("@/lib/mastra/run-chat");
+    return runMastraOrchestrator(input);
+  }
+
   const intent = detectIntent(input.message);
 
   if (intent === "setup") {

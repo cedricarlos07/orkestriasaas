@@ -35,9 +35,9 @@ const MATURITY: Record<ConnectorId, CapabilityMaturity> = {
   meta_ads: "production",
   ga4: "reporting",
   linkedin_ads: "experimental",
-  tiktok_ads: "experimental",
-  snapchat_ads: "experimental",
-  reddit_ads: "experimental",
+  tiktok_ads: "production",
+  snapchat_ads: "production",
+  reddit_ads: "production",
   microsoft_ads: "experimental",
   x_ads: "experimental",
   amazon_ads: "experimental",
@@ -46,18 +46,21 @@ const MATURITY: Record<ConnectorId, CapabilityMaturity> = {
 
 const NOTES: Partial<Record<ConnectorId, string>> = {
   google_ads:
-    "V1 : AdLoop self-hosted (Search/PMax preview + diagnostics GA4). Fallback API native OAuth.",
+    "Pipeboard Google Ads MCP (remote). Fallback API native OAuth pour lectures.",
   meta_ads:
-    "Meta writes via adkit-mcp (github.com/jatinjain25/adkit): launch_brief PAUSED + activate_ad. Reads restent OAuth natif.",
+    "Meta via Pipeboard Meta Ads MCP (create_campaign PAUSED + update_ad). Reads OAuth natif ou Pipeboard.",
   ga4: "Read-only analytics. Writes are rejected.",
-  linkedin_ads: "DRAFT create OK; ad-set is a DRAFT campaign workaround; creatives/attach best-effort.",
-  tiktok_ads: "Campaign/adgroup create often needs locations + uploaded assets — experimental.",
-  snapchat_ads: "Minimal PAUSED campaign / segment create — verify against Marketing API for your account.",
-  reddit_ads: "Requires funding instrument; objectives vary by account.",
-  microsoft_ads: "SOAP v13 Search create + keywords; timezone/account setup sensitive.",
-  x_ads: "Needs funding instrument + Ads API auth; Bearer alone may fail.",
-  amazon_ads: "Sponsored Products PAUSED create + keywords.",
-  pinterest_ads: "Minimal PAUSED campaign create — confirm objective enums for your market.",
+  linkedin_ads: "Pas sur Pipeboard — DRAFT create experimental (API native).",
+  tiktok_ads:
+    "Pipeboard TikTok Ads MCP — create/pause/budget PAUSED. OAuth client pour lier advertiser_id.",
+  snapchat_ads:
+    "Pipeboard Snap Ads MCP — create/pause/budget PAUSED. OAuth client pour lier ad_account_id.",
+  reddit_ads:
+    "Pipeboard Reddit Ads MCP — create/pause/budget PAUSED. OAuth client pour lier le compte.",
+  microsoft_ads: "Pas sur Pipeboard — SOAP v13 experimental.",
+  x_ads: "Pas sur Pipeboard — Ads API experimental.",
+  amazon_ads: "Pas sur Pipeboard — Sponsored Products experimental.",
+  pinterest_ads: "Pas sur Pipeboard — create PAUSED experimental.",
 };
 
 const DOCS: Partial<Record<ConnectorId, string>> = {

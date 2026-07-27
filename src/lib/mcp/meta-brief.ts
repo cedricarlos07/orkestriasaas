@@ -1,4 +1,4 @@
-/** Meta brief schema — passed to upstream adkit (https://github.com/jatinjain25/adkit). */
+/** Meta brief schema — used for Pipeboard Meta campaign launches. */
 
 export type MetaBriefAd = {
   name: string;

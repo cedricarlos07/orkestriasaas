@@ -1,49 +1,58 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { mcpStatusSnapshots } from "@/db/schema/index";
-import { probeAdloopHealth } from "@/lib/mcp/clients/adloop";
-import { probeAdkitMcp } from "@/lib/mcp/adkit-bridge";
-import { adkitMcpCommand } from "@/lib/mcp/clients/adkit-mcp";
+import {
+  isPipeboardConfigured,
+  probePipeboardMcp,
+  PIPEBOARD_URLS,
+  type PipeboardServer,
+} from "@/mastra/pipeboard-mcp";
 import { probeMetaAdLibraryHealth } from "@/lib/platforms/meta-ad-library";
-import { probeMem0Health, isMem0Configured } from "@/lib/mcp/mem0-bridge";
+import { uid } from "@/functions/utils";
+
+const PIPEBOARD_LABELS: Record<PipeboardServer, string> = {
+  "meta-ads": "Pipeboard Meta Ads MCP",
+  "google-ads": "Pipeboard Google Ads MCP",
+  "tiktok-ads": "Pipeboard TikTok Ads MCP",
+  "snap-ads": "Pipeboard Snap Ads MCP",
+  "reddit-ads": "Pipeboard Reddit Ads MCP",
+};
 
 export async function probeMcpHealth(): Promise<void> {
-  const services = [
-    {
-      serviceId: "adloop_mcp",
-      label: "AdLoop self-hosted (Google + GA4)",
-      probe: () => probeAdloopHealth(),
-      mode: "adloop_stdio",
-      url: `${process.env.ADLOOP_MCP_COMMAND ?? "python3"} ${process.env.ADLOOP_MCP_ARGS ?? "-m adloop"}`,
-    },
+  const pipeboardProbe = isPipeboardConfigured()
+    ? await probePipeboardMcp()
+    : { ok: false, error: "PIPEBOARD_API_TOKEN unset", servers: undefined };
+
+  const services: {
+    serviceId: string;
+    label: string;
+    probe: () => Promise<{ ok: boolean; latencyMs: number; error?: string }>;
+    mode: string;
+    url: string | null;
+  }[] = [
+    ...(Object.keys(PIPEBOARD_URLS) as PipeboardServer[]).map((server) => ({
+      serviceId: `pipeboard_${server.replace(/-/g, "_")}`,
+      label: PIPEBOARD_LABELS[server],
+      probe: async () => {
+        if (!isPipeboardConfigured()) {
+          return { ok: false, latencyMs: 0, error: "PIPEBOARD_API_TOKEN unset" };
+        }
+        const status = pipeboardProbe.servers?.[server] ?? pipeboardProbe.error ?? "unknown";
+        return {
+          ok: status.startsWith("ok"),
+          latencyMs: 0,
+          error: status.startsWith("ok") ? undefined : status,
+        };
+      },
+      mode: "pipeboard_http",
+      url: PIPEBOARD_URLS[server],
+    })),
     {
       serviceId: "meta_ad_library",
       label: "Meta Ad Library (ads_archive)",
       probe: () => probeMetaAdLibraryHealth(),
       mode: "meta_graph",
       url: "graph.facebook.com/ads_archive",
-    },
-    {
-      serviceId: "fb_ads_library_mcp",
-      label: "facebook-ads-library-mcp (legacy optional)",
-      probe: async () => ({
-        ok: false,
-        latencyMs: 0,
-        error: "deprecated — research uses Meta ads_archive",
-      }),
-      mode: "deprecated",
-      url: null,
-    },
-    {
-      serviceId: "useproxy_mcp",
-      label: "Proxy Ads Library (legacy)",
-      probe: async () => ({
-        ok: false,
-        latencyMs: 0,
-        error: "deprecated — research uses Meta ads_archive",
-      }),
-      mode: "deprecated",
-      url: null,
     },
     {
       serviceId: "google_ads_native",
@@ -68,40 +77,17 @@ export async function probeMcpHealth(): Promise<void> {
       url: null,
     },
     {
-      serviceId: "adkit_mcp",
-      label: "adkit (Meta automation)",
-      probe: async () => {
-        const token = process.env.ADKIT_PROBE_TOKEN?.trim() || process.env.META_PROBE_ACCESS_TOKEN?.trim();
-        const account = process.env.ADKIT_PROBE_ACCOUNT?.trim() || process.env.META_PROBE_AD_ACCOUNT_ID?.trim();
-        if (!token || !account) {
-          return {
-            ok: false,
-            latencyMs: 0,
-            error: "ADKIT_PROBE_TOKEN + ADKIT_PROBE_ACCOUNT unset (optional health probe)",
-          };
-        }
-        return probeAdkitMcp({
-          META_ACCESS_TOKEN: token,
-          META_AD_ACCOUNT_ID: account,
-          ADKIT_ALLOW_SPEND: "0",
-        });
-      },
-      mode: "adkit_stdio",
-      url: adkitMcpCommand(),
+      serviceId: "mastra_memory",
+      label: "Mastra Memory (Postgres)",
+      probe: async () => ({
+        ok: Boolean(process.env.DATABASE_URL?.trim()),
+        latencyMs: 0,
+        error: process.env.DATABASE_URL ? undefined : "DATABASE_URL unset",
+      }),
+      mode: "mastra_pg",
+      url: null,
     },
-    {
-      serviceId: "mem0",
-      label: "Mem0 (long-term org memory)",
-      probe: async () => {
-        if (!isMem0Configured()) {
-          return { ok: false, latencyMs: 0, error: "MEM0_API_KEY unset or MEM0_ENABLED=false" };
-        }
-        return probeMem0Health();
-      },
-      mode: "mem0_rest",
-      url: process.env.MEM0_API_URL ?? "http://127.0.0.1:8888",
-    },
-  ] as const;
+  ];
 
   for (const s of services) {
     const probe = await s.probe();
@@ -125,7 +111,7 @@ export async function probeMcpHealth(): Promise<void> {
     if (existing[0]) {
       await db.update(mcpStatusSnapshots).set(row).where(eq(mcpStatusSnapshots.serviceId, s.serviceId));
     } else {
-      await db.insert(mcpStatusSnapshots).values({ id: `mcp_${s.serviceId}`, ...row });
+      await db.insert(mcpStatusSnapshots).values({ id: uid("mcp"), ...row });
     }
   }
 }

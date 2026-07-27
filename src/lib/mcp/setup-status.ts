@@ -1,12 +1,10 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { connections } from "@/db/schema/index";
-import { buildAdkitEnv, adkitVerify } from "@/lib/mcp/adkit-bridge";
-import { getOrgGoogleCustomerId, isAdloopServerConfigured } from "@/lib/mcp/adloop-org";
-import { probeAdloopHealth } from "@/lib/mcp/clients/adloop";
+import { isPipeboardConfigured, probePipeboardMcp } from "@/mastra/pipeboard-mcp";
 import { isMetaAdLibraryConfigured, probeMetaAdLibraryHealth } from "@/lib/platforms/meta-ad-library";
 import { resolveMetaPageId, syncOrgMetaPageFromToken } from "@/lib/mcp/meta-org";
-import { isMem0Configured, probeMem0Health } from "@/lib/mcp/mem0-bridge";
+import { resolveActiveAdAccountId } from "@/lib/mcp/resolve-ad-account";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
 
 export type StackSetupStatus = {
@@ -14,15 +12,22 @@ export type StackSetupStatus = {
     oauthConnected: boolean;
     account: string | null;
     pageId: string | null;
+    pipeboardVerify: "ok" | "skipped" | "error";
+    pipeboardError?: string;
+    /** @deprecated use pipeboardVerify */
     adkitVerify: "ok" | "skipped" | "error";
     adkitError?: string;
   };
   google: {
+    pipeboardConfigured: boolean;
+    pipeboardHealth: "ok" | "skipped" | "error";
+    pipeboardError?: string;
+    oauthConnected: boolean;
+    customerId: string | null;
+    /** @deprecated */
     adloopConfigured: boolean;
     adloopHealth: "ok" | "skipped" | "error";
     adloopError?: string;
-    oauthConnected: boolean;
-    customerId: string | null;
   };
   research: {
     useproxyConfigured: boolean;
@@ -33,12 +38,15 @@ export type StackSetupStatus = {
     adsLibraryError?: string;
     url: string;
   };
-  /** Meta campaigns can launch when Meta OAuth + Page are ready (adkit preferred but not blocking). */
   readyForCampaign: boolean;
   readyForMeta: boolean;
   readyForGoogle: boolean;
   missingSteps: string[];
   memory: {
+    mastraConfigured: boolean;
+    mastraHealth: "ok" | "skipped" | "error";
+    mastraError?: string;
+    /** @deprecated */
     mem0Configured: boolean;
     mem0Health: "ok" | "skipped" | "error";
     mem0Error?: string;
@@ -50,12 +58,13 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
   const metaConn = rows.find((r) => r.connector === "meta_ads" && r.status === "connectée");
   const googleConn = rows.find((r) => r.connector === "google_ads" && r.status === "connectée");
   let pageId = await resolveMetaPageId(orgId, null);
-  const customerId = await getOrgGoogleCustomerId(orgId);
+  const customerId = await resolveActiveAdAccountId(orgId, "google_ads");
 
   const missingSteps: string[] = [];
 
-  let adkitVerify: StackSetupStatus["meta"]["adkitVerify"] = "skipped";
-  let adkitError: string | undefined;
+  let pipeboardVerify: StackSetupStatus["meta"]["pipeboardVerify"] = "skipped";
+  let pipeboardError: string | undefined;
+
   if (metaConn?.encryptedTokens) {
     try {
       const tokens = await ensureFreshTokens(metaConn.id, orgId, "meta_ads");
@@ -67,23 +76,9 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
         ).catch(() => null);
         if (synced) pageId = synced.pageId;
       }
-      try {
-        const env = buildAdkitEnv({
-          accessToken: tokens.accessToken,
-          accountId: tokens.accountId ?? metaConn.externalAccount ?? "",
-          pageId: pageId ?? undefined,
-          allowSpend: false,
-        });
-        await adkitVerify(env);
-        adkitVerify = "ok";
-      } catch (e) {
-        adkitVerify = "error";
-        adkitError = e instanceof Error ? e.message : "Vérification automatisation Meta échouée";
-      }
     } catch (e) {
-      adkitVerify = "error";
-      adkitError = e instanceof Error ? e.message : "Token Meta invalide";
       missingSteps.push("Reconnecter Meta Ads (jeton invalide)");
+      pipeboardError = e instanceof Error ? e.message : "Token Meta invalide";
     }
   } else {
     missingSteps.push("Connecter Meta Ads");
@@ -93,16 +88,24 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
     missingSteps.push("Aucune Page Facebook détectée — reconnectez Meta ou choisissez une Page");
   }
 
-  const adloopConfigured = isAdloopServerConfigured();
-  let adloopHealth: StackSetupStatus["google"]["adloopHealth"] = "skipped";
-  let adloopError: string | undefined;
-  if (adloopConfigured) {
-    const probe = await probeAdloopHealth();
-    if (probe.ok) adloopHealth = "ok";
-    else {
-      adloopHealth = "error";
-      adloopError = probe.error;
+  const pipeboardConfigured = isPipeboardConfigured();
+  let googlePipeboardHealth: StackSetupStatus["google"]["pipeboardHealth"] = "skipped";
+  let googlePipeboardError: string | undefined;
+
+  if (pipeboardConfigured) {
+    const probe = await probePipeboardMcp();
+    if (probe.ok) {
+      pipeboardVerify = "ok";
+      googlePipeboardHealth = "ok";
+    } else {
+      pipeboardVerify = "error";
+      googlePipeboardHealth = "error";
+      pipeboardError = probe.error ?? `meta=${probe.meta} google=${probe.google}`;
+      googlePipeboardError = pipeboardError;
+      missingSteps.push("Vérifier PIPEBOARD_API_TOKEN (Pipeboard MCP)");
     }
+  } else {
+    missingSteps.push("Configurer PIPEBOARD_API_TOKEN pour Meta/Google/TikTok/Snap/Reddit");
   }
 
   const adsLibraryConfigured = isMetaAdLibraryConfigured();
@@ -118,41 +121,34 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
   }
 
   const readyForMeta = Boolean(metaConn?.encryptedTokens) && Boolean(pageId);
-  const readyForGoogle = adloopConfigured && adloopHealth === "ok";
-  /** Campaign launch in product is Meta-first — do not block on Google/AdLoop. */
-  const readyForCampaign = readyForMeta;
+  const readyForGoogle = Boolean(googleConn?.encryptedTokens) && Boolean(customerId);
+  const readyForCampaign = readyForMeta && pipeboardConfigured;
 
-  const mem0Configured = isMem0Configured();
-  let mem0Health: StackSetupStatus["memory"]["mem0Health"] = "skipped";
-  let mem0Error: string | undefined;
-  if (mem0Configured) {
-    const probe = await probeMem0Health();
-    if (probe.ok) mem0Health = "ok";
-    else {
-      mem0Health = "error";
-      mem0Error = probe.error;
-    }
-  }
+  const mastraOk = Boolean(process.env.DATABASE_URL?.trim() && process.env.DEEPSEEK_API_KEY?.trim());
 
   return {
     meta: {
       oauthConnected: Boolean(metaConn?.encryptedTokens),
       account: metaConn?.externalAccount ?? null,
       pageId,
-      adkitVerify,
-      adkitError,
+      pipeboardVerify,
+      pipeboardError,
+      adkitVerify: pipeboardVerify,
+      adkitError: pipeboardError,
     },
     google: {
-      adloopConfigured,
-      adloopHealth,
-      adloopError,
-      oauthConnected: Boolean(googleConn),
+      pipeboardConfigured,
+      pipeboardHealth: googlePipeboardHealth,
+      pipeboardError: googlePipeboardError,
+      oauthConnected: Boolean(googleConn?.encryptedTokens),
       customerId,
+      adloopConfigured: pipeboardConfigured,
+      adloopHealth: googlePipeboardHealth,
+      adloopError: googlePipeboardError,
     },
     research: {
-      useproxyConfigured: adsLibraryConfigured,
-      useproxyHealth: adsLibraryHealth,
-      useproxyError: adsLibraryError,
+      useproxyConfigured: false,
+      useproxyHealth: "skipped",
       adsLibraryConfigured,
       adsLibraryHealth,
       adsLibraryError,
@@ -163,9 +159,12 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
     readyForGoogle,
     missingSteps,
     memory: {
-      mem0Configured,
-      mem0Health,
-      mem0Error,
+      mastraConfigured: mastraOk,
+      mastraHealth: mastraOk ? "ok" : "error",
+      mastraError: mastraOk ? undefined : "DATABASE_URL ou DEEPSEEK_API_KEY manquant",
+      mem0Configured: mastraOk,
+      mem0Health: mastraOk ? "ok" : "error",
+      mem0Error: mastraOk ? undefined : "Mastra Memory non prêt",
     },
   };
 }
