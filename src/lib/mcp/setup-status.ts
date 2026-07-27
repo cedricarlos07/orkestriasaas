@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { connections } from "@/db/schema/index";
+import { businessMemory, connections } from "@/db/schema/index";
 import { isPipeboardConfigured, probePipeboardMcp } from "@/mastra/pipeboard-mcp";
 import { isMetaAdLibraryConfigured, probeMetaAdLibraryHealth } from "@/lib/platforms/meta-ad-library";
 import { resolveMetaPageId, syncOrgMetaPageFromToken } from "@/lib/mcp/meta-org";
@@ -11,7 +11,9 @@ export type StackSetupStatus = {
   meta: {
     oauthConnected: boolean;
     account: string | null;
+    accountName: string | null;
     pageId: string | null;
+    pageName: string | null;
     pipeboardVerify: "ok" | "skipped" | "error";
     pipeboardError?: string;
     /** @deprecated use pipeboardVerify */
@@ -58,6 +60,9 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
   const metaConn = rows.find((r) => r.connector === "meta_ads" && r.status === "connectée");
   const googleConn = rows.find((r) => r.connector === "google_ads" && r.status === "connectée");
   let pageId = await resolveMetaPageId(orgId, null);
+  let pageName: string | null = null;
+  let accountName: string | null = null;
+  let accountId: string | null = metaConn?.externalAccount ?? null;
   const customerId = await resolveActiveAdAccountId(orgId, "google_ads");
 
   const missingSteps: string[] = [];
@@ -68,13 +73,49 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
   if (metaConn?.encryptedTokens) {
     try {
       const tokens = await ensureFreshTokens(metaConn.id, orgId, "meta_ads");
+      accountId = tokens.accountId ?? metaConn.externalAccount ?? accountId;
+      accountName = tokens.accountName?.trim() || null;
       if (!pageId) {
         const synced = await syncOrgMetaPageFromToken(
           orgId,
           tokens.accessToken,
           tokens.accountId ?? metaConn.externalAccount ?? undefined,
         ).catch(() => null);
-        if (synced) pageId = synced.pageId;
+        if (synced) {
+          pageId = synced.pageId;
+          pageName = synced.pageName;
+        }
+      }
+      if (pageId && !pageName) {
+        const { getMetaPageName } = await import("@/lib/platforms/meta-api");
+        pageName = (await getMetaPageName(tokens.accessToken, pageId).catch(() => null)) ?? null;
+      }
+      const active = await resolveActiveAdAccountId(orgId, "meta_ads");
+      if (active) accountId = active;
+      if (!accountName && accountId) {
+        try {
+          const mem = await db
+            .select()
+            .from(businessMemory)
+            .where(
+              and(
+                eq(businessMemory.organizationId, orgId),
+                eq(businessMemory.key, "linked_ad_accounts"),
+              ),
+            )
+            .limit(1);
+          const store = (mem[0]?.value ?? {}) as {
+            accounts?: { accountId: string; accountName?: string }[];
+          };
+          const match = (store.accounts ?? []).find(
+            (a) =>
+              a.accountId === accountId ||
+              a.accountId.replace(/^act_/, "") === String(accountId).replace(/^act_/, ""),
+          );
+          if (match?.accountName) accountName = match.accountName;
+        } catch {
+          /* ignore */
+        }
       }
     } catch (e) {
       missingSteps.push("Reconnecter Meta Ads (jeton invalide)");
@@ -129,8 +170,10 @@ export async function getStackSetupStatus(orgId: string): Promise<StackSetupStat
   return {
     meta: {
       oauthConnected: Boolean(metaConn?.encryptedTokens),
-      account: metaConn?.externalAccount ?? null,
+      account: accountId ?? metaConn?.externalAccount ?? null,
+      accountName,
       pageId,
+      pageName,
       pipeboardVerify,
       pipeboardError,
       adkitVerify: pipeboardVerify,

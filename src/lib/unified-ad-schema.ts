@@ -102,11 +102,13 @@ export function buildAuditSummary(schema: UnifiedAdSchema): AuditSummary {
     situation =
       "Aucun compte publicitaire connecté. Reliez Meta depuis Connexions pour lancer une analyse.";
   } else if (emptyAccounts.length === schema.accounts.length) {
+    const label = named.length ? `« ${named.join(" », « ")} »` : "connecté";
     situation =
-      `Compte${named.length ? ` ${named.join(", ")}` : ""} connecté, mais **aucune campagne** et **0 dépense** sur la période. ` +
-      `Ce n'est pas un problème de tracking — le compte est vide. Prochaine étape : créer une première campagne en pause.`;
+      `Compte ${label} lié, mais **aucune campagne** et **0 dépense** sur la période. ` +
+      `Ce n'est pas un problème de tracking — le compte est vide. Prochaine étape : créer une première campagne en pause sur ce compte.`;
   } else {
-    situation = `Sur ${schema.accounts.length} plateforme(s) : ${formatMoney(totals.spend, totals.currency)} dépensés, ${totals.conversions} conversion(s)${cpa != null ? `, CPA ~${Math.round(cpa)} ${totals.currency}` : ""}.`;
+    const label = named.length ? ` (${named.join(", ")})` : "";
+    situation = `Sur ${schema.accounts.length} compte(s)${label} : ${formatMoney(totals.spend, totals.currency)} dépensés, ${totals.conversions} conversion(s)${cpa != null ? `, CPA ~${Math.round(cpa)} ${totals.currency}` : ""}.`;
   }
 
   const problems =

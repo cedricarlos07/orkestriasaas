@@ -59,19 +59,19 @@ function extractPeriod(message: string): string {
   return "30 derniers jours";
 }
 
-const DEFAULT_SYSTEM_PROMPT = `Tu es Orkestria, media buyer senior qui parle au dirigeant d'une PME.
+const DEFAULT_SYSTEM_PROMPT = `Tu es Orkestria, media buyer senior qui parle au dirigeant d'une PME — clair, calme, expert.
 
 Règles absolues :
-- Ne demande JAMAIS de connecter un compte déjà listé comme connecté dans le contexte.
-- Cite les noms de campagnes, statuts, dépenses et CPA du contexte. Si une donnée manque, dis-le — n'invente aucun chiffre.
-- Une seule question maximum par réponse, seulement si elle bloque la suite.
-- Français direct, orienté argent. Zéro jargon inutile.
-- Création de campagne toujours en pause d'abord ; activation = validation explicite.
-- Si une seule régie est connectée (ex. Meta), reste UNIQUEMENT sur cette régie. Ne recommande JAMAIS Google, TikTok, Snap, Reddit ou une autre plateforme.
-- Si le compte est vide (0 campagne / 0 dépense), dis-le clairement et demande offre + pays + budget/j + URL.
-- Pour « bientôt » (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, WhatsApp, Shopify) : une phrase max, seulement si on te le demande.
+- Tu CONNAIS le compte : cite toujours le nom commercial + l'id du compte pub, et le nom de la Page Facebook (ex. « Boutique X » (act_123) · Page « Boutique X »).
+- Ne demande JAMAIS de reconnecter un compte déjà listé. Cite campagnes, statuts, dépenses, CPA du contexte. Si une donnée manque, dis-le — n'invente aucun chiffre.
+- Langage simple (dirigeant PME), décisions d'expert media buyer (argent, CPA, budget/j, créas). Zéro jargon d'agence.
+- Une seule question max, seulement si elle bloque la suite.
+- Création toujours en pause d'abord ; activation = validation explicite.
+- Une seule régie connectée → reste UNIQUEMENT dessus. Ne recommande JAMAIS une autre plateforme.
+- Compte vide (0 campagne / 0 dépense) → dis-le clairement + demande offre + pays + budget/j + URL.
+- « Bientôt » (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, WhatsApp, Shopify) : une phrase max, seulement si on te le demande.
 
-Format : 120 mots maximum. Markdown sobre. Termine par une seule prochaine action.`;
+Format : 120 mots max. Markdown sobre. Termine par une seule prochaine action.`;
 
 export async function loadOrchestratorPrompt(): Promise<string> {
   const rows = await db
@@ -128,7 +128,7 @@ async function loadLiveAccountData(orgId: string): Promise<{ results: string[]; 
             .join("\n")
         : "  (aucune campagne listée)";
       results.push(
-        `${label} (${snapshot.accountName}) — dépense ${Math.round(snapshot.spend)} ${snapshot.currency}, ${snapshot.conversions} conv, ${snapshot.campaigns.length} campagne(s):\n${campLines}` +
+        `${label} — compte ${snapshot.accountName || "n/d"} (id ${snapshot.accountId}) — dépense ${Math.round(snapshot.spend)} ${snapshot.currency}, ${snapshot.conversions} conv, ${snapshot.campaigns.length} campagne(s):\n${campLines}` +
           (snapshot.issues.length ? `\n  Signaux: ${snapshot.issues.slice(0, 3).join(" ; ")}` : ""),
       );
     } catch (e) {
@@ -388,9 +388,21 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
         : stack.research.adsLibraryConfigured
           ? "Meta Ad Library à vérifier"
           : "non configurée";
+    const accLabel =
+      stack.meta.accountName && stack.meta.account
+        ? `« ${stack.meta.accountName} » (${stack.meta.account})`
+        : stack.meta.account
+          ? stack.meta.account
+          : "non lié";
+    const pageLabel =
+      stack.meta.pageName && stack.meta.pageId
+        ? `« ${stack.meta.pageName} » (${stack.meta.pageId})`
+        : stack.meta.pageId
+          ? stack.meta.pageId
+          : "manquante";
     const lines = [
-      `**Meta :** ${stack.meta.oauthConnected ? "connecté" : "à connecter"}`,
-      `**Page Facebook :** ${stack.meta.pageId ?? "manquante"}`,
+      `**Meta :** ${stack.meta.oauthConnected ? `connecté — ${accLabel}` : "à connecter"}`,
+      `**Page Facebook :** ${pageLabel}`,
       `**Pipeboard (Meta/Google/TikTok/Snap/Reddit) :** ${pipeboardLabel}`,
       `**Google Ads :** ${googleLabel}`,
       `**Recherche concurrents :** ${researchLabel}`,
@@ -514,7 +526,7 @@ function serializeAuditData(summary: AuditSummary): string {
   ];
   for (const a of summary.accounts) {
     lines.push(
-      `\n${a.platform} (${a.accountName}) : ${Math.round(a.spend)} ${a.currency}, ` +
+      `\n${a.platform} — « ${a.accountName || a.accountId} » (id ${a.accountId}) : ${Math.round(a.spend)} ${a.currency}, ` +
         `${a.conversions} conv, CPA ${a.cpa ? Math.round(a.cpa) : "n/d"}, ROAS ${a.roas ? a.roas.toFixed(2) : "n/d"}.`,
     );
     const camps = [...a.campaigns].sort((x, y) => y.spend - x.spend).slice(0, 8);
@@ -529,7 +541,7 @@ function serializeAuditData(summary: AuditSummary): string {
     if (a.issues.length) lines.push(`  Signaux : ${a.issues.slice(0, 4).join(" ; ")}.`);
   }
   lines.push(
-    "CONSIGNE RÉDACTION : ne mentionne que les plateformes listées ci-dessus. N'invente pas d'autres régies à connecter.",
+    "CONSIGNE RÉDACTION : cite nommément chaque compte (nom + id) présent ci-dessus. Ne mentionne que ces plateformes. N'invente pas d'autres régies.",
   );
   return lines.join("\n");
 }
@@ -543,7 +555,7 @@ async function composeAuditReply(opts: {
 }): Promise<string> {
   const { orgId, message, intent, summary } = opts;
   if (!summary.accounts.length) {
-    return "Aucun compte publicitaire connecté. Allez dans **Connexions** pour relier Meta, Google Ads, TikTok ou GA4 via OAuth.";
+    return "Aucun compte publicitaire connecté. Allez dans **Connexions** pour relier votre régie via OAuth.";
   }
   if (!isLlmConfigured()) return formatAuditReply(summary);
 
@@ -573,14 +585,15 @@ async function composeAuditReply(opts: {
       `--- Contexte du compte (source de vérité) ---\n${orgContext}\n\n` +
       `--- Données d'audit réelles (${intent === "report" ? "rapport" : "audit"}) ---\n${auditData}${skillBlock}\n\n` +
       `Règles de réponse (strictes) :\n` +
-      `- Parle au dirigeant, tutoiement ou vouvoiement cohérent, français direct.\n` +
-      `- Cite le nom/id du compte et les campagnes réelles. N'invente aucun chiffre.\n` +
+      `- Ouvre en citant le compte (nom + id) et la Page Facebook du contexte — le dirigeant doit sentir que tu le connais.\n` +
+      `- Parle simple et expert media buyer (argent, CPA, budget). Pas de jargon d'agence.\n` +
+      `- Cite les campagnes réelles. N'invente aucun chiffre.\n` +
       `- Reste UNIQUEMENT sur les plateformes présentes dans les données d'audit. Si une seule régie (ex. Meta), ne parle PAS de Google/TikTok/Snap/Reddit.\n` +
       `- Si dépense = 0 et 0 campagne : « compte vide » + prochaine étape sur CETTE régie seulement.\n` +
       `- Une seule prochaine action, concrète, liée à CE compte.\n` +
       `- Max 120 mots. Interdit : listes multi-plateformes, « diversifiez », « connectez aussi… ».\n` +
       `Structure :\n` +
-      `1) 2–3 phrases de synthèse (sans titre)\n` +
+      `1) 2–3 phrases de synthèse avec nom du compte / page (sans titre)\n` +
       `2) **Problèmes à corriger :** 1–3 points max\n` +
       `3) **Première action recommandée :** une phrase (demande les infos manquantes si besoin : offre, pays, budget/j, URL)`;
 
@@ -605,8 +618,10 @@ async function composeAuditReply(opts: {
 
 function formatAuditReply(summary: AuditSummary): string {
   if (!summary.accounts.length) {
-    return "Aucun compte publicitaire connecté. Allez dans **Connexions** pour relier Meta, Google Ads, TikTok ou GA4 via OAuth.";
+    return "Aucun compte publicitaire connecté. Allez dans **Connexions** pour relier votre régie via OAuth.";
   }
+  const acc = summary.accounts[0]!;
+  const header = `Sur **${acc.accountName || acc.accountId}** (${acc.accountId}) — ${acc.period || "période"} :`;
   const problems =
     summary.problems.length > 0
       ? summary.problems.map((p, i) => `${i + 1}. ${p}`).join("\n")
@@ -616,7 +631,7 @@ function formatAuditReply(summary: AuditSummary): string {
       ? summary.opportunities.map((o, i) => `${i + 1}. ${o}`).join("\n")
       : "Continuez à monitorer les performances.";
   return (
-    `${summary.situation}\n\n` +
+    `${header}\n${summary.situation}\n\n` +
     `**Problèmes à corriger :**\n${problems}\n\n` +
     `**Opportunités :**\n${opps}\n\n` +
     `**Première action recommandée :**\n${summary.firstAction}`
