@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/app/runs")({
-  head: () => ({ meta: [{ title: "Agent Runs — Orkestria" }] }),
+  head: () => ({ meta: [{ title: "Activité — Orkestria" }] }),
   component: RunsPage,
 });
 
@@ -23,7 +23,7 @@ function RunsPage() {
 
   const kpis = [
     {
-      label: "Runs actifs",
+      label: "En cours",
       value: String(list.filter((r) => !isTerminal(r.state)).length),
       grad: "from-[#fff1e2] via-[#ffe0c2] to-[#ffcf9c]",
       ic: "text-[#c94a00]",
@@ -37,14 +37,14 @@ function RunsPage() {
       ring: "ring-[#ffbfd1]",
     },
     {
-      label: "Sous surveillance",
+      label: "Suivi en cours",
       value: String(list.filter((r) => r.state === "monitoring").length),
       grad: "from-[#e6f7ee] via-[#c9edd8] to-[#a9e0bf]",
       ic: "text-[#0f7a3c]",
       ring: "ring-[#b6e3c8]",
     },
     {
-      label: "Récupération",
+      label: "À reprendre",
       value: String(list.filter((r) => r.state === "failed_recoverable").length),
       grad: "from-[#f0e6ff] via-[#dcc7ff] to-[#c2a3ff]",
       ic: "text-[#4a2a9e]",
@@ -64,15 +64,15 @@ function RunsPage() {
             <span className="absolute -inset-1 -z-10 rounded-3xl bg-[#ff6c02]/25 blur-xl anim-pulse-dot" />
           </span>
           <div>
-            <p className="text-[12px] font-medium uppercase tracking-wider text-[#c94a00]">Exécution agentique</p>
-            <h1 className="mt-0.5 font-display text-[26px] font-semibold text-ink">Agent Runs</h1>
+            <p className="text-[12px] font-medium uppercase tracking-wider text-[#c94a00]">Activité</p>
+            <h1 className="mt-0.5 font-display text-[26px] font-semibold text-ink">Ce qui a été fait</h1>
             <p className="text-[13px] text-ink-soft">
-              Cycle d'exécution · reprise · idempotence · streaming SSE
+              Historique des actions sur vos pubs — rien ne dépense sans votre accord.
             </p>
           </div>
         </div>
         <Link to="/app/orkestria" className="btn-primary btn-halo">
-          <Activity className="h-4 w-4" /> Lancer via Orkestria
+          <Activity className="h-4 w-4" /> Ouvrir l'assistant
         </Link>
       </header>
 

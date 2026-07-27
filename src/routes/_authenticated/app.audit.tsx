@@ -35,8 +35,8 @@ function Audit() {
             <Stethoscope className="h-5 w-5" />
           </span>
           <div>
-            <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Diagnostic</p>
-            <h1 className="mt-0.5 font-display text-[26px] font-semibold text-ink">Audit publicitaire</h1>
+            <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Résultats</p>
+            <h1 className="mt-0.5 font-display text-[26px] font-semibold text-ink">Bilan publicitaire</h1>
             <p className="text-[13px] text-ink-soft">Analyse réelle via vos comptes connectés — aucun chiffre inventé.</p>
           </div>
         </div>

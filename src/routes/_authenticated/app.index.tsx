@@ -78,7 +78,7 @@ function Today() {
       <header className="flex flex-wrap items-end justify-between gap-4 anim-fade-up">
         <div>
           <p className="text-[13px] text-ink-soft">{dashboard?.greeting ?? "Bonjour 👋"}</p>
-          <h1 className="mt-1 font-display text-[28px] font-semibold text-ink">Aujourd'hui</h1>
+          <h1 className="mt-1 font-display text-[28px] font-semibold text-ink">Accueil</h1>
           <p className="mt-1 max-w-[560px] text-[13px] text-ink-soft">
             {dashboard?.metaConnected
               ? `Données Meta · ${dashboard.company}.${dashboard.pendingApprovalsHint ? ` ${dashboard.pendingApprovalsHint}` : ""} ${approvals.length} action${approvals.length > 1 ? "s" : ""} en attente.`

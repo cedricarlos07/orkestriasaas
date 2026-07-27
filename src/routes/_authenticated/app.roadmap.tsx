@@ -14,10 +14,10 @@ function RoadmapPage() {
           <Map className="h-5 w-5" />
         </span>
         <div>
-          <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Roadmap</p>
-          <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Bientôt sur Orkestria</h1>
+          <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">À venir</p>
+          <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Prochaines fonctions</h1>
           <p className="mt-1 text-[13px] text-ink-soft">
-            Ces fonctions ne sont pas encore disponibles. Le produit live se concentre sur Meta, les campagnes, l’agent et le MCP.
+            Pas encore disponibles. Aujourd'hui : vos comptes pubs, campagnes Meta, assistant et bilan.
           </p>
         </div>
       </header>

@@ -22,30 +22,30 @@ export type NavItem = {
 };
 export type NavGroup = { title: string; items: NavItem[] };
 
-/** Primary nav — only shipped product surfaces (+ single Roadmap for bientôt). */
+/** Primary nav — plain French for SME owners (no MCP / agent jargon). */
 export const APP_NAV_GROUPS: NavGroup[] = [
   {
-    title: "Pilotage",
+    title: "Mon espace",
     items: [
-      { label: "Aujourd'hui", to: "/app", icon: Sun, desc: "Vue synthétique", kbd: "G" },
-      { label: "Connexions", to: "/app/connections", icon: Cable, desc: "Comptes publicitaires", kbd: "N" },
-      { label: "Campagnes", to: "/app/campaigns", icon: Rocket, desc: "Meta Ads", kbd: "C" },
-      { label: "Orkestria", to: "/app/orkestria", icon: Sparkle, desc: "Conversation centrale", kbd: "O" },
-      { label: "Agent Runs", to: "/app/runs", icon: Radio, desc: "Cycle d'exécution", kbd: "R" },
+      { label: "Accueil", to: "/app", icon: Sun, desc: "Vue d'ensemble", kbd: "G" },
+      { label: "Mes comptes", to: "/app/connections", icon: Cable, desc: "Comptes publicitaires liés", kbd: "N" },
+      { label: "Campagnes", to: "/app/campaigns", icon: Rocket, desc: "Vos pubs Meta", kbd: "C" },
+      { label: "Assistant", to: "/app/orkestria", icon: Sparkle, desc: "Posez vos questions pubs", kbd: "O" },
+      { label: "Activité", to: "/app/runs", icon: Radio, desc: "Ce qui a été fait", kbd: "R" },
     ],
   },
   {
-    title: "Performance",
+    title: "Résultats",
     items: [
-      { label: "Audit", to: "/app/audit", icon: Stethoscope, desc: "Analyse complète" },
+      { label: "Bilan", to: "/app/audit", icon: Stethoscope, desc: "Ce qui marche, ce qui coûte" },
     ],
   },
   {
-    title: "Configuration",
+    title: "Compte",
     items: [
-      { label: "Orkestria MCP", to: "/app/mcp", icon: Plug, desc: "Clés API, policies, audit agents" },
-      { label: "Paramètres", to: "/app/settings", icon: SlidersHorizontal, desc: "Entreprise, usage, facturation" },
-      { label: "Roadmap", to: "/app/roadmap", icon: Map, desc: "Fonctions à venir", soon: true },
+      { label: "Clés API", to: "/app/mcp", icon: Plug, desc: "Pour connecter un outil externe" },
+      { label: "Paramètres", to: "/app/settings", icon: SlidersHorizontal, desc: "Entreprise et facturation" },
+      { label: "À venir", to: "/app/roadmap", icon: Map, desc: "Prochaines fonctions", soon: true },
     ],
   },
 ];
@@ -55,8 +55,8 @@ export const APP_NAV: NavItem[] = APP_NAV_GROUPS.flatMap((g) => g.items);
 /** Upcoming surfaces listed on /app/roadmap — not in primary nav. */
 export const ROADMAP_ITEMS: { title: string; desc: string }[] = [
   { title: "Créations", desc: "Studio d’affiches, vidéos et textes publicitaires." },
-  { title: "Automatisations", desc: "Règles Ads Guardian et autonomie avancée." },
+  { title: "Automatisations", desc: "Règles qui protègent votre budget." },
   { title: "Leads & ventes", desc: "Prospects et suivi des commandes." },
-  { title: "Rapports", desc: "Exports hebdo / mensuel pour vos clients." },
-  { title: "Espace agence", desc: "Multi-clients et approbations croisées." },
+  { title: "Rapports", desc: "Résumés hebdo / mensuel pour votre équipe." },
+  { title: "Espace agence", desc: "Plusieurs clients dans un même compte." },
 ];

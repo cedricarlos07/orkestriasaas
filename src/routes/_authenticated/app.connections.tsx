@@ -179,10 +179,10 @@ function Connections() {
     <div className="mx-auto max-w-[1000px] space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Connexions</p>
-          <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Vos connexions</h1>
+          <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Mes comptes</p>
+          <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Comptes publicitaires</h1>
           <p className="text-[13px] text-ink-soft">
-            Liez vos comptes publicitaires pour que Orkestria puisse lancer et suivre vos campagnes.
+            Liez Meta, Google ou TikTok pour lancer et suivre vos campagnes.
           </p>
         </div>
         <button type="button" className="chip-ghost" disabled={busy} onClick={() => void refresh()}>

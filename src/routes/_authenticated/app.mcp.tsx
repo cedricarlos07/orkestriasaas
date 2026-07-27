@@ -32,10 +32,10 @@ export const Route = createFileRoute("/_authenticated/app/mcp")({ component: Mcp
 type Tab = "keys" | "policies" | "approvals" | "audit";
 
 const TABS: { id: Tab; label: string; icon: typeof KeyRound }[] = [
-  { id: "keys", label: "Clés API", icon: KeyRound },
-  { id: "policies", label: "Policies", icon: ShieldCheck },
-  { id: "approvals", label: "Approbations", icon: ClipboardCheck },
-  { id: "audit", label: "Audit", icon: ScrollText },
+  { id: "keys", label: "Clés", icon: KeyRound },
+  { id: "policies", label: "Règles", icon: ShieldCheck },
+  { id: "approvals", label: "À valider", icon: ClipboardCheck },
+  { id: "audit", label: "Historique", icon: ScrollText },
 ];
 
 function McpPage() {
@@ -48,10 +48,10 @@ function McpPage() {
           <Plug className="h-5 w-5" />
         </span>
         <div>
-          <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Orkestria MCP</p>
-          <h1 className="mt-0.5 font-display text-[26px] font-semibold text-ink">Accès agents</h1>
+          <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Clés API</p>
+          <h1 className="mt-0.5 font-display text-[26px] font-semibold text-ink">Accès externe</h1>
           <p className="text-[13px] text-ink-soft">
-            Clés API, policies, approbations et audit — tout ce qui gouverne les agents externes (Cursor, Claude…).
+            Créez une clé pour brancher un outil externe. Les actions restent en pause tant que vous n'avez pas validé.
           </p>
         </div>
       </header>
