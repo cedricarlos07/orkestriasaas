@@ -144,7 +144,7 @@ const QUESTIONS: Question[] = [
   { key: "price", prompt: "Parfait. Quel est le prix de ce menu ?", suggestions: ["$5", "$8", "$12"], placeholder: "Ex : $9" },
   { key: "zone", prompt: "Où livrez-vous ? (ville ou quartiers)", suggestions: ["Cocody", "Marcory + Zone 4", "Tout Abidjan"], placeholder: "Cocody, Marcory…" },
   { key: "capacity", prompt: "Combien de commandes pouvez-vous traiter par jour ?", suggestions: ["20 / jour", "50 / jour", "100+ / jour"], placeholder: "Ex : 40" },
-  { key: "channel", prompt: "Les clients doivent-ils commander sur WhatsApp ou sur votre site ?", suggestions: ["WhatsApp", "Site web", "Les deux"] },
+  { key: "channel", prompt: "Où voulez-vous envoyer les clients ?", suggestions: ["Site web", "Lien WhatsApp (wa.me)", "Page Facebook"] },
   { key: "budget", prompt: "Quel budget total sur combien de jours ?", suggestions: ["$250 · 7 jours", "$400 · 14 jours", "$800 · 30 jours"], placeholder: "Ex : $400 · 14 jours" },
 ];
 
