@@ -31,7 +31,7 @@ export const getGoogleSetupStatus = createServerFn({ method: "GET" }).handler(as
   const pipeboardConfigured = isPipeboardConfigured();
   let pipeboardHealth: { ok: boolean; error?: string } = {
     ok: false,
-    error: "PIPEBOARD_API_TOKEN non configuré",
+    error: "Stack pubs non configurée",
   };
   if (pipeboardConfigured) {
     const probe = await probePipeboardMcp();
