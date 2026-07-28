@@ -32,10 +32,16 @@ export async function pipeboardMetaCreateCampaign(input: {
   dailyBudget: number;
   objective?: string;
   countries?: string[];
+  /** City / place names — resolved via search_geo_locations when possible */
+  cities?: string[];
+  neighborhoods?: string[];
+  radiusKm?: number;
+  geoScope?: "country_wide" | "city";
   /** Meta Ads destination — website (default), click-to-WhatsApp, or Messenger. */
   channel?: "website" | "whatsapp" | "messenger";
   pageId?: string;
   partnerUserId?: string;
+  deviceTargeting?: "mobile" | "all";
 }): Promise<Record<string, unknown>> {
   requirePipeboard();
   const channel =
@@ -52,7 +58,6 @@ export async function pipeboardMetaCreateCampaign(input: {
 
   let objective: string;
   if (isMessaging) {
-    // Click-to-WhatsApp / Messenger — Pipeboard: OUTCOME_ENGAGEMENT + CONVERSATIONS
     objective =
       input.objective?.startsWith("OUTCOME_") && input.objective !== "OUTCOME_TRAFFIC"
         ? input.objective
@@ -67,7 +72,6 @@ export async function pipeboardMetaCreateCampaign(input: {
     objective = "OUTCOME_TRAFFIC";
   }
 
-  // Messaging: budget on ad set only (avoid CBO double-budget). Website: keep campaign budget.
   const campaignArgs: Record<string, unknown> = {
     account_id: actId(input.accountId),
     name: input.name,
@@ -88,10 +92,18 @@ export async function pipeboardMetaCreateCampaign(input: {
     campaign.id ?? campaign.campaign_id ?? (campaign as { campaign?: { id?: string } }).campaign?.id ?? "",
   );
 
+  const geo = await buildMetaGeoLocations({
+    countries: input.countries,
+    cities: input.cities,
+    neighborhoods: input.neighborhoods,
+    radiusKm: input.radiusKm,
+    geoScope: input.geoScope,
+    partnerUserId: input.partnerUserId,
+  });
+
   let adSet: Record<string, unknown> | undefined;
-  if (campaignId && (input.countries?.length || isMessaging)) {
+  if (campaignId && (geo || isMessaging)) {
     try {
-      const countries = (input.countries?.length ? input.countries : ["CI"]).map((c) => c.toUpperCase());
       const adsetArgs: Record<string, unknown> = {
         account_id: actId(input.accountId),
         campaign_id: campaignId,
@@ -101,7 +113,10 @@ export async function pipeboardMetaCreateCampaign(input: {
         billing_event: "IMPRESSIONS",
         bid_strategy: "LOWEST_COST_WITHOUT_CAP",
         targeting: {
-          geo_locations: { countries },
+          geo_locations: geo ?? {
+            countries: (input.countries?.length ? input.countries : ["CI"]).map((c) => c.toUpperCase()),
+          },
+          ...(input.deviceTargeting === "mobile" ? { device_platforms: ["mobile"] } : {}),
           targeting_automation: { advantage_audience: 0 },
         },
       };
@@ -128,7 +143,6 @@ export async function pipeboardMetaCreateCampaign(input: {
       })) as Record<string, unknown>;
     } catch (e) {
       if (isMessaging) throw e;
-      // website: campaign created; ad set optional if targeting fails
     }
   }
 
@@ -139,9 +153,74 @@ export async function pipeboardMetaCreateCampaign(input: {
     upstream: "pipeboard",
     channel,
     objective,
+    geo,
     campaign,
     adSet,
   };
+}
+
+/** Resolve human place names → Meta geo_locations payload. */
+async function buildMetaGeoLocations(input: {
+  countries?: string[];
+  cities?: string[];
+  neighborhoods?: string[];
+  radiusKm?: number;
+  geoScope?: "country_wide" | "city";
+  partnerUserId?: string;
+}): Promise<Record<string, unknown> | null> {
+  const countries = (input.countries ?? []).map((c) => c.toUpperCase());
+  if (input.geoScope === "country_wide" || (!input.cities?.length && !input.neighborhoods?.length)) {
+    return countries.length ? { countries } : null;
+  }
+
+  const queries = [...(input.neighborhoods ?? []), ...(input.cities ?? [])];
+  const cityEntries: Array<Record<string, unknown>> = [];
+  const regionEntries: Array<Record<string, unknown>> = [];
+
+  for (const q of queries.slice(0, 5)) {
+    try {
+      const raw = await callPipeboardTool(
+        "meta-ads",
+        "search_geo_locations",
+        {
+          query: q,
+          location_types: ["city", "neighborhood", "subcity", "region", "geo_market"],
+        },
+        { partnerUserId: input.partnerUserId },
+      );
+      const list = Array.isArray(raw)
+        ? raw
+        : Array.isArray((raw as { data?: unknown[] })?.data)
+          ? ((raw as { data: unknown[] }).data)
+          : Array.isArray((raw as { results?: unknown[] })?.results)
+            ? ((raw as { results: unknown[] }).results)
+            : [];
+      const first = list[0] as Record<string, unknown> | undefined;
+      if (!first) continue;
+      const key = String(first.key ?? first.id ?? "");
+      if (!key) continue;
+      const type = String(first.type ?? first.location_type ?? "city").toLowerCase();
+      const entry: Record<string, unknown> = { key };
+      if (typeof input.radiusKm === "number" && input.radiusKm > 0 && /city|neighborhood|subcity/.test(type)) {
+        entry.radius = input.radiusKm;
+        entry.distance_unit = "kilometer";
+      }
+      if (/region|geo_market/.test(type)) regionEntries.push({ key });
+      else cityEntries.push(entry);
+    } catch {
+      // keep going — fall back to countries
+    }
+  }
+
+  if (!cityEntries.length && !regionEntries.length) {
+    return countries.length ? { countries } : null;
+  }
+
+  const geo: Record<string, unknown> = {};
+  if (cityEntries.length) geo.cities = cityEntries;
+  if (regionEntries.length) geo.regions = regionEntries;
+  // When cities are set, omit country to avoid diluting — Meta accepts cities alone
+  return geo;
 }
 
 export async function pipeboardMetaActivateAd(input: {

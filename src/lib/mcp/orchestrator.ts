@@ -177,6 +177,11 @@ type CampaignBrief = {
   channelPending?: boolean;
   dailyBudget?: number;
   countries?: string[];
+  cities?: string[];
+  neighborhoods?: string[];
+  geoScope?: "country_wide" | "city" | "pending";
+  radiusKm?: number;
+  deviceTargeting?: "mobile" | "all";
   linkUrl?: string;
   confirmCreate?: boolean;
   confirmActivate?: boolean;
@@ -202,6 +207,30 @@ function metaCreateParams(brief: CampaignBrief): {
     return { objective: "OUTCOME_SALES", channel: "website", label: "Ventes" };
   }
   return { objective: "OUTCOME_TRAFFIC", channel: "website", label: "Trafic" };
+}
+
+function geoBriefResolved(brief: CampaignBrief): boolean {
+  if (brief.geoScope === "country_wide") return true;
+  if (!(brief.cities?.length || brief.neighborhoods?.length)) return false;
+  return typeof brief.radiusKm === "number";
+}
+
+function metaCampaignGeoArgs(brief: CampaignBrief): {
+  countries?: string[];
+  cities?: string[];
+  neighborhoods?: string[];
+  radiusKm?: number;
+  geoScope?: "country_wide" | "city";
+  deviceTargeting?: "mobile" | "all";
+} {
+  return {
+    countries: brief.countries,
+    cities: brief.cities,
+    neighborhoods: brief.neighborhoods,
+    radiusKm: brief.radiusKm,
+    geoScope: brief.geoScope === "country_wide" ? "country_wide" : brief.geoScope === "city" ? "city" : undefined,
+    deviceTargeting: brief.deviceTargeting,
+  };
 }
 
 function parseCampaignBrief(message: string, history?: OrchestratorTurn[]): CampaignBrief {
@@ -252,6 +281,80 @@ function parseCampaignBrief(message: string, history?: OrchestratorTurn[]): Camp
   if (/\b(sénégal|senegal|\bsn\b|dakar)\b/i.test(blob)) countries.push("SN");
   if (/\b(maroc|\bma\b|casablanca|rabat)\b/i.test(blob)) countries.push("MA");
   if (countries.length) brief.countries = [...new Set(countries)];
+
+  // Precise geo
+  if (/ciblage\s+pays\s+entier|tout\s+le\s+pays|pays\s+entier/i.test(lower)) {
+    brief.geoScope = "country_wide";
+  }
+  const ville = blob.match(/\bville\s+([A-Za-zÀ-ÿ'’-]+(?:\s+[A-Za-zÀ-ÿ'’-]+)?)/i);
+  const quartier = blob.match(/\bquartier\s+([A-Za-zÀ-ÿ'’-]+(?:\s+[A-Za-zÀ-ÿ'’-]+)?)/i);
+  const knownCities = [
+    "abidjan",
+    "bouaké",
+    "bouake",
+    "yamoussoukro",
+    "dakar",
+    "thiès",
+    "thies",
+    "casablanca",
+    "rabat",
+    "marrakech",
+    "paris",
+    "lyon",
+    "marseille",
+    "bruxelles",
+    "montréal",
+    "montreal",
+    "toronto",
+  ];
+  const knownQuarters = [
+    "cocody",
+    "plateau",
+    "marcory",
+    "yopougon",
+    "treichville",
+    "riviera",
+    "zone 4",
+    "angré",
+    "angre",
+  ];
+  const cities: string[] = [];
+  const neighborhoods: string[] = [];
+  if (ville?.[1]) cities.push(ville[1].trim());
+  if (quartier?.[1]) neighborhoods.push(quartier[1].trim());
+  for (const c of knownCities) {
+    if (new RegExp(`\\b${c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(blob)) {
+      cities.push(c.charAt(0).toUpperCase() + c.slice(1));
+    }
+  }
+  for (const q of knownQuarters) {
+    if (new RegExp(`\\b${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(blob)) {
+      neighborhoods.push(q.charAt(0).toUpperCase() + q.slice(1));
+    }
+  }
+  if (cities.length) {
+    brief.cities = [...new Set(cities.map((c) => c.replace(/\s+/g, " ").trim()))];
+    brief.geoScope = brief.geoScope === "country_wide" ? "country_wide" : "city";
+  }
+  if (neighborhoods.length) {
+    brief.neighborhoods = [...new Set(neighborhoods)];
+    brief.geoScope = brief.geoScope === "country_wide" ? "country_wide" : "city";
+  }
+
+  const radius =
+    blob.match(/rayon\s*(\d+)\s*km/i) ||
+    blob.match(/(\d+)\s*km\s*(?:autour|radius)?/i);
+  if (/rayon\s+ville\s+enti[eè]re|sans\s+rayon|ville\s+enti[eè]re/i.test(lower)) {
+    brief.radiusKm = 0;
+  } else if (radius?.[1]) {
+    brief.radiusKm = Number(radius[1]);
+  }
+
+  if (/ciblage\s+mobile\s+uniquement|mobile\s+uniquement|smartphones?\s+uniquement/i.test(lower)) {
+    brief.deviceTargeting = "mobile";
+  } else if (/ciblage\s+tous\s+appareils|mobile\s*\+\s*ordinateur|tous\s+appareils/i.test(lower)) {
+    brief.deviceTargeting = "all";
+  }
 
   const url = blob.match(/https?:\/\/[^\s)>\]]+/i);
   if (url?.[0]) brief.linkUrl = url[0].replace(/[.,;]+$/, "");
@@ -396,13 +499,29 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
   const guided = campaignNextSuggestions(brief);
   const needsChannel =
     brief.objective === "messages" && (brief.channelPending || !brief.channel);
+  const needsGeoPrecision =
+    Boolean(brief.countries?.length) &&
+    brief.geoScope !== "country_wide" &&
+    !(brief.cities?.length || brief.neighborhoods?.length);
+  const needsRadius =
+    Boolean(brief.cities?.length || brief.neighborhoods?.length) &&
+    brief.geoScope !== "country_wide" &&
+    brief.radiusKm === undefined;
+  const needsDevice = geoBriefResolved(brief) && !brief.deviceTargeting;
   const briefIncomplete =
     !brief.objective ||
     needsChannel ||
     !brief.countries?.length ||
+    needsGeoPrecision ||
+    needsRadius ||
+    needsDevice ||
     !(typeof brief.dailyBudget === "number" && brief.dailyBudget > 0);
 
   if (briefIncomplete && guided.length && !brief.confirmCreate) {
+    const mediaSkill = matchMediaSkill(
+      `${input.message} lancer campagne ciblage geo`,
+      ["meta_ads"],
+    );
     const acc =
       stack.meta.accountName && stack.meta.account
         ? `« ${stack.meta.accountName} » (${stack.meta.account})`
@@ -420,23 +539,49 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
     if (!brief.objective) question = "Quel **objectif** Meta pour cette campagne ?";
     else if (needsChannel) question = "Quel **canal** voulez-vous utiliser pour recevoir les messages ?";
     else if (!brief.countries?.length) question = "Dans quel **pays** cibler ?";
+    else if (needsGeoPrecision)
+      question =
+        "Ciblage précis (media buyer) : **ville / quartier**, ou tout le pays ? Un pays entier dilue souvent le budget.";
+    else if (needsRadius)
+      question = "Quel **rayon** autour de la zone (livraison / clients locaux) ?";
+    else if (needsDevice)
+      question =
+        "Sur quels **appareils** cibler ? En Afrique de l'Ouest, **mobile uniquement** évite souvent le gaspillage budget.";
     else if (!(typeof brief.dailyBudget === "number" && brief.dailyBudget > 0))
       question = "Quel **budget** par jour ?";
 
+    const geoBits = [
+      brief.countries?.length ? brief.countries.join(", ") : null,
+      brief.cities?.length ? brief.cities.join(", ") : null,
+      brief.neighborhoods?.length ? `quartier ${brief.neighborhoods.join(", ")}` : null,
+      typeof brief.radiusKm === "number" && brief.radiusKm > 0 ? `${brief.radiusKm} km` : null,
+      typeof brief.radiusKm === "number" && brief.radiusKm === 0 ? "ville entière" : null,
+      brief.geoScope === "country_wide" ? "pays entier" : null,
+      brief.deviceTargeting === "mobile" ? "mobile uniquement" : brief.deviceTargeting === "all" ? "tous appareils" : null,
+    ].filter(Boolean);
+
+    const skillHint = mediaSkill
+      ? `\n\n_${formatSkillForPrompt(mediaSkill).split("\n").slice(0, 4).join("\n")}_`
+      : "";
+
     const lines = [
       `Compte **${acc}** · Page ${page}.`,
-      brief.objective ? `• Objectif : **${brief.objective === "messages" ? "Messages" : brief.objective}**` : null,
+      skillHint || null,
+      brief.objective
+        ? `• Objectif : **${brief.objective === "messages" ? "Messages" : brief.objective}**`
+        : null,
       brief.dailyBudget ? `• Budget : **${brief.dailyBudget} / jour**` : null,
-      brief.countries?.length ? `• Pays : **${brief.countries.join(", ")}**` : null,
+      geoBits.length ? `• Zone : **${geoBits.join(" · ")}**` : null,
       "",
       question,
     ].filter((x) => x !== null) as string[];
 
     return {
       reply: lines.join("\n"),
-      toolsUsed,
+      toolsUsed: mediaSkill ? [...toolsUsed, `media_skill:${mediaSkill.id}`] : toolsUsed,
       runId: input.runId,
       suggestions: guided,
+      matchedMediaSkill: mediaSkill?.name,
     };
   }
 
@@ -445,6 +590,8 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
     typeof brief.dailyBudget === "number" &&
     brief.dailyBudget > 0 &&
     Boolean(brief.countries?.length || brief.objective) &&
+    geoBriefResolved(brief) &&
+    Boolean(brief.deviceTargeting) &&
     !(brief.objective === "messages" && (brief.channelPending || !brief.channel));
 
   if (canCreate) {
@@ -459,6 +606,7 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
         objective: meta.objective,
         channel: meta.channel,
         countries: brief.countries ?? ["FR"],
+        ...metaCampaignGeoArgs(brief),
         dry_run: false,
         mode: "live",
       })) as {
@@ -536,7 +684,15 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
           `Campagne Meta créée en **pause** (aucune dépense).\n\n` +
           `• Nom : **${name}**\n` +
           `• Budget : **${brief.dailyBudget} / jour**\n` +
-          `• Pays : ${(brief.countries ?? ["FR"]).join(", ")}\n` +
+          `• Zone : ${[
+            ...(brief.countries ?? ["FR"]),
+            ...(brief.cities ?? []),
+            ...(brief.neighborhoods?.map((n) => `quartier ${n}`) ?? []),
+            typeof brief.radiusKm === "number" && brief.radiusKm > 0 ? `${brief.radiusKm} km` : null,
+            brief.deviceTargeting === "mobile" ? "mobile" : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}\n` +
           `• Objectif : ${meta.label}\n` +
           creativeLine +
           `\nProchaine action : vérifiez dans Meta Ads Manager, puis dites **« oui active »** + ad id seulement quand vous voulez dépenser.`,
@@ -584,6 +740,8 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
     typeof brief.dailyBudget === "number" &&
     brief.dailyBudget > 0 &&
     Boolean(brief.countries?.length || brief.objective) &&
+    geoBriefResolved(brief) &&
+    Boolean(brief.deviceTargeting) &&
     !(brief.objective === "messages" && (brief.channelPending || !brief.channel))
   ) {
     try {
@@ -597,13 +755,23 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
         objective: meta.objective,
         channel: meta.channel,
         countries: brief.countries ?? ["FR"],
+        ...metaCampaignGeoArgs(brief),
         dry_run: true,
       });
       toolsUsed.push("create_meta_campaign:dry_run");
       readyConfirm = true;
+      const zoneLabel = [
+        (brief.countries ?? ["FR"]).join(","),
+        ...(brief.cities ?? []),
+        ...(brief.neighborhoods ?? []),
+        typeof brief.radiusKm === "number" && brief.radiusKm > 0 ? `${brief.radiusKm}km` : null,
+        brief.deviceTargeting === "mobile" ? "mobile" : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
       dryRunBlock =
         `\n\n--- Aperçu création (dry_run, rien créé) ---\n` +
-        `Nom: ${name} | Budget/j: ${brief.dailyBudget} | Pays: ${(brief.countries ?? ["FR"]).join(",")} | Objectif: ${meta.label}\n` +
+        `Nom: ${name} | Budget/j: ${brief.dailyBudget} | Zone: ${zoneLabel} | Objectif: ${meta.label}\n` +
         `${JSON.stringify(preview).slice(0, 400)}\n` +
         `Si OK, l'utilisateur doit répondre exactement : « oui crée en pause ».`;
     } catch (e) {
@@ -630,7 +798,7 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
   const system =
     `${prompt}\n\n--- Contexte du compte (source de vérité) ---\n${orgContext}${liveData}${skillBlock}${dryRunBlock}\n\n` +
     `Tâche : tu es en mode BRIEF CAMPAGNE. Utilise les campagnes déjà présentes pour conseiller (ne pas tout recréer bêtement). ` +
-    `Si le brief est incomplet, demande UNE seule info manquante. ` +
+    `Si le brief est incomplet, demande UNE seule info manquante — après le pays : ville/quartier, puis rayon si local, puis mobile vs tous appareils, puis budget. ` +
     `Si un aperçu dry_run est présent, résume-le clairement et demande confirmation « oui crée en pause ». ` +
     `Quand tu proposes 2–5 choix, formate-les en lignes « → **Label** (détail) » — l'UI les transforme en boutons. ` +
     `Ne prétends JAMAIS avoir créé ou activé une campagne si ce n'est pas dans le contexte outil.`;

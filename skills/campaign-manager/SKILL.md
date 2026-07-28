@@ -1,19 +1,27 @@
 ---
 name: campaign-manager
-description: Launch and structure campaigns across connected platforms under Orkestria policy.
+description: Launch Meta campaigns with precise geo (city/quartier), paused-first, media-buyer SOP.
 ---
 
 # Campaign manager
 
 ## Steps
 
-1. `validate_setup` — confirm connections + maturity
-2. `research_competitor_ads` — spy Ad Library before creative (useproxy)
-3. `create_media_plan` — allocate budget from 30-day perf
-4. Meta: `launch_meta_brief` (adkit-mcp) → dry_run → `activate_meta_campaign` when approved
-5. Google: `create_search_campaign` / `create_pmax_campaign` (AdLoop self-hosted on server)
-6. Writes: dry_run=true then dry_run=false
+1. `validate_setup` — Meta OAuth + Page Facebook
+2. Clarifier **objectif** (Trafic / Prospects / Ventes / Messages WhatsApp|Messenger)
+3. Clarifier **géo précise** — pas seulement le pays :
+   - Ville (ex. Abidjan, Dakar, Paris)
+   - Quartier / zone si service local (Cocody, Plateau, Marcory…)
+   - Rayon km si livraison / local
+   - Ou « tout le pays » seulement si national
+4. Budget / jour réaliste pour la taille d'audience
+5. **Appareils** — mobile uniquement si marché mobile-first (CI, SN…) ou service local
+6. Créas (image) ou boost d'un post Page
+7. `create_meta_campaign` dry_run → confirmation « oui crée en pause » → activation explicite
 
 ## Notes
 
-Campaigns stay PAUSED until the owner confirms. Meta via [adkit](https://github.com/jatinjain25/adkit). Google via [AdLoop self-hosted](https://docs.getadloop.com/quickstart/self-hosted).
+- Campagnes toujours **PAUSED** jusqu'à validation.
+- Messages Ads = destination WhatsApp ou Messenger (pas WhatsApp Business API envoi).
+- Ciblage Meta : préférer `cities` / radius via recherche géo plutôt qu'un pays entier pour un commerce local.
+- Une seule régie connectée → rester dessus.

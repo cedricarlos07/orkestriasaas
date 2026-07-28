@@ -39,9 +39,21 @@ const RULES: Rule[] = [
   },
   {
     skillSuffix: "meta-ads/launch/launch-verifier",
-    patterns: [/lancer|campagne|launch|budget|cr[eé]er/i],
+    patterns: [/lancer|campagne|launch|budget|cr[eé]er|messages?\s*whatsapp|messenger/i],
     platforms: ["meta_ads"],
     localFallback: "campaign-manager",
+  },
+  {
+    skillSuffix: "meta-ads/launch/campaign-structure-reviewer",
+    patterns: [/cibl|audience|geo|ville|quartier|pays|zone|rayon|targeting|int[eé]r[eê]t/i],
+    platforms: ["meta_ads"],
+    localFallback: "campaign-manager",
+  },
+  {
+    skillSuffix: "meta-ads/launch/bid-strategy-selector",
+    patterns: [/ench[eè]re|bid|budget\s*\/\s*j|lowest cost|cost cap/i],
+    platforms: ["meta_ads"],
+    localFallback: "budget-optimizer",
   },
   {
     skillSuffix: "google-lsa/diagnostics/lead-quality-auditor",
@@ -83,10 +95,11 @@ function loadLocalSkill(id: string): MediaBuyingSkill | null {
       `Purpose: ${desc}`,
       steps && `Workflow:\n${steps.slice(0, 700)}`,
       "Cite toujours nom + id du compte et nom de la Page. Langage simple, expert media buyer.",
+      "Ciblage : demander ville / quartier / rayon quand le business est local — pas seulement le pays.",
     ]
       .filter(Boolean)
       .join("\n\n")
-      .slice(0, 1000),
+      .slice(0, 1200),
     fullMarkdown: raw,
   };
 }
@@ -107,6 +120,13 @@ export function matchMediaSkill(
       const local = loadLocalSkill(rule.localFallback);
       if (local) return local;
     }
+  }
+
+  if (connected.has("meta_ads") && /campagne|lancer|pub|ads|meta|facebook|instagram|messages?/i.test(t)) {
+    return (
+      getMediaBuyingSkill("meta-ads/launch/launch-verifier") ??
+      loadLocalSkill("campaign-manager")
+    );
   }
 
   if (connected.has("meta_ads") && /pub|ads|meta|facebook|instagram|compte|page/i.test(t)) {
