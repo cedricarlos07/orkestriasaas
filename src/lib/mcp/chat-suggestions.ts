@@ -102,6 +102,11 @@ export function campaignNextSuggestions(brief: BriefLike): ChatSuggestion[] {
       { label: "Sénégal", value: "pays Sénégal" },
       { label: "Maroc", value: "pays Maroc" },
       { label: "Belgique", value: "pays Belgique" },
+      { label: "Canada", value: "pays Canada" },
+      {
+        label: "Autre · je décris pays + ville",
+        value: "pays ",
+      },
     ];
   }
 
@@ -112,10 +117,15 @@ export function campaignNextSuggestions(brief: BriefLike): ChatSuggestion[] {
   if (needsCity) {
     const primary = brief.countries[0]!;
     const cities = CITIES_BY_COUNTRY[primary] ?? [
-      { label: "Préciser une ville", value: "ville " },
       { label: "Tout le pays", value: "ciblage pays entier" },
     ];
-    return cities;
+    return [
+      ...cities,
+      {
+        label: "Je décris ma zone (ville / quartier)",
+        value: "ville ",
+      },
+    ];
   }
 
   // Radius when we have a city/quartier (local delivery / services)
@@ -129,6 +139,7 @@ export function campaignNextSuggestions(brief: BriefLike): ChatSuggestion[] {
       { label: "Rayon 15 km", value: "rayon 15 km" },
       { label: "Rayon 25 km", value: "rayon 25 km" },
       { label: "Toute la ville (sans rayon)", value: "rayon ville entière" },
+      { label: "Autre rayon…", value: "rayon " },
     ];
   }
 

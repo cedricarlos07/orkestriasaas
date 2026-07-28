@@ -143,6 +143,12 @@ type CampaignWizardState = {
   businessCustom: string;
   objective: CampaignObjective | null;
   countries: string[];
+  /** country = tout le pays ; city = ville/quartier + rayon optionnel */
+  geoScope: "country" | "city";
+  /** Ville, quartier ou zone libre (ex. Cocody, Abidjan) */
+  cityText: string;
+  /** null = non précisé ; 0 = ville entière */
+  radiusKm: number | null;
   dailyBudget: number | null;
   detail: string;
   images: { preview: string; dataUrl: string; name: string }[];
@@ -174,6 +180,7 @@ const COUNTRY_OPTIONS: { code: string; label: string }[] = [
 ];
 
 const BUDGET_CHIPS = [10, 15, 25, 50, 100];
+const RADIUS_CHIPS = [5, 10, 15, 25, 40];
 
 function emptyCampaignWizard(): CampaignWizardState {
   return {
@@ -181,6 +188,9 @@ function emptyCampaignWizard(): CampaignWizardState {
     businessCustom: "",
     objective: null,
     countries: [],
+    geoScope: "city",
+    cityText: "",
+    radiusKm: null,
     dailyBudget: null,
     detail: "",
     images: [],
@@ -198,11 +208,27 @@ function composeCampaignWizardBrief(w: CampaignWizardState): string {
     .join(", ");
   const countryCodes = w.countries.join(" ");
   const budget = w.dailyBudget && w.dailyBudget > 0 ? `${w.dailyBudget}/j` : "";
+
+  let zone: string | null = null;
+  if (w.geoScope === "country" && countryNames) {
+    zone = `ciblage pays entier (${countryNames})`;
+  } else if (w.cityText.trim()) {
+    const city = w.cityText.trim();
+    const radius =
+      typeof w.radiusKm === "number"
+        ? w.radiusKm === 0
+          ? "ville entière (sans rayon)"
+          : `rayon ${w.radiusKm} km`
+        : null;
+    zone = [`ville ${city}`, radius].filter(Boolean).join(", ");
+  }
+
   const parts = [
     `Je veux lancer une campagne Meta`,
     `type d'offre : ${biz}`,
     obj ? `objectif ${obj.brief}` : null,
     countryNames ? `pays ${countryNames} ${countryCodes}` : null,
+    zone,
     budget ? `budget ${budget}` : null,
     w.detail.trim() ? w.detail.trim() : null,
     w.images.length ? `${w.images.length} image(s) jointe(s) pour la créa` : null,
@@ -718,7 +744,15 @@ function OrkestriaPage() {
                         m.role === "agent" &&
                         m.suggestions?.length &&
                         lastSuggest?.id === m.id
-                          ? (value) => send(value)
+                          ? (value) => {
+                              // Prefill composer when the chip is a prompt to type (ville / rayon / pays…)
+                              if (/\s$/.test(value) || /^(pays|ville|rayon)\s*$/i.test(value.trim())) {
+                                setInput(value);
+                                setTimeout(() => inputRef.current?.focus(), 30);
+                                return;
+                              }
+                              send(value);
+                            }
                           : undefined
                       }
                     />
@@ -1498,7 +1532,7 @@ function CampaignWizardModal({
   const titles = [
     "Quel type d'offre veux-tu promouvoir ?",
     "Quel objectif Meta ?",
-    "Pays et budget / jour",
+    "Zone, pays et budget / jour",
     "Joindre les créas (images)",
     "Récapitulatif",
   ];
@@ -1511,6 +1545,10 @@ function CampaignWizardModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onCancel]);
 
+  const geoOk =
+    wizard.countries.length > 0 &&
+    (wizard.geoScope === "country" || wizard.cityText.trim().length >= 2);
+
   const stepValid =
     step === 0
       ? Boolean(
@@ -1520,7 +1558,7 @@ function CampaignWizardModal({
       : step === 1
         ? Boolean(wizard.objective)
         : step === 2
-          ? wizard.countries.length > 0 &&
+          ? geoOk &&
             typeof wizard.dailyBudget === "number" &&
             wizard.dailyBudget > 0
           : true;
@@ -1652,7 +1690,7 @@ function CampaignWizardModal({
           {step === 2 && (
             <div className="space-y-4 px-2">
               <div>
-                <p className="mb-2 text-[12px] font-semibold text-ink">Pays cibles</p>
+                <p className="mb-2 text-[12px] font-semibold text-ink">Pays</p>
                 <div className="flex flex-wrap gap-2">
                   {COUNTRY_OPTIONS.map((c) => {
                     const on = wizard.countries.includes(c.code);
@@ -1674,6 +1712,101 @@ function CampaignWizardModal({
                   })}
                 </div>
               </div>
+
+              <div>
+                <p className="mb-2 text-[12px] font-semibold text-ink">Ciblage géographique</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setWizard((w) => ({
+                        ...w,
+                        geoScope: "city",
+                        radiusKm: w.radiusKm ?? 15,
+                      }))
+                    }
+                    aria-pressed={wizard.geoScope === "city"}
+                    className={`rounded-xl border px-3 py-2.5 text-left text-[13px] transition ${
+                      wizard.geoScope === "city"
+                        ? "border-[#ffb066] bg-[#fff5ea] text-ink"
+                        : "border-line/70 bg-white text-ink-soft hover:border-[#ffb066] hover:text-ink"
+                    }`}
+                  >
+                    <span className="font-medium text-ink">Ville / quartier + rayon</span>
+                    <span className="mt-0.5 block text-[11px] text-ink-soft">
+                      Ex. Cocody, Abidjan · 15 km
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setWizard((w) => ({
+                        ...w,
+                        geoScope: "country",
+                        cityText: "",
+                        radiusKm: null,
+                      }))
+                    }
+                    aria-pressed={wizard.geoScope === "country"}
+                    className={`rounded-xl border px-3 py-2.5 text-left text-[13px] transition ${
+                      wizard.geoScope === "country"
+                        ? "border-[#ffb066] bg-[#fff5ea] text-ink"
+                        : "border-line/70 bg-white text-ink-soft hover:border-[#ffb066] hover:text-ink"
+                    }`}
+                  >
+                    <span className="font-medium text-ink">Tout le pays</span>
+                    <span className="mt-0.5 block text-[11px] text-ink-soft">
+                      Budget plus dilué — à éviter en local
+                    </span>
+                  </button>
+                </div>
+
+                {wizard.geoScope === "city" && (
+                  <div className="mt-3 space-y-3">
+                    <label className="block text-[12px] font-semibold text-ink">
+                      Ville, quartier ou zone
+                      <input
+                        type="text"
+                        value={wizard.cityText}
+                        onChange={(e) => setWizard((w) => ({ ...w, cityText: e.target.value }))}
+                        placeholder="Ex. : Cocody, Abidjan — ou Dakar Plateau"
+                        className="mt-1.5 w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] font-normal text-ink placeholder:text-ink-soft focus:border-[#ff6c02] focus:outline-none focus:ring-2 focus:ring-[#ff6c02]/25"
+                      />
+                    </label>
+                    <div>
+                      <p className="mb-2 text-[12px] font-semibold text-ink">Rayon</p>
+                      <div className="flex flex-wrap gap-2">
+                        {RADIUS_CHIPS.map((r) => (
+                          <button
+                            key={r}
+                            type="button"
+                            onClick={() => setWizard((w) => ({ ...w, radiusKm: r }))}
+                            className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
+                              wizard.radiusKm === r
+                                ? "bg-gradient-to-br from-[#ff8a2b] to-[#ff5e00] text-white"
+                                : "bg-[#f0ebe3] text-ink-soft hover:text-ink"
+                            }`}
+                          >
+                            {r} km
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setWizard((w) => ({ ...w, radiusKm: 0 }))}
+                          className={`rounded-full px-3 py-1.5 text-[12px] font-medium transition ${
+                            wizard.radiusKm === 0
+                              ? "bg-gradient-to-br from-[#ff8a2b] to-[#ff5e00] text-white"
+                              : "bg-[#f0ebe3] text-ink-soft hover:text-ink"
+                          }`}
+                        >
+                          Ville entière
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div>
                 <p className="mb-2 text-[12px] font-semibold text-ink">Budget journalier</p>
                 <div className="flex flex-wrap gap-2">
@@ -1801,6 +1934,23 @@ function CampaignWizardModal({
                     {wizard.countries
                       .map((c) => COUNTRY_OPTIONS.find((x) => x.code === c)?.label ?? c)
                       .join(", ") || "—"}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-3 p-3">
+                  <dt className="text-ink-soft">Zone</dt>
+                  <dd className="text-right font-medium text-ink">
+                    {wizard.geoScope === "country"
+                      ? "Tout le pays"
+                      : [
+                          wizard.cityText.trim() || "—",
+                          typeof wizard.radiusKm === "number"
+                            ? wizard.radiusKm === 0
+                              ? "ville entière"
+                              : `${wizard.radiusKm} km`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-3 p-3">
