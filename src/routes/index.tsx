@@ -673,8 +673,8 @@ function Hero() {
               placeholder="Ex : je veux 100 nouvelles commandes ce mois-ci…"
             />
           </div>
-          <div className="flex items-center justify-between gap-3 px-2 pb-1 pt-1">
-            <div className="flex min-w-0 items-center gap-2">
+          <div className="flex flex-col gap-2 px-2 pb-1 pt-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <input
                 ref={fileRef}
                 type="file"
@@ -688,18 +688,26 @@ function Hero() {
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="chip-ghost"
+                className="chip-ghost max-w-full min-w-0 !justify-start"
+                aria-label={photoName ? "Changer la créa pub" : "Ajouter une créa pub"}
               >
-                <Paperclip className="h-4 w-4" />
-                {photoName ? "Changer la photo" : "Ajouter une photo"}
+                <Paperclip className="h-4 w-4 shrink-0" aria-hidden />
+                <span className="truncate">
+                  {photoName ? "Changer la créa pub" : "Ajouter une créa pub"}
+                </span>
               </button>
               {photoName && (
-                <span className="truncate text-[12px] text-ink-soft" title={photoName}>
+                <span className="hidden min-w-0 truncate text-[12px] text-ink-soft sm:inline" title={photoName}>
                   {photoName}
                 </span>
               )}
             </div>
-            <button type="submit" className="btn-primary shrink-0">
+            {photoName && (
+              <p className="truncate px-1 text-[12px] text-ink-soft sm:hidden" title={photoName}>
+                {photoName}
+              </p>
+            )}
+            <button type="submit" className="btn-primary w-full shrink-0 sm:w-auto">
               Trouver mes clients
               <ArrowUp className="h-4 w-4" />
             </button>
