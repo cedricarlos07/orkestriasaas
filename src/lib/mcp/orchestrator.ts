@@ -38,6 +38,8 @@ export type OrchestratorOutput = {
   auditSummary?: AuditSummary;
   runId?: string;
   matchedMediaSkill?: string;
+  /** Clickable reply chips shown under the agent bubble (ChatGPT-style). */
+  suggestions?: Array<{ label: string; value: string }>;
 };
 
 function detectIntent(
@@ -170,8 +172,9 @@ function extractBrandFromMessage(message: string): string | null {
 type CampaignBrief = {
   name?: string;
   objective?: "traffic" | "leads" | "sales" | "messages";
-  /** Meta destination for Messages Ads */
+  /** Meta destination for Messages Ads — undefined until user picks */
   channel?: "website" | "whatsapp" | "messenger";
+  channelPending?: boolean;
   dailyBudget?: number;
   countries?: string[];
   linkUrl?: string;
@@ -208,23 +211,30 @@ function parseCampaignBrief(message: string, history?: OrchestratorTurn[]): Camp
 
   const budget =
     blob.match(/(\d+[.,]?\d*)\s*(?:€|eur|usd|\$)?\s*(?:\/\s*j(?:our)?|par\s*jour|daily)/i) ||
-    blob.match(/budget\s*(?:journalier|daily)?\s*[:=]?\s*(\d+[.,]?\d*)/i);
+    blob.match(/budget\s*(?:journalier|daily)?\s*[:=]?\s*(\d+[.,]?\d*)/i) ||
+    blob.match(/\b(\d+[.,]?\d*)\s*(?:€|eur|usd|\$)\b/i);
   if (budget?.[1]) brief.dailyBudget = Number(budget[1].replace(",", "."));
 
-  // Messages Ads before leads/traffic — WhatsApp/Messenger are live Meta destinations
-  if (
-    /whats?\s*app|messenger|messages?\s*(ads|meta)?|click[\s-]?to[\s-]?(whatsapp|message)|conversations?\s+(whats|meta|messenger)/i.test(
+  const hasWhatsApp = /whats?\s*app/i.test(lower);
+  const hasMessenger = /messenger/i.test(lower);
+  const hasMessages =
+    /messages?\s*(ads|meta)?|click[\s-]?to[\s-]?(whatsapp|message)|conversations?\s+(whats|meta|messenger)|\bmessages?\b/i.test(
       lower,
-    ) && !/wa\.me|api\.whatsapp|business\s+api|envoi\s+auto/i.test(lower)
-  ) {
+    ) && !/wa\.me|api\.whatsapp|business\s+api|envoi\s+auto/i.test(lower);
+
+  if (hasWhatsApp || hasMessenger || hasMessages) {
     brief.objective = "messages";
-    brief.channel = /messenger/i.test(lower) && !/whats?\s*app/i.test(lower) ? "messenger" : "whatsapp";
+    if (hasWhatsApp && !hasMessenger) brief.channel = "whatsapp";
+    else if (hasMessenger && !hasWhatsApp) brief.channel = "messenger";
+    else if (hasWhatsApp && hasMessenger) brief.channel = "whatsapp";
+    else brief.channelPending = true; // "Messages" alone — ask with buttons
   } else if (/lead|prospect|formulaire/.test(lower)) brief.objective = "leads";
   else if (/achat|vente|purchase|conversion|catalogue/.test(lower)) brief.objective = "sales";
   else if (/trafic|traffic|visite|clics?/.test(lower)) brief.objective = "traffic";
 
-  if (/messenger/i.test(lower) && brief.objective === "messages") brief.channel = "messenger";
-  if (/whats?\s*app/i.test(lower) && brief.objective === "messages") brief.channel = "whatsapp";
+  if (hasMessenger && brief.objective === "messages") brief.channel = "messenger";
+  if (hasWhatsApp && brief.objective === "messages") brief.channel = "whatsapp";
+  if (brief.channel) brief.channelPending = false;
 
   const countries: string[] = [];
   if (/\b(france|français|fr)\b/i.test(blob)) countries.push("FR");
@@ -232,9 +242,15 @@ function parseCampaignBrief(message: string, history?: OrchestratorTurn[]): Camp
   if (/\b(suisse|ch)\b/i.test(blob)) countries.push("CH");
   if (/\b(canada|ca)\b/i.test(blob)) countries.push("CA");
   if (/\b(usa|états-unis|etats-unis|us)\b/i.test(blob)) countries.push("US");
-  if (/\b(côte\s*d['']?ivoire|cote\s*d['']?ivoire|ivory\s*coast|\bci\b)/i.test(blob)) countries.push("CI");
-  if (/\b(sénégal|senegal|\bsn\b)/i.test(blob)) countries.push("SN");
-  if (/\b(maroc|\bma\b)/i.test(blob)) countries.push("MA");
+  if (
+    /\b(côte\s*d['']?ivoire|cote\s*d['']?ivoire|ivory\s*coast|\bci\b|abidjan|yamoussoukro)\b/i.test(
+      blob,
+    )
+  ) {
+    countries.push("CI");
+  }
+  if (/\b(sénégal|senegal|\bsn\b|dakar)\b/i.test(blob)) countries.push("SN");
+  if (/\b(maroc|\bma\b|casablanca|rabat)\b/i.test(blob)) countries.push("MA");
   if (countries.length) brief.countries = [...new Set(countries)];
 
   const url = blob.match(/https?:\/\/[^\s)>\]]+/i);
@@ -354,6 +370,11 @@ function chatToolCtx(orgId: string, userId: string) {
 
 async function handleCampaignIntent(input: OrchestratorInput): Promise<OrchestratorOutput> {
   const { getStackSetupStatus } = await import("@/lib/mcp/setup-status");
+  const {
+    campaignNextSuggestions,
+    extractSuggestionsFromReply,
+    mergeSuggestions,
+  } = await import("@/lib/mcp/chat-suggestions");
   const stack = await getStackSetupStatus(input.orgId);
   if (!stack.readyForMeta && !stack.readyForCampaign) {
     const steps = stack.missingSteps.length
@@ -371,11 +392,60 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
   const { invokeAgentTool } = await import("@/lib/mcp/agent-tools");
   const ctx = chatToolCtx(input.orgId, input.userId);
 
+  // Guided buttons: ask ONE missing field before creating / calling the LLM
+  const guided = campaignNextSuggestions(brief);
+  const needsChannel =
+    brief.objective === "messages" && (brief.channelPending || !brief.channel);
+  const briefIncomplete =
+    !brief.objective ||
+    needsChannel ||
+    !brief.countries?.length ||
+    !(typeof brief.dailyBudget === "number" && brief.dailyBudget > 0);
+
+  if (briefIncomplete && guided.length && !brief.confirmCreate) {
+    const acc =
+      stack.meta.accountName && stack.meta.account
+        ? `« ${stack.meta.accountName} » (${stack.meta.account})`
+        : stack.meta.account
+          ? stack.meta.account
+          : "votre compte Meta";
+    const page =
+      stack.meta.pageName && stack.meta.pageId
+        ? `« ${stack.meta.pageName} »`
+        : stack.meta.pageId
+          ? stack.meta.pageId
+          : "votre Page";
+
+    let question = "Que voulez-vous optimiser ?";
+    if (!brief.objective) question = "Quel **objectif** Meta pour cette campagne ?";
+    else if (needsChannel) question = "Quel **canal** voulez-vous utiliser pour recevoir les messages ?";
+    else if (!brief.countries?.length) question = "Dans quel **pays** cibler ?";
+    else if (!(typeof brief.dailyBudget === "number" && brief.dailyBudget > 0))
+      question = "Quel **budget** par jour ?";
+
+    const lines = [
+      `Compte **${acc}** · Page ${page}.`,
+      brief.objective ? `• Objectif : **${brief.objective === "messages" ? "Messages" : brief.objective}**` : null,
+      brief.dailyBudget ? `• Budget : **${brief.dailyBudget} / jour**` : null,
+      brief.countries?.length ? `• Pays : **${brief.countries.join(", ")}**` : null,
+      "",
+      question,
+    ].filter((x) => x !== null) as string[];
+
+    return {
+      reply: lines.join("\n"),
+      toolsUsed,
+      runId: input.runId,
+      suggestions: guided,
+    };
+  }
+
   const canCreate =
     brief.confirmCreate &&
     typeof brief.dailyBudget === "number" &&
     brief.dailyBudget > 0 &&
-    Boolean(brief.countries?.length || brief.objective);
+    Boolean(brief.countries?.length || brief.objective) &&
+    !(brief.objective === "messages" && (brief.channelPending || !brief.channel));
 
   if (canCreate) {
     try {
@@ -504,14 +574,17 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
         `Sinon : **« sponsoriser un post »** pour booster un post déjà publié sur votre Page.`,
       toolsUsed: [...toolsUsed, "attachment:image"],
       runId: input.runId,
+      suggestions: campaignNextSuggestions(brief),
     };
   }
 
   let dryRunBlock = "";
+  let readyConfirm = false;
   if (
     typeof brief.dailyBudget === "number" &&
     brief.dailyBudget > 0 &&
-    Boolean(brief.countries?.length || brief.objective)
+    Boolean(brief.countries?.length || brief.objective) &&
+    !(brief.objective === "messages" && (brief.channelPending || !brief.channel))
   ) {
     try {
       const meta = metaCreateParams(brief);
@@ -527,6 +600,7 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
         dry_run: true,
       });
       toolsUsed.push("create_meta_campaign:dry_run");
+      readyConfirm = true;
       dryRunBlock =
         `\n\n--- Aperçu création (dry_run, rien créé) ---\n` +
         `Nom: ${name} | Budget/j: ${brief.dailyBudget} | Pays: ${(brief.countries ?? ["FR"]).join(",")} | Objectif: ${meta.label}\n` +
@@ -558,6 +632,7 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
     `Tâche : tu es en mode BRIEF CAMPAGNE. Utilise les campagnes déjà présentes pour conseiller (ne pas tout recréer bêtement). ` +
     `Si le brief est incomplet, demande UNE seule info manquante. ` +
     `Si un aperçu dry_run est présent, résume-le clairement et demande confirmation « oui crée en pause ». ` +
+    `Quand tu proposes 2–5 choix, formate-les en lignes « → **Label** (détail) » — l'UI les transforme en boutons. ` +
     `Ne prétends JAMAIS avoir créé ou activé une campagne si ce n'est pas dans le contexte outil.`;
 
   const history = (input.history ?? []).slice(-10).map((turn) => ({
@@ -574,11 +649,17 @@ async function handleCampaignIntent(input: OrchestratorInput): Promise<Orchestra
     maxTokens: 700,
   });
 
+  const extracted = extractSuggestionsFromReply(res);
+  const fallback = readyConfirm
+    ? [{ label: "Oui, crée en pause", value: "oui crée en pause" }]
+    : campaignNextSuggestions(brief);
+
   return {
-    reply: res,
+    reply: extracted.suggestions.length ? extracted.cleanText : res,
     toolsUsed: mediaSkill ? [...toolsUsed, `media_skill:${mediaSkill.id}`] : toolsUsed,
     runId: input.runId,
     matchedMediaSkill: mediaSkill?.name,
+    suggestions: mergeSuggestions(extracted.suggestions, fallback),
   };
 }
 

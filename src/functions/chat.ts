@@ -156,11 +156,14 @@ export const sendChatMessage = createServerFn({ method: "POST" })
       threadId: data.threadId,
       role: "agent",
       text: orchestrated.reply,
-      tools: orchestrated.toolsUsed.map((name) => ({
-        name,
-        label: name.replace(/_/g, " "),
-        status: "done" as const,
-      })),
+      tools: {
+        calls: orchestrated.toolsUsed.map((name) => ({
+          name,
+          label: name.replace(/_/g, " "),
+          status: "done" as const,
+        })),
+        suggestions: orchestrated.suggestions ?? [],
+      },
       createdAt: new Date(now.getTime() + 500),
     });
 

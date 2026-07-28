@@ -15,11 +15,14 @@ export type ChatToolCall = {
   detail?: string;
 };
 
+export type ChatSuggestion = { label: string; value: string };
+
 export type ChatMsg = {
   id: string;
   role: "user" | "agent";
   text: string;
   tools?: ChatToolCall[];
+  suggestions?: ChatSuggestion[];
   createdAt: number;
 };
 
@@ -30,18 +33,37 @@ export type ChatThread = {
   messages: ChatMsg[];
 };
 
+function mapToolsPayload(raw: unknown): { tools?: ChatToolCall[]; suggestions?: ChatSuggestion[] } {
+  if (!raw) return {};
+  if (Array.isArray(raw)) {
+    return { tools: raw as ChatToolCall[] };
+  }
+  if (typeof raw === "object") {
+    const o = raw as { calls?: ChatToolCall[]; suggestions?: ChatSuggestion[]; tools?: ChatToolCall[] };
+    return {
+      tools: o.calls ?? o.tools,
+      suggestions: o.suggestions?.length ? o.suggestions : undefined,
+    };
+  }
+  return {};
+}
+
 function mapThread(t: Awaited<ReturnType<typeof listThreads>>[number]): ChatThread {
   return {
     id: t.id,
     title: t.title ?? "Nouvelle conversation",
     updatedAt: asMs(t.updatedAt),
-    messages: t.messages.map((m) => ({
-      id: m.id,
-      role: m.role as "user" | "agent",
-      text: m.text,
-      tools: (m.tools as ChatToolCall[] | null) ?? undefined,
-      createdAt: asMs(m.createdAt),
-    })),
+    messages: t.messages.map((m) => {
+      const mapped = mapToolsPayload(m.tools);
+      return {
+        id: m.id,
+        role: m.role as "user" | "agent",
+        text: m.text,
+        tools: mapped.tools,
+        suggestions: mapped.suggestions,
+        createdAt: asMs(m.createdAt),
+      };
+    }),
   };
 }
 
