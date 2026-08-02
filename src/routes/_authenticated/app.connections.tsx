@@ -70,6 +70,8 @@ function Connections() {
   const [accountBusy, setAccountBusy] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [manualPageId, setManualPageId] = useState("");
+  const [pagePickerOpen, setPagePickerOpen] = useState(false);
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false);
 
   const setPageMut = useMutation({
     mutationFn: (pageId: string) => setMetaPage({ data: { pageId } }),
@@ -81,29 +83,72 @@ function Connections() {
 
   const metaOnly = metaAccounts.filter((a) => a.connector === "meta_ads");
 
-  const handleLinkAccount = async (a: (typeof metaAccounts)[0], link: boolean) => {
+  const activeLinkedAccount =
+    linked?.accounts.find((l) =>
+      linked.activeAccountId ? sameMetaActId(linked.activeAccountId, l.accountId) : false,
+    ) ??
+    linked?.accounts[0] ??
+    null;
+
+  const activeAccountLabel =
+    activeLinkedAccount?.accountName ??
+    metaOnly.find((a) =>
+      linked?.activeAccountId ? sameMetaActId(linked.activeAccountId, a.accountId) : false,
+    )?.name ??
+    null;
+
+  const hasPage = Boolean(metaSetup?.pageId);
+  const hasAccount = Boolean(activeLinkedAccount || linked?.activeAccountId);
+  const metaReady = metaLinked && hasPage && hasAccount;
+
+  const showPagePicker = pagePickerOpen || !hasPage;
+  const showAccountPicker = accountPickerOpen || !hasAccount;
+
+  const refreshAccounts = async () => {
+    await Promise.all([
+      refetchLinked(),
+      refetchMetaAccounts(),
+      qc.invalidateQueries({ queryKey: ["dashboard-kpis"] }),
+      qc.invalidateQueries({ queryKey: ["usage-quotas"] }),
+    ]);
+  };
+
+  /** Select account for campaigns; if plan limit is full, replace the previous one. */
+  const handleSelectAccount = async (a: (typeof metaAccounts)[0]) => {
+    const alreadyActive =
+      linked?.activeAccountId && sameMetaActId(linked.activeAccountId, a.accountId);
+    if (alreadyActive) {
+      setAccountPickerOpen(false);
+      return;
+    }
+
     setAccountBusy(a.accountId);
     setAccountError(null);
     try {
-      if (link) {
-        await selectAdAccount({
-          data: {
-            connectionId: a.connectionId,
-            accountId: a.accountId,
-            accountName: a.name,
-            connector: a.connector,
-            link: true,
-          },
-        });
-      } else {
-        await unlinkAdAccount({ data: { accountId: a.accountId } });
+      const alreadyLinked = linked?.accounts.some((l) => sameMetaActId(l.accountId, a.accountId));
+      const atLimit =
+        Boolean(linked) &&
+        linked!.limit >= 0 &&
+        linked!.accounts.length >= linked!.limit &&
+        !alreadyLinked;
+
+      if (atLimit && linked!.accounts.length > 0) {
+        for (const prev of linked!.accounts) {
+          await unlinkAdAccount({ data: { accountId: prev.accountId } });
+        }
       }
-      await Promise.all([
-        refetchLinked(),
-        refetchMetaAccounts(),
-        qc.invalidateQueries({ queryKey: ["dashboard-kpis"] }),
-        qc.invalidateQueries({ queryKey: ["usage-quotas"] }),
-      ]);
+
+      await selectAdAccount({
+        data: {
+          connectionId: a.connectionId,
+          accountId: a.accountId,
+          accountName: a.name,
+          connector: a.connector,
+          link: true,
+        },
+      });
+      await refreshAccounts();
+      setAccountPickerOpen(false);
     } catch (e) {
       setAccountError(e instanceof Error ? e.message : "Impossible de mettre à jour le compte");
     } finally {
@@ -153,6 +198,7 @@ function Connections() {
     setSavingPage(true);
     try {
       await setPageMut.mutateAsync(pageId);
+      setPagePickerOpen(false);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Impossible d'enregistrer la Page.");
     } finally {
@@ -244,39 +290,22 @@ function Connections() {
         <div className="flex items-start gap-3">
           <MetaIcon className="mt-0.5 h-5 w-5 shrink-0" />
           <div className="flex-1 space-y-4">
-            <div>
-              <p className="text-[14px] font-medium text-ink">Meta Ads</p>
-              <p className="text-[12px] text-ink-soft">
-                Connectez Meta, choisissez votre Page Facebook, puis le compte publicitaire à utiliser.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[14px] font-medium text-ink">Meta Ads</p>
+                <p className="text-[12px] text-ink-soft">
+                  Facebook & Instagram — Page + compte pour lancer vos campagnes.
+                </p>
+              </div>
               {metaLinked ? (
-                <>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[12px] font-medium text-emerald-700">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Connecté
-                  </span>
-                  {metaPageLabel ? (
-                    <span className="text-[12px] text-ink-soft">Page · {metaPageLabel}</span>
-                  ) : metaFetching ? (
-                    <span className="inline-flex items-center gap-1 text-[12px] text-ink-soft">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement des Pages…
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[12px] text-amber-700">
-                      <AlertCircle className="h-3.5 w-3.5" />
-                      Choisissez une Page ci-dessous
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    className="chip-ghost text-[12px]"
-                    disabled={disconnecting}
-                    onClick={() => void handleDisconnectMeta()}
-                  >
-                    {disconnecting ? "Déconnexion…" : "Déconnecter"}
-                  </button>
-                </>
+                <button
+                  type="button"
+                  className="chip-ghost text-[12px]"
+                  disabled={disconnecting}
+                  onClick={() => void handleDisconnectMeta()}
+                >
+                  {disconnecting ? "Déconnexion…" : "Déconnecter"}
+                </button>
               ) : (
                 <button type="button" className="btn-primary text-[13px]" onClick={() => void connect("meta_ads")}>
                   Connecter Meta
@@ -285,155 +314,227 @@ function Connections() {
             </div>
 
             {metaLinked && (
-              <div className="space-y-2 border-t border-line/50 pt-3">
-                <p className="text-[12px] font-medium text-ink">1 · Page Facebook pour les publicités</p>
-                <p className="text-[12px] text-ink-soft">Sélectionnez la Page qui apparaîtra sur vos annonces.</p>
-                {metaFetching && !metaSetup ? (
-                  <p className="flex items-center gap-2 text-[12px] text-ink-soft">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement des Pages…
-                  </p>
-                ) : (metaSetup?.availablePages?.length ?? 0) > 0 ? (
-                  <div className="overflow-hidden rounded-xl border border-line/60">
-                    {metaSetup!.availablePages.map((p) => {
-                      const selected = sameMetaPageId(metaSetup?.pageId, p.id);
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          disabled={savingPage || setPageMut.isPending}
-                          onClick={() => void handleSelectPage(p.id)}
-                          className={`flex w-full items-center justify-between gap-3 border-b border-line/50 px-3 py-2.5 text-left last:border-b-0 ${
-                            selected ? "bg-[#fff5ea]" : "bg-white hover:bg-surface-2/60"
-                          }`}
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-[13px] font-medium text-ink">{p.name}</p>
-                            <p className="text-[11px] text-ink-soft">ID {p.id}</p>
-                          </div>
-                          <span
-                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
-                              selected
-                                ? "border-[#ff6c02] bg-gradient-to-b from-[#ff9040] to-[#e55a00] text-white"
-                                : "border-line bg-white"
-                            }`}
-                          >
-                            {selected ? <Check className="h-3 w-3" /> : null}
-                          </span>
-                        </button>
-                      );
-                    })}
+              <>
+                <div
+                  className={`rounded-xl px-3.5 py-3 ${
+                    metaReady
+                      ? "border border-emerald-200/80 bg-emerald-50/70"
+                      : "border border-amber-200/80 bg-amber-50/60"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    {metaReady ? (
+                      <span className="inline-flex items-center gap-1 text-[13px] font-medium text-emerald-800">
+                        <CheckCircle2 className="h-4 w-4" /> Prêt pour les campagnes
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[13px] font-medium text-amber-900">
+                        <AlertCircle className="h-4 w-4" /> Presque prêt
+                      </span>
+                    )}
                   </div>
-                ) : (
-                  <div className="space-y-2 rounded-xl border border-amber-200/80 bg-amber-50/50 px-3 py-3">
-                    <p className="text-[12px] text-amber-900">
-                      Aucune Page listée automatiquement. Collez l’ID de votre Page Facebook (chiffres uniquement).
+                  {metaReady ? (
+                    <p className="mt-1 text-[12px] text-emerald-900/80">
+                      Page · {metaPageLabel}
+                      {activeAccountLabel ? ` · Compte · ${activeAccountLabel}` : ""}
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      <input
-                        value={manualPageId}
-                        onChange={(e) => setManualPageId(e.target.value)}
-                        placeholder="Ex. 123456789012345"
-                        className="min-w-[200px] flex-1 rounded-lg border border-line bg-white px-3 py-2 text-[13px] text-ink outline-none focus:border-[#ff6c02]"
-                      />
+                  ) : (
+                    <p className="mt-1 text-[12px] text-amber-900/90">
+                      {!hasPage
+                        ? "Choisissez la Page qui apparaîtra sur vos pubs."
+                        : "Choisissez le compte qui paie les campagnes."}
+                    </p>
+                  )}
+                </div>
+
+                {/* Page picker */}
+                <div className="space-y-2 border-t border-line/50 pt-3">
+                  <p className="text-[12px] font-medium text-ink">Page qui apparaît sur vos pubs</p>
+                  {metaFetching && !metaSetup ? (
+                    <p className="flex items-center gap-2 text-[12px] text-ink-soft">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement des Pages…
+                    </p>
+                  ) : hasPage && !showPagePicker ? (
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-line/60 bg-surface-2/40 px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-medium text-ink">{metaPageLabel}</p>
+                      </div>
                       <button
                         type="button"
-                        className="btn-primary text-[12px]"
-                        disabled={savingPage || !manualPageId.trim()}
-                        onClick={() => void handleSelectPage(manualPageId.trim())}
+                        className="chip-ghost shrink-0 text-[12px]"
+                        onClick={() => setPagePickerOpen(true)}
                       >
-                        {savingPage ? "Enregistrement…" : "Utiliser cette Page"}
+                        Changer
                       </button>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {metaLinked && (
-              <div className="space-y-2 border-t border-line/50 pt-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-[12px] font-medium text-ink">2 · Compte publicitaire Meta</p>
-                  <span className="text-[11px] text-ink-soft">
-                    {linked?.accounts.length ?? 0}
-                    {linked && linked.limit >= 0 ? ` / ${linked.limit}` : ""} liés
-                  </span>
-                </div>
-                <p className="text-[12px] text-ink-soft">
-                  Cochez le compte à rattacher (limite de votre plan). Le compte actif sert aux campagnes.
-                </p>
-                {accountError && (
-                  <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
-                    {/plan|quota|limite|upgrade|supérieur/i.test(accountError) ? (
-                      <>
-                        {accountError}{" "}
-                        <Link to="/app/settings" className="font-medium underline">
-                          Passer au plan supérieur
-                        </Link>
-                      </>
-                    ) : /Failed query|column|does not exist/i.test(accountError) ? (
-                      "Erreur technique temporaire — rechargez la page. Si ça continue, contactez le support."
-                    ) : (
-                      accountError
-                    )}
-                  </p>
-                )}
-                {metaAccountsLoading ? (
-                  <p className="flex items-center gap-2 text-[12px] text-ink-soft">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement des comptes…
-                  </p>
-                ) : metaOnly.length === 0 ? (
-                  <p className="text-[12px] text-ink-soft">Aucun compte Meta visible avec ce token OAuth.</p>
-                ) : (
-                  <div className="overflow-hidden rounded-xl border border-line/60">
-                    {metaOnly.map((a) => {
-                      const isLinked = linked?.accounts.some((l) => sameMetaActId(l.accountId, a.accountId));
-                      const isActive = linked?.activeAccountId
-                        ? sameMetaActId(linked.activeAccountId, a.accountId)
-                        : false;
-                      const atLimit =
-                        linked &&
-                        linked.limit >= 0 &&
-                        linked.accounts.length >= linked.limit &&
-                        !isLinked;
-                      return (
-                        <button
-                          key={a.id}
-                          type="button"
-                          disabled={accountBusy === a.accountId || Boolean(atLimit && !isLinked)}
-                          title={atLimit ? "Limite du plan atteinte" : undefined}
-                          onClick={() => void handleLinkAccount(a, !isLinked)}
-                          className={`flex w-full items-center justify-between gap-3 border-b border-line/50 px-3 py-2.5 text-left last:border-b-0 disabled:opacity-50 ${
-                            isLinked ? "bg-[#fff5ea]" : "bg-white hover:bg-surface-2/60"
-                          }`}
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-[13px] font-medium text-ink">{a.name}</p>
-                            <p className="text-[11px] text-ink-soft">
-                              {a.masked} · {a.currency}
-                              {isActive ? " · actif" : ""}
-                            </p>
-                          </div>
-                          <span className="flex items-center gap-2">
-                            {accountBusy === a.accountId ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-ink-soft" />
-                            ) : (
+                  ) : (metaSetup?.availablePages?.length ?? 0) > 0 ? (
+                    <div className="space-y-2">
+                      <div className="overflow-hidden rounded-xl border border-line/60">
+                        {metaSetup!.availablePages.map((p) => {
+                          const selected = sameMetaPageId(metaSetup?.pageId, p.id);
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              disabled={savingPage || setPageMut.isPending}
+                              onClick={() => void handleSelectPage(p.id)}
+                              className={`flex w-full items-center justify-between gap-3 border-b border-line/50 px-3 py-2.5 text-left last:border-b-0 ${
+                                selected ? "bg-[#fff5ea]" : "bg-white hover:bg-surface-2/60"
+                              }`}
+                            >
+                              <p className="truncate text-[13px] font-medium text-ink">{p.name}</p>
                               <span
-                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
-                                  isLinked
+                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                                  selected
                                     ? "border-[#ff6c02] bg-gradient-to-b from-[#ff9040] to-[#e55a00] text-white"
                                     : "border-line bg-white"
                                 }`}
                               >
-                                {isLinked ? <Check className="h-3.5 w-3.5" /> : null}
+                                {selected ? <Check className="h-3 w-3" /> : null}
                               </span>
-                            )}
-                          </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {hasPage ? (
+                        <button
+                          type="button"
+                          className="text-[12px] text-ink-soft underline-offset-2 hover:underline"
+                          onClick={() => setPagePickerOpen(false)}
+                        >
+                          Annuler
                         </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="space-y-2 rounded-xl border border-amber-200/80 bg-amber-50/50 px-3 py-3">
+                      <p className="text-[12px] text-amber-900">
+                        Aucune Page listée. Collez l’ID de votre Page Facebook (chiffres uniquement).
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <input
+                          value={manualPageId}
+                          onChange={(e) => setManualPageId(e.target.value)}
+                          placeholder="Ex. 123456789012345"
+                          className="min-w-[200px] flex-1 rounded-lg border border-line bg-white px-3 py-2 text-[13px] text-ink outline-none focus:border-[#ff6c02]"
+                        />
+                        <button
+                          type="button"
+                          className="btn-primary text-[12px]"
+                          disabled={savingPage || !manualPageId.trim()}
+                          onClick={() => void handleSelectPage(manualPageId.trim())}
+                        >
+                          {savingPage ? "Enregistrement…" : "Utiliser cette Page"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Account picker */}
+                <div className="space-y-2 border-t border-line/50 pt-3">
+                  <p className="text-[12px] font-medium text-ink">Compte qui paie les campagnes</p>
+                  {accountError && (
+                    <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+                      {/plan|quota|limite|upgrade|supérieur/i.test(accountError) ? (
+                        <>
+                          {accountError}{" "}
+                          <Link to="/app/settings" className="font-medium underline">
+                            Passer au plan supérieur
+                          </Link>
+                        </>
+                      ) : /Failed query|column|does not exist/i.test(accountError) ? (
+                        "Erreur technique temporaire — rechargez la page. Si ça continue, contactez le support."
+                      ) : (
+                        accountError
+                      )}
+                    </p>
+                  )}
+                  {metaAccountsLoading ? (
+                    <p className="flex items-center gap-2 text-[12px] text-ink-soft">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Chargement des comptes…
+                    </p>
+                  ) : metaOnly.length === 0 ? (
+                    <p className="text-[12px] text-ink-soft">Aucun compte Meta visible avec cette connexion.</p>
+                  ) : hasAccount && !showAccountPicker ? (
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-line/60 bg-surface-2/40 px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-medium text-ink">
+                          {activeAccountLabel ?? "Compte sélectionné"}
+                        </p>
+                        <p className="text-[11px] text-ink-soft">En cours</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="chip-ghost shrink-0 text-[12px]"
+                        onClick={() => setAccountPickerOpen(true)}
+                      >
+                        Changer
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="overflow-hidden rounded-xl border border-line/60">
+                        {metaOnly.map((a) => {
+                          const isActive = linked?.activeAccountId
+                            ? sameMetaActId(linked.activeAccountId, a.accountId)
+                            : false;
+                          return (
+                            <button
+                              key={a.id}
+                              type="button"
+                              disabled={accountBusy === a.accountId || Boolean(accountBusy)}
+                              onClick={() => void handleSelectAccount(a)}
+                              className={`flex w-full items-center justify-between gap-3 border-b border-line/50 px-3 py-2.5 text-left last:border-b-0 disabled:opacity-50 ${
+                                isActive ? "bg-[#fff5ea]" : "bg-white hover:bg-surface-2/60"
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-[13px] font-medium text-ink">{a.name}</p>
+                                <p className="text-[11px] text-ink-soft">{a.currency}</p>
+                              </div>
+                              <span className="flex shrink-0 items-center gap-2">
+                                {accountBusy === a.accountId ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-ink-soft" />
+                                ) : isActive ? (
+                                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                                    En cours
+                                  </span>
+                                ) : (
+                                  <span className="text-[12px] font-medium text-[#e55a00]">Utiliser</span>
+                                )}
+                                <span
+                                  className={`flex h-5 w-5 items-center justify-center rounded-full border ${
+                                    isActive
+                                      ? "border-[#ff6c02] bg-gradient-to-b from-[#ff9040] to-[#e55a00] text-white"
+                                      : "border-line bg-white"
+                                  }`}
+                                >
+                                  {isActive ? <Check className="h-3 w-3" /> : null}
+                                </span>
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {linked && linked.limit >= 0 && linked.limit <= 1 ? (
+                        <p className="text-[11px] text-ink-soft">
+                          Votre plan permet 1 compte. En choisir un autre remplace le précédent.
+                        </p>
+                      ) : null}
+                      {hasAccount ? (
+                        <button
+                          type="button"
+                          className="text-[12px] text-ink-soft underline-offset-2 hover:underline"
+                          onClick={() => setAccountPickerOpen(false)}
+                        >
+                          Annuler
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>
