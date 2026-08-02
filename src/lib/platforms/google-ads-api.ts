@@ -14,7 +14,11 @@ function headers(accessToken: string, loginCustomerId?: string): Record<string, 
     "developer-token": requireEnv("GOOGLE_ADS_DEVELOPER_TOKEN"),
     "Content-Type": "application/json",
   };
-  if (loginCustomerId) h["login-customer-id"] = loginCustomerId.replace(/\D/g, "");
+  const mcc =
+    loginCustomerId?.replace(/\D/g, "") ||
+    process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID?.replace(/\D/g, "") ||
+    "";
+  if (mcc) h["login-customer-id"] = mcc;
   return h;
 }
 
@@ -362,6 +366,7 @@ export async function createGoogleCampaignPaused(
         assetGroupId,
         headlines,
         descriptions,
+        upstream: "orkestria",
         note: assetGroupId
           ? "PMax créée en PAUSE avec asset group textuel minimal"
           : "PMax créée en PAUSE — asset group à compléter dans Google Ads",
@@ -467,10 +472,14 @@ export async function createGoogleCampaignPaused(
     details: {
       status: "PAUSED",
       type: "search",
+      budgetResource: budgetRn,
       adGroupId,
       adId,
-      keywords: kw.resourceNames.length,
-      note: "Search créée en PAUSE avec ad group, mots-clés et RSA",
+      keywords: kw.resourceNames,
+      upstream: "orkestria",
+      note: adId
+        ? "Search créée en PAUSE avec ad group + RSA"
+        : "Search créée en PAUSE — RSA à compléter dans Google Ads",
       maturity: "production",
     },
   };

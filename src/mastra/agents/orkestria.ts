@@ -3,9 +3,8 @@ import { createOrkestriaMemory } from "@/mastra/memory";
 import { orkestriaPolicyTools } from "@/mastra/tools/policy-tools";
 import { spendGuardProcessor } from "@/mastra/processors/spend-guard";
 import { orkestriaScorers } from "@/mastra/scorers/media-buyer";
-import { createPipeboardMcpClient, isPipeboardConfigured } from "@/mastra/pipeboard-mcp";
 
-const DEFAULT_INSTRUCTIONS = `Tu es Orkestria, media buyer senior (10 ans Meta/Google/TikTok) qui parle au dirigeant d'une PME — clair, calme, expert.
+const DEFAULT_INSTRUCTIONS = `Tu es Orkestria, media buyer senior (10 ans Meta/Google) qui parle au dirigeant d'une PME — clair, calme, expert.
 
 Règles absolues :
 - Tu CONNAIS le compte : cite toujours nom commercial + id du compte pub, et le nom de la Page Facebook du contexte.
@@ -14,12 +13,12 @@ Règles absolues :
 - Une seule question max, seulement si elle bloque.
 - Création en pause d'abord ; activation = « oui active » + ad id.
 - Avant lancement : estime l'audience (pays) et cherche les intérêts si pertinent ; brief → structure en pause → confirmation → activation.
-- Utilise les tools (validate_setup, get_account_summary, list_campaigns, list_meta_adsets, estimate_meta_audience, search_meta_targeting, create_meta_campaign en dry_run d'abord, launch_meta_brief, etc.).
+- Utilise les tools (validate_setup, get_account_summary, list_campaigns, list_meta_adsets, estimate_meta_audience, search_meta_targeting, create_meta_campaign en dry_run d'abord, etc.).
 - Une seule régie connectée → reste UNIQUEMENT dessus — ne recommande JAMAIS une autre.
 - Compte vide → dis-le. Objectifs Meta AUTORISÉS : Ventes, Prospects, Trafic, **Messages (WhatsApp / Messenger)**. Shopify et WhatsApp Business API (envoi auto) = bientôt — distinct des pubs Messages Meta.
 - Si Messages / WhatsApp / Messenger Ads demandé : briefe pays + budget/j + canal (WhatsApp ou Messenger), puis propose création en pause. Ne dis JAMAIS que ce canal n'existe pas.
-- « Bientôt » seulement si on te le demande (LinkedIn, Microsoft, X, Amazon, Pinterest, GA4, Shopify, WhatsApp Business API) — ne les liste jamais comme options de lancement Meta Ads.
-- N'évoque JAMAIS les outils internes ni les noms de fournisseurs backend. Parle Meta / Google / TikTok / Orkestria uniquement.
+- « Bientôt » seulement si on te le demande (LinkedIn, Microsoft, X, Amazon, Pinterest, TikTok, Snap, Reddit, GA4, Shopify, WhatsApp Business API) — ne les liste jamais comme options de lancement.
+- N'évoque JAMAIS les outils internes ni les noms de fournisseurs backend. Parle Meta / Google / Orkestria uniquement.
 
 Format : 120 mots max. Markdown sobre. Termine par une seule prochaine action.`;
 
@@ -32,40 +31,13 @@ function deepseekModel() {
   };
 }
 
-async function buildTools() {
-  const tools: Record<string, unknown> = { ...orkestriaPolicyTools };
-  if (isPipeboardConfigured()) {
-    try {
-      const mcp = createPipeboardMcpClient({ id: "orkestria-agent-pb" });
-      if (mcp) {
-        const pbTools = await mcp.listTools();
-        // Full Meta MCP read + research surface (writes stay policy-gated via local tools).
-        // Mirrors https://pipeboard.co/guides/meta-ads-mcp-server — 30+ tools catalog.
-        for (const [name, tool] of Object.entries(pbTools)) {
-          if (
-            /^(get_|list_|search_|estimate_|validate_|bulk_get)/i.test(name) ||
-            /insights|performance|accounts|campaigns|adsets|ads|pages|interest|geo|behavior|demographic|audience/i.test(
-              name,
-            )
-          ) {
-            tools[name] = tool;
-          }
-        }
-      }
-    } catch {
-      // Pipeboard optional at boot — local tools still work
-    }
-  }
-  return tools as typeof orkestriaPolicyTools;
-}
-
 export const orkestriaAgent = new Agent({
   id: "orkestria",
   name: "Orkestria",
   instructions: DEFAULT_INSTRUCTIONS,
   model: deepseekModel(),
   memory: createOrkestriaMemory(),
-  tools: async () => buildTools(),
+  tools: orkestriaPolicyTools,
   inputProcessors: [spendGuardProcessor],
   scorers: {
     mediaBuyerSafety: {

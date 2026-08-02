@@ -1,0 +1,62 @@
+name: Meta Ads
+slug: meta-ads
+category: social
+status: active
+
+api:
+  base_url: https://graph.facebook.com
+  current_version: v21.0
+  auth_type: oauth2
+  auth_url: https://www.facebook.com/v21.0/dialog/oauth
+  token_url: https://graph.facebook.com/v21.0/oauth/access_token
+  scopes: ["ads_management", "ads_read", "business_management"]
+  documentation: https://developers.facebook.com/docs/marketing-apis
+  rate_limits:
+    requests_per_minute: 200
+    notes: "Rate limits vary by app, ad account, and access level"
+
+login:
+  url: https://business.facebook.com
+  api_console: https://developers.facebook.com/apps
+  developer_portal: https://developers.facebook.com/docs/marketing-apis
+
+upstream_repos:
+  - repo: facebook/facebook-python-business-sdk
+    description: "Official Python Business SDK (Marketing API)"
+    language: python
+    advertising_relevant: true
+  - repo: facebook/facebook-nodejs-business-sdk
+    description: "Official Node.js Business SDK"
+    language: javascript
+    advertising_relevant: true
+  - repo: facebook/facebook-php-business-sdk
+    description: "Official PHP Business SDK"
+    language: php
+    advertising_relevant: true
+  - repo: facebook/facebook-java-business-sdk
+    description: "Official Java Business SDK"
+    language: java
+    advertising_relevant: true
+  - repo: facebook/facebook-ruby-business-sdk
+    description: "Official Ruby Business SDK"
+    language: ruby
+    advertising_relevant: true
+
+our_tools: []
+
+agents:
+  - paid-social-strategist
+  - creative-strategist
+
+capabilities:
+  campaign_management: true
+  audience_targeting: true
+  conversion_tracking: true
+  reporting_api: true
+  bulk_operations: true
+  real_time_bidding: false
+  creative_upload: true
+  offline_conversions: true
+  conversions_api: true
+  catalog_ads: true
+  advantage_plus: true

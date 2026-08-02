@@ -6,7 +6,7 @@ import { StepHeader } from "@/components/onboarding/StepHeader";
 import { connectorFromPlatform, type ConnectorId } from "@/lib/oauth/connectors";
 import { getOAuthAvailability } from "@/functions/platform-config";
 import { listConnections } from "@/functions/connections";
-import { getGoogleSetupStatus } from "@/functions/adloop";
+import { getGoogleSetupStatus } from "@/functions/google-setup";
 
 const PLATFORMS = [
   { id: "meta", label: "Meta Ads", desc: "Facebook & Instagram", icon: Facebook, color: "#1877F2" },

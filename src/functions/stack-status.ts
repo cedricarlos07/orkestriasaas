@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { ensureSession } from "@/lib/auth.functions";
 import { getActiveOrgId } from "./context";
 import { isMetaAdLibraryConfigured } from "@/lib/platforms/meta-ad-library";
-import { probeResearchHealth, resolveResearchAccessToken } from "@/lib/mcp/clients/useproxy";
+import { probeResearchHealth, resolveResearchAccessToken } from "@/lib/mcp/clients/meta-ad-library-client";
 import { probeMetaAdLibraryHealth } from "@/lib/platforms/meta-ad-library";
 
 export const getResearchStackStatus = createServerFn({ method: "GET" }).handler(async () => {

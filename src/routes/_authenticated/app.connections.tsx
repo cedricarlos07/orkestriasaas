@@ -182,7 +182,7 @@ function Connections() {
           <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Mes comptes</p>
           <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Comptes publicitaires</h1>
           <p className="text-[13px] text-ink-soft">
-            Liez Meta, Google ou TikTok pour lancer et suivre vos campagnes.
+            Liez Meta Ads et Google Ads pour lancer et suivre vos campagnes. Autres régies : bientôt.
           </p>
         </div>
         <button type="button" className="chip-ghost" disabled={busy} onClick={() => void refresh()}>
@@ -470,7 +470,7 @@ function Connections() {
               c.id !== "google_ads",
           );
           if (!items.length) return null;
-          const PIPEBOARD_LIVE = new Set(["tiktok_ads", "snapchat_ads", "reddit_ads"]);
+          const LIVE_SOON = new Set<string>(); // TikTok / Snap / Reddit / … → Bientôt (Meta+Google only for now)
           return (
             <section key={g.title} className="rounded-2xl border border-line/70 bg-white">
               <div className="border-b border-line/60 px-5 py-3 text-[12px] uppercase tracking-wider text-ink-soft">
@@ -478,7 +478,7 @@ function Connections() {
               </div>
               <ul className="divide-y divide-line/60">
                 {items.map((cfg) => {
-                  const live = PIPEBOARD_LIVE.has(cfg.id);
+                  const live = LIVE_SOON.has(cfg.id);
                   const linked = byConnector(cfg.id)?.status === "connectée";
                   return (
                   <li key={cfg.id} className="flex items-center justify-between gap-4 px-5 py-4">

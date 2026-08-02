@@ -79,7 +79,7 @@ const TOOL_FAMILIES: { family: string; tools: { name: string; desc: string }[] }
   {
     family: "Measure",
     tools: [
-      { name: "research_competitor_ads", desc: "Meta Ad Library via useproxy (mcp.useproxy.dev)" },
+      { name: "research_competitor_ads", desc: "Meta Ad Library (Graph ads_archive)" },
       { name: "get_performance", desc: "Perf campagne par campagne sur 30 jours" },
       { name: "list_campaigns", desc: "Toutes les campagnes (une plateforme ou toutes)" },
       { name: "get_account_summary", desc: "Vue consolidée multi-plateformes" },

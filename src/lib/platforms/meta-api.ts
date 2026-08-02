@@ -319,6 +319,13 @@ export type CreateMetaCampaignInput = {
   dailyBudget: number;
   objective?: string;
   countries?: string[];
+  cities?: string[];
+  neighborhoods?: string[];
+  radiusKm?: number;
+  geoScope?: "country_wide" | "city";
+  deviceTargeting?: "mobile" | "all";
+  channel?: "website" | "whatsapp" | "messenger";
+  pageId?: string;
 };
 
 export type CreateMetaCampaignResult = {
@@ -326,6 +333,269 @@ export type CreateMetaCampaignResult = {
   adSetId: string;
   details?: Record<string, unknown>;
 };
+
+async function searchMetaGeoKey(
+  accessToken: string,
+  query: string,
+): Promise<{ key: string; type: string } | null> {
+  try {
+    const url = new URL(`${GRAPH}/search`);
+    url.searchParams.set("type", "adgeolocation");
+    url.searchParams.set("q", query);
+    url.searchParams.set("location_types", '["city","neighborhood","subcity","region"]');
+    url.searchParams.set("limit", "5");
+    url.searchParams.set("access_token", accessToken);
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      data?: Array<{ key?: string; type?: string; name?: string }>;
+    };
+    const first = data.data?.[0];
+    if (!first?.key) return null;
+    return { key: String(first.key), type: String(first.type ?? "city").toLowerCase() };
+  } catch {
+    return null;
+  }
+}
+
+export async function searchMetaGeoLocations(
+  accessToken: string,
+  query: string,
+): Promise<Array<{ key: string; name: string; type: string; country_code?: string }>> {
+  const url = new URL(`${GRAPH}/search`);
+  url.searchParams.set("type", "adgeolocation");
+  url.searchParams.set("q", query);
+  url.searchParams.set("location_types", '["country","region","city","neighborhood","subcity"]');
+  url.searchParams.set("limit", "15");
+  url.searchParams.set("access_token", accessToken);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Meta geo search: ${await res.text()}`);
+  const data = (await res.json()) as {
+    data?: Array<{ key?: string; name?: string; type?: string; country_code?: string }>;
+  };
+  return (data.data ?? []).map((r) => ({
+    key: String(r.key ?? ""),
+    name: String(r.name ?? r.key ?? ""),
+    type: String(r.type ?? ""),
+    country_code: r.country_code,
+  }));
+}
+
+export async function searchMetaInterests(
+  accessToken: string,
+  query: string,
+  type = "adinterest",
+): Promise<Array<{ id: string; name: string; audience_size?: number }>> {
+  const url = new URL(`${GRAPH}/search`);
+  url.searchParams.set("type", type);
+  url.searchParams.set("q", query);
+  url.searchParams.set("limit", "20");
+  url.searchParams.set("access_token", accessToken);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Meta interest search: ${await res.text()}`);
+  const data = (await res.json()) as {
+    data?: Array<{ id?: string; name?: string; audience_size?: number; audience_size_lower_bound?: number }>;
+  };
+  return (data.data ?? []).map((r) => ({
+    id: String(r.id ?? ""),
+    name: String(r.name ?? ""),
+    audience_size: r.audience_size ?? r.audience_size_lower_bound,
+  }));
+}
+
+export async function estimateMetaAudience(
+  accessToken: string,
+  adAccountId: string,
+  targeting: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const url = new URL(`${GRAPH}/${actId(adAccountId)}/reachestimate`);
+  url.searchParams.set("targeting_spec", JSON.stringify(targeting));
+  url.searchParams.set("access_token", accessToken);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Meta reachestimate: ${await res.text()}`);
+  return (await res.json()) as Record<string, unknown>;
+}
+
+export async function listMetaAdSets(
+  accessToken: string,
+  adAccountId: string,
+  opts?: { campaignId?: string },
+): Promise<Array<{ id: string; name: string; status: string; campaign_id?: string; daily_budget?: string }>> {
+  const params = new URLSearchParams({
+    fields: "id,name,status,campaign_id,daily_budget",
+    limit: "50",
+    access_token: accessToken,
+  });
+  if (opts?.campaignId) {
+    params.set("filtering", JSON.stringify([{ field: "campaign.id", operator: "EQUAL", value: opts.campaignId }]));
+  }
+  const res = await fetch(`${GRAPH}/${actId(adAccountId)}/adsets?${params}`);
+  if (!res.ok) throw new Error(`Meta list adsets: ${await res.text()}`);
+  const data = (await res.json()) as {
+    data?: Array<{ id: string; name: string; status: string; campaign_id?: string; daily_budget?: string }>;
+  };
+  return data.data ?? [];
+}
+
+export async function listMetaAds(
+  accessToken: string,
+  adAccountId: string,
+  opts?: { campaignId?: string; adSetId?: string },
+): Promise<Array<{ id: string; name: string; status: string; adset_id?: string; campaign_id?: string }>> {
+  const params = new URLSearchParams({
+    fields: "id,name,status,adset_id,campaign_id",
+    limit: "50",
+    access_token: accessToken,
+  });
+  const filtering: Array<{ field: string; operator: string; value: string }> = [];
+  if (opts?.campaignId) filtering.push({ field: "campaign.id", operator: "EQUAL", value: opts.campaignId });
+  if (opts?.adSetId) filtering.push({ field: "adset.id", operator: "EQUAL", value: opts.adSetId });
+  if (filtering.length) params.set("filtering", JSON.stringify(filtering));
+  const res = await fetch(`${GRAPH}/${actId(adAccountId)}/ads?${params}`);
+  if (!res.ok) throw new Error(`Meta list ads: ${await res.text()}`);
+  const data = (await res.json()) as {
+    data?: Array<{ id: string; name: string; status: string; adset_id?: string; campaign_id?: string }>;
+  };
+  return data.data ?? [];
+}
+
+async function buildNativeGeoLocations(
+  accessToken: string,
+  input: Pick<
+    CreateMetaCampaignInput,
+    "countries" | "cities" | "neighborhoods" | "radiusKm" | "geoScope"
+  >,
+): Promise<Record<string, unknown>> {
+  const countries = (input.countries ?? []).map((c) => c.toUpperCase());
+  if (input.geoScope === "country_wide" || (!input.cities?.length && !input.neighborhoods?.length)) {
+    return { countries: countries.length ? countries : ["CI"] };
+  }
+
+  const queries = [...(input.neighborhoods ?? []), ...(input.cities ?? [])];
+  const cityEntries: Array<Record<string, unknown>> = [];
+  for (const q of queries.slice(0, 5)) {
+    const hit = await searchMetaGeoKey(accessToken, q);
+    if (!hit) continue;
+    const entry: Record<string, unknown> = { key: hit.key };
+    if (
+      typeof input.radiusKm === "number" &&
+      input.radiusKm > 0 &&
+      /city|neighborhood|subcity/.test(hit.type)
+    ) {
+      entry.radius = input.radiusKm;
+      entry.distance_unit = "kilometer";
+    }
+    cityEntries.push(entry);
+  }
+  if (cityEntries.length) return { cities: cityEntries };
+  return { countries: countries.length ? countries : ["CI"] };
+}
+
+/**
+ * Proprietary Meta campaign+adset creation (PAUSED) — Graph API native.
+ * Supports website traffic and Click-to-WhatsApp / Messenger.
+ */
+export async function createMetaCampaignPaused(
+  input: CreateMetaCampaignInput,
+): Promise<CreateMetaCampaignResult> {
+  const act = actId(input.adAccountId);
+  const channel = input.channel ?? "website";
+  const isMessaging = channel === "whatsapp" || channel === "messenger";
+
+  let objective = input.objective ?? "OUTCOME_TRAFFIC";
+  if (isMessaging) {
+    objective =
+      objective.startsWith("OUTCOME_") && objective !== "OUTCOME_TRAFFIC"
+        ? objective
+        : "OUTCOME_ENGAGEMENT";
+  }
+
+  const campaignBody: Record<string, string> = {
+    name: input.name,
+    objective,
+    status: "PAUSED",
+    special_ad_categories: "[]",
+    bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+    access_token: input.accessToken,
+  };
+  // Messaging: budget on ad set only (avoid CBO double-budget)
+  if (!isMessaging) {
+    campaignBody.daily_budget = String(Math.max(100, Math.round(input.dailyBudget * 100)));
+  }
+
+  const campaignRes = await fetch(`${GRAPH}/${act}/campaigns`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(campaignBody),
+  });
+  if (!campaignRes.ok) throw new Error(`Meta create campaign: ${await campaignRes.text()}`);
+  const campaign = (await campaignRes.json()) as { id?: string };
+  if (!campaign.id) throw new Error("Meta create campaign: id manquant");
+
+  const geo = await buildNativeGeoLocations(input.accessToken, input);
+  const targeting: Record<string, unknown> = {
+    geo_locations: geo,
+    targeting_automation: { advantage_audience: 0 },
+  };
+  if (input.deviceTargeting === "mobile") {
+    targeting.device_platforms = ["mobile"];
+  }
+
+  const adsetBody: Record<string, string> = {
+    name: `${input.name} — Ad set`,
+    campaign_id: campaign.id,
+    daily_budget: String(Math.max(100, Math.round(input.dailyBudget * 100))),
+    billing_event: "IMPRESSIONS",
+    bid_strategy: "LOWEST_COST_WITHOUT_CAP",
+    targeting: JSON.stringify(targeting),
+    status: "PAUSED",
+    access_token: input.accessToken,
+  };
+
+  if (isMessaging) {
+    if (!input.pageId) {
+      throw new Error("pageId requis pour Messages WhatsApp / Messenger");
+    }
+    adsetBody.destination_type = channel === "whatsapp" ? "WHATSAPP" : "MESSENGER";
+    adsetBody.optimization_goal = "CONVERSATIONS";
+    adsetBody.promoted_object = JSON.stringify({ page_id: input.pageId });
+  } else {
+    adsetBody.optimization_goal =
+      objective === "OUTCOME_LEADS"
+        ? "LEAD_GENERATION"
+        : objective === "OUTCOME_SALES"
+          ? "OFFSITE_CONVERSIONS"
+          : "LINK_CLICKS";
+    adsetBody.destination_type = "WEBSITE";
+  }
+
+  const adSetRes = await fetch(`${GRAPH}/${act}/adsets`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(adsetBody),
+  });
+  if (!adSetRes.ok) throw new Error(`Meta create ad set: ${await adSetRes.text()}`);
+  const adSet = (await adSetRes.json()) as { id?: string };
+  if (!adSet.id) throw new Error("Meta create ad set: id manquant");
+
+  return {
+    campaignId: campaign.id,
+    adSetId: adSet.id,
+    details: {
+      status: "PAUSED",
+      upstream: "orkestria",
+      channel,
+      objective,
+      geo,
+    },
+  };
+}
+
+function actId(adAccountId: string): string {
+  return adAccountId.startsWith("act_")
+    ? adAccountId
+    : `act_${adAccountId.replace(/\D/g, "")}`;
+}
 
 export async function createMetaCampaignOnly(
   accessToken: string,
@@ -348,61 +618,6 @@ export async function createMetaCampaignOnly(
   const campaign = (await campaignRes.json()) as { id?: string };
   if (!campaign.id) throw new Error("Meta create campaign: id manquant");
   return { campaignId: campaign.id };
-}
-
-export async function createMetaCampaignPaused(
-  input: CreateMetaCampaignInput,
-): Promise<CreateMetaCampaignResult> {
-  const actId = input.adAccountId.startsWith("act_")
-    ? input.adAccountId
-    : `act_${input.adAccountId.replace(/\D/g, "")}`;
-
-  const campaignRes = await fetch(`${GRAPH}/${actId}/campaigns`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      name: input.name,
-      objective: input.objective ?? "OUTCOME_TRAFFIC",
-      status: "PAUSED",
-      special_ad_categories: "[]",
-      access_token: input.accessToken,
-    }),
-  });
-  if (!campaignRes.ok) throw new Error(`Meta create campaign: ${await campaignRes.text()}`);
-  const campaign = (await campaignRes.json()) as { id?: string };
-  if (!campaign.id) throw new Error("Meta create campaign: id manquant");
-
-  const countries = input.countries?.length ? input.countries : ["US"];
-  const targeting = JSON.stringify({
-    geo_locations: { countries },
-  });
-
-  const adSetRes = await fetch(`${GRAPH}/${actId}/adsets`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      name: `${input.name} — ensemble`,
-      campaign_id: campaign.id,
-      daily_budget: String(Math.max(100, Math.round(input.dailyBudget * 100))),
-      billing_event: "IMPRESSIONS",
-      optimization_goal: "LINK_CLICKS",
-      bid_strategy: "LOWEST_COST_WITHOUT_CAP",
-      targeting,
-      status: "PAUSED",
-      access_token: input.accessToken,
-    }),
-  });
-  if (!adSetRes.ok) throw new Error(`Meta create ad set: ${await adSetRes.text()}`);
-  const adSet = (await adSetRes.json()) as { id?: string };
-  if (!adSet.id) throw new Error("Meta create ad set: id manquant");
-
-  return { campaignId: campaign.id, adSetId: adSet.id, details: { status: "PAUSED", maturity: "production" } };
-}
-
-function actId(adAccountId: string): string {
-  return adAccountId.startsWith("act_")
-    ? adAccountId
-    : `act_${adAccountId.replace(/\D/g, "")}`;
 }
 
 /** Meta budgets live on ad sets — `entityId` is the ad set id. */
@@ -550,16 +765,26 @@ export async function createMetaAd(
 export async function uploadMetaCreative(
   accessToken: string,
   adAccountId: string,
-  input: { imageUrl: string; name?: string },
+  input: { imageUrl?: string; bytesBase64?: string; name?: string },
 ): Promise<{ imageHash: string }> {
+  const body = new URLSearchParams({
+    name: input.name ?? "orkestria-upload",
+    access_token: accessToken,
+  });
+  if (input.bytesBase64) {
+    const raw = input.bytesBase64.includes(",")
+      ? input.bytesBase64.split(",", 2)[1]!
+      : input.bytesBase64;
+    body.set("bytes", raw);
+  } else if (input.imageUrl) {
+    body.set("url", input.imageUrl);
+  } else {
+    throw new Error("imageUrl ou bytesBase64 requis");
+  }
   const res = await fetch(`${GRAPH}/${actId(adAccountId)}/adimages`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      url: input.imageUrl,
-      name: input.name ?? "orkestria-upload",
-      access_token: accessToken,
-    }),
+    body,
   });
   if (!res.ok) throw new Error(`Meta creative upload: ${await res.text()}`);
   const data = (await res.json()) as { images?: Record<string, { hash?: string }> };
@@ -721,7 +946,7 @@ export async function listMetaAdsInsights(
 
 export type MetaPagePost = {
   id: string;
-  /** Same as id when already pageId_postId; used as object_story_id for Pipeboard boost. */
+  /** Same as id when already pageId_postId; used as object_story_id for boost. */
   objectStoryId: string;
   message: string;
   createdTime: string;

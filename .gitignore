@@ -23,6 +23,9 @@ dist-ssr
 *.tmp
 scripts/.stripe-webhook-secret.tmp
 
+# Vendored upstream clones (not part of the app build)
+_vendor/
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars

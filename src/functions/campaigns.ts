@@ -12,7 +12,7 @@ import {
   pauseMetaCampaign,
   resumeMetaCampaign,
 } from "@/lib/platforms/meta-api";
-import { classifyRisk } from "@/lib/mcp/action-pipeline";
+import { classifyRisk } from "@/lib/mcp/policy-engine";
 import { countriesFromZone } from "@/lib/geo/countries-from-zone";
 import { assertAdWritesAllowed } from "@/lib/mcp/write-gate";
 import { enforceQuotas, recordUsage } from "@/lib/quotas/enforce";

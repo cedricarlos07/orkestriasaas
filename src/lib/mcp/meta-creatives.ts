@@ -3,20 +3,17 @@ import { db } from "@/db";
 import { connections } from "@/db/schema/index";
 import { resolveMetaPageId } from "@/lib/mcp/meta-org";
 import { resolveActiveAdAccountId } from "@/lib/mcp/resolve-ad-account";
+import { runWriteAction } from "@/lib/mcp/policy-engine";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
-import { listMetaPagePosts, type MetaPagePost } from "@/lib/platforms/meta-api";
 import {
-  pipeboardAttachImageAd,
-  pipeboardBoostPost,
-  pipeboardUploadAdImage,
-} from "@/mastra/pipeboard-bridge";
-import { isPipeboardConfigured } from "@/mastra/pipeboard-mcp";
+  listMetaPagePosts,
+  uploadMetaCreative,
+  type MetaPagePost,
+} from "@/lib/platforms/meta-api";
 
 export type ChatAttachment = {
   kind: "image";
-  /** data:image/...;base64,... preferred for Pipeboard upload_ad_image */
   dataUrl?: string;
-  /** Public HTTPS URL alternative */
   url?: string;
   name?: string;
 };
@@ -54,19 +51,15 @@ export async function uploadChatImageToMeta(
   orgId: string,
   attachment: ChatAttachment,
 ): Promise<{ imageHash: string }> {
-  if (!isPipeboardConfigured()) {
-    throw new Error("Upload de créa temporairement indisponible — réessayez ou contactez le support.");
-  }
-  const { accountId } = await resolveOrgMetaIds(orgId);
-  const up = await pipeboardUploadAdImage({
-    accountId,
-    file: attachment.dataUrl,
+  const { accountId, accessToken } = await resolveOrgMetaIds(orgId);
+  return uploadMetaCreative(accessToken, accountId, {
     imageUrl: attachment.url,
+    bytesBase64: attachment.dataUrl,
     name: attachment.name ?? "Orkestria créa",
   });
-  return { imageHash: up.imageHash };
 }
 
+/** Upload image then create PAUSED ad via policy pipeline (no policy bypass). */
 export async function attachPausedImageAd(orgId: string, input: {
   adSetId: string;
   name: string;
@@ -77,52 +70,59 @@ export async function attachPausedImageAd(orgId: string, input: {
   imageHash?: string;
   callToAction?: string;
 }): Promise<{ adId: string; creativeId: string; imageHash: string }> {
-  if (!isPipeboardConfigured()) throw new Error("Création d'annonce temporairement indisponible.");
+  void input.callToAction;
   const { accountId, pageId } = await resolveOrgMetaIds(orgId);
-  const res = await pipeboardAttachImageAd({
+  let imageHash = input.imageHash ?? "";
+  if (!imageHash) {
+    if (!input.attachment?.dataUrl && !input.attachment?.url) {
+      throw new Error("imageHash ou pièce jointe image requis");
+    }
+    const up = await uploadChatImageToMeta(orgId, input.attachment!);
+    imageHash = up.imageHash;
+  }
+
+  const outcome = await runWriteAction({
+    orgId,
+    connector: "meta_ads",
+    action: "create_ad",
     accountId,
-    pageId,
-    adSetId: input.adSetId,
-    name: input.name,
-    linkUrl: input.linkUrl,
-    message: input.message,
-    headline: input.headline,
-    imageHash: input.imageHash,
-    file: input.attachment?.dataUrl,
-    imageUrl: input.attachment?.url,
-    callToAction: input.callToAction,
+    mode: "live",
+    params: {
+      adSetId: input.adSetId,
+      name: input.name,
+      pageId,
+      linkUrl: input.linkUrl,
+      message: input.message,
+      headline: input.headline,
+      imageHash,
+    },
   });
-  return { adId: res.adId, creativeId: res.creativeId, imageHash: res.imageHash };
+
+  if (outcome.status !== "executed") {
+    throw new Error(outcome.message || `Création annonce : ${outcome.status}`);
+  }
+  const result = (outcome.result ?? {}) as Record<string, unknown>;
+  return {
+    adId: String(result.adId ?? ""),
+    creativeId: String(result.creativeId ?? ""),
+    imageHash,
+  };
 }
 
-export async function boostOrgPagePost(orgId: string, input: {
+export async function boostOrgPagePost(_orgId: string, _input: {
   objectStoryId: string;
   name?: string;
   dailyBudget: number;
   countries?: string[];
 }): Promise<Record<string, unknown>> {
-  if (!isPipeboardConfigured()) throw new Error("Boost de post temporairement indisponible.");
-  const { accountId, pageId } = await resolveOrgMetaIds(orgId);
-  return pipeboardBoostPost({
-    accountId,
-    pageId,
-    objectStoryId: input.objectStoryId,
-    name: input.name ?? `Boost post ${new Date().toISOString().slice(0, 10)}`,
-    dailyBudget: input.dailyBudget,
-    countries: input.countries,
-  });
+  throw new Error(
+    "Boost de post Meta : bientôt via API native. Créez une campagne + annonce image pour l'instant.",
+  );
 }
 
-/** Parse Meta object_story_id from free text / Facebook URLs. */
 export function extractObjectStoryId(text: string): string | null {
   const explicit = text.match(/\b(\d{5,})_(\d{5,})\b/);
   if (explicit) return `${explicit[1]}_${explicit[2]}`;
-  const posts = text.match(/facebook\.com\/[^/\s]+\/posts\/(\d+)/i);
-  if (posts?.[1]) return null; // need page id — handled by caller with resolve
-  const permalink = text.match(/story_fbid=(\d+)/i);
-  if (permalink?.[1] && explicit) return null;
-  const pfbid = text.match(/facebook\.com\/(?:permalink\.php\?|.*[?&]id=)(\d+)/i);
-  void pfbid;
   return null;
 }
 

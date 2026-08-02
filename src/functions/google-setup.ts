@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { connections } from "@/db/schema/index";
 import { ensureSession } from "@/lib/auth.functions";
-import { isPipeboardConfigured, probePipeboardMcp } from "@/mastra/pipeboard-mcp";
 import { resolveActiveAdAccountId } from "@/lib/mcp/resolve-ad-account";
 import { hasOAuthCredentials } from "@/lib/oauth/connectors";
 import { ensureFreshTokens } from "@/lib/platforms/token-refresh";
@@ -28,18 +27,8 @@ export const getGoogleSetupStatus = createServerFn({ method: "GET" }).handler(as
   }
 
   const customerId = await resolveActiveAdAccountId(orgId, "google_ads");
-  const pipeboardConfigured = isPipeboardConfigured();
-  let pipeboardHealth: { ok: boolean; error?: string } = {
-    ok: false,
-    error: "Stack pubs non configurée",
-  };
-  if (pipeboardConfigured) {
-    const probe = await probePipeboardMcp();
-    pipeboardHealth = { ok: probe.ok, error: probe.error };
-  }
-
   const oauthConfigured = hasOAuthCredentials("google_ads");
-  const googleReady = oauthConnected && pipeboardConfigured && pipeboardHealth.ok;
+  const googleReady = oauthConnected && Boolean(customerId);
 
   return {
     oauthConnected,
@@ -47,15 +36,6 @@ export const getGoogleSetupStatus = createServerFn({ method: "GET" }).handler(as
     tokenError,
     account: oauthConnected ? (googleConn?.externalAccount ?? null) : null,
     customerId,
-    pipeboardConfigured,
-    pipeboardHealth,
-    /** @deprecated aliases for UI compatibility */
-    adloopConfigured: pipeboardConfigured,
-    adloopHealth: pipeboardHealth,
-    agencyReady: pipeboardConfigured && pipeboardHealth.ok,
     googleReady,
   };
 });
-
-/** @deprecated use getGoogleSetupStatus */
-export const getAdloopLinkStatus = getGoogleSetupStatus;

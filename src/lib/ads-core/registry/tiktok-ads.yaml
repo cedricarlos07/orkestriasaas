@@ -1,0 +1,37 @@
+name: TikTok Ads
+slug: tiktok-ads
+category: social
+status: planned
+# Not present in Advertising Hub — Orkestria stub matching Hub PLATFORM.yaml schema.
+# Source schema: https://github.com/itallstartedwithaidea/advertising-hub platforms/*/PLATFORM.yaml
+
+api:
+  base_url: https://business-api.tiktok.com
+  current_version: v1.3
+  auth_type: oauth2
+  documentation: https://business-api.tiktok.com/portal/docs
+  scopes: []
+  rate_limits:
+    notes: "Varies by app tier"
+
+login:
+  url: https://ads.tiktok.com
+  developer_portal: https://business-api.tiktok.com/portal
+
+upstream_repos: []
+
+our_tools: []
+
+agents:
+  - paid-social-strategist
+  - creative-strategist
+
+capabilities:
+  campaign_management: true
+  audience_targeting: true
+  conversion_tracking: true
+  reporting_api: true
+  bulk_operations: false
+  real_time_bidding: false
+  creative_upload: true
+  offline_conversions: false

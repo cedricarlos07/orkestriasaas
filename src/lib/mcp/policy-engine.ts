@@ -167,6 +167,11 @@ export type WriteActionInput = {
     dailyBudget?: number;
     objective?: string;
     countries?: string[];
+    cities?: string[];
+    neighborhoods?: string[];
+    radiusKm?: number;
+    geoScope?: "country_wide" | "city";
+    deviceTargeting?: "mobile" | "all";
     /** Meta Ads destination: website | whatsapp | messenger */
     channel?: "website" | "whatsapp" | "messenger";
     currentDailyBudget?: number;
@@ -189,6 +194,8 @@ export type WriteActionInput = {
     optimizationGoal?: string;
     keywords?: { text: string; matchType?: string; bid?: number }[];
     campaignType?: "search" | "pmax" | "traffic" | "leads" | "default";
+    /** Alias for campaignType (Google search | pmax) */
+    type?: string;
     finalUrl?: string;
     headlines?: string[];
     descriptions?: string[];
@@ -198,7 +205,6 @@ export type WriteActionInput = {
     brief?: Record<string, unknown>;
   };
 };
-
 export type WriteActionOutcome = {
   status: "dry_run" | "pending_approval" | "executed" | "blocked";
   mode: ExecutionMode;
@@ -551,8 +557,8 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
   const accountId = input.accountId ?? "";
 
   if (mode === "dry_run") {
-    const pipeboardPreview = {
-      upstream: "pipeboard",
+    const executionPreview = {
+      upstream: "orkestria",
       action: input.action,
       connector: input.connector,
       accountId: accountId || null,
@@ -563,7 +569,7 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
 
     await logRun({
       orgId: input.orgId, apiKeyId: input.apiKeyId, connector: input.connector, tool: input.action,
-      mode: "dry_run", status: "ok", params: diff, result: { wouldExecute: true, pipeboardPreview }, latencyMs: Date.now() - start,
+      mode: "dry_run", status: "ok", params: diff, result: { wouldExecute: true, executionPreview }, latencyMs: Date.now() - start,
     });
     const { getCapability } = await import("@/lib/mcp/capability-matrix");
     const capability = getCapability(input.connector);
@@ -585,7 +591,7 @@ export async function runWriteAction(input: WriteActionInput): Promise<WriteActi
           params: input.params,
           dry_run: false,
         },
-        pipeboard: pipeboardPreview,
+        execution: executionPreview,
       },
     };
   }
@@ -724,6 +730,68 @@ export async function rejectPendingAction(orgId: string, approvalId: string): Pr
   if (appr.actionId) {
     await db.update(adActions).set({ status: "rejected" }).where(eq(adActions.id, appr.actionId));
   }
+}
+
+/** UI risk classification for proposed actions. */
+export type ActionRisk = "low" | "medium" | "high";
+
+export function classifyRisk(action: string): ActionRisk {
+  if (/create|launch|new_campaign|expand_geo/i.test(action)) return "high";
+  if (/budget|spend|bid|activate/i.test(action)) return "medium";
+  return "low";
+}
+
+/** Propose an action for the Approvals UI (may require human approval). */
+export async function proposeAdAction(opts: {
+  orgId: string;
+  runId?: string;
+  connector: string;
+  action: string;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+}) {
+  const risk = classifyRisk(opts.action);
+  const actionId = uid("act");
+  await db.insert(adActions).values({
+    id: actionId,
+    organizationId: opts.orgId,
+    runId: opts.runId ?? null,
+    connector: opts.connector,
+    action: opts.action,
+    status: risk === "low" ? "auto_pending" : "pending_approval",
+    before: opts.before ?? null,
+    after: opts.after ?? null,
+    createdAt: new Date(),
+  });
+
+  if (risk !== "low") {
+    const approvalId = uid("appr");
+    await db.insert(approvals).values({
+      id: approvalId,
+      organizationId: opts.orgId,
+      actionId,
+      track: risk,
+      status: "pending",
+      requiredApprovers: risk === "high" ? 2 : 1,
+      expiresAt: new Date(Date.now() + 86400_000 * 3),
+      createdAt: new Date(),
+    });
+    return { actionId, approvalId, requiresApproval: true, risk };
+  }
+
+  return { actionId, requiresApproval: false, risk };
+}
+
+/** Approve UI approval then execute via the same write pipeline. */
+export async function approveAction(orgId: string, approvalId: string, _actorId: string) {
+  await approveAndExecute(orgId, approvalId);
+  return { ok: true as const };
+}
+
+/** Reject UI approval (alias). */
+export async function rejectAction(orgId: string, approvalId: string) {
+  await rejectPendingAction(orgId, approvalId);
+  return { ok: true as const };
 }
 
 export async function recordSpend(opts: {

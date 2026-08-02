@@ -40,7 +40,7 @@ function extractToolsUsed(result: unknown): string[] {
 }
 
 /**
- * Mastra-powered orchestrator — Memory (thread=chat, resource=org) + Pipeboard tools + policy tools.
+ * Mastra-powered orchestrator — Memory (thread=chat, resource=org) + policy tools.
  */
 export async function runMastraOrchestrator(
   input: OrchestratorInput & { threadId?: string },

@@ -1,0 +1,49 @@
+# MCP Server Registry — Machine-readable index of all advertising MCP servers
+# Used by Buddy and other orchestrator agents to know what's available
+
+servers:
+  - platform: google-ads
+    name: google-ads-mcp
+    repo: itallstartedwithaidea/google-ads-mcp
+    pypi: google-ads-mcp
+    status: live
+    tools:
+      - list_campaigns
+      - get_campaign
+      - get_metrics
+      - run_gaql_query
+      - get_search_terms
+      - manage_campaign
+
+  - platform: meta-ads
+    name: meta-ads-mcp
+    status: planned
+    spec: mcp-servers/meta-ads/README.md
+
+  - platform: microsoft-ads
+    name: microsoft-ads-mcp
+    status: planned
+    spec: mcp-servers/microsoft-ads/README.md
+
+  - platform: amazon-ads
+    name: amazon-ads-mcp
+    status: planned
+    spec: mcp-servers/amazon-ads/README.md
+
+  - platform: linkedin-ads
+    name: linkedin-ads-mcp
+    status: planned
+    spec: mcp-servers/linkedin-ads/README.md
+
+  - platform: pinterest-ads
+    name: pinterest-ads-mcp
+    status: planned
+
+  - platform: thetradedesk
+    name: ttd-mcp
+    status: planned
+    spec: mcp-servers/thetradedesk/README.md
+
+  - platform: demandbase
+    name: demandbase-mcp
+    status: planned

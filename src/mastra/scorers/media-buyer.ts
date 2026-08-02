@@ -30,7 +30,7 @@ export const mediaBuyerScorer = createScorer({
   ) {
     score -= 0.5;
   }
-  if (/environ \d+\s*€|≈\d+|estimation sans données/.test(lower) && !/snapshot|pipeboard|compte/.test(lower)) {
+  if (/environ \d+\s*€|≈\d+|estimation sans données/.test(lower) && !/snapshot|compte|métriques/.test(lower)) {
     score -= 0.2;
   }
 

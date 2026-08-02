@@ -1,6 +1,6 @@
 import { lt, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { rateLimits } from "@/db/schema/index";
+import { appRateLimits } from "@/db/schema/index";
 
 export class RateLimitError extends Error {
   status = 429;
@@ -39,11 +39,11 @@ export async function consume(
     // Bare returning() — the db union type (neon-http | postgres-js) rejects
     // the projected overload.
     const rows = await db
-      .insert(rateLimits)
+      .insert(appRateLimits)
       .values({ bucket, windowStart, count: 1, expiresAt })
       .onConflictDoUpdate({
-        target: [rateLimits.bucket, rateLimits.windowStart],
-        set: { count: sql`${rateLimits.count} + 1` },
+        target: [appRateLimits.bucket, appRateLimits.windowStart],
+        set: { count: sql`${appRateLimits.count} + 1` },
       })
       .returning();
 
@@ -113,7 +113,7 @@ export async function enforceApiKeyLimit(
 /** Best-effort cleanup of expired windows. Safe to call periodically. */
 export async function pruneRateLimits(): Promise<void> {
   try {
-    await db.delete(rateLimits).where(lt(rateLimits.expiresAt, new Date()));
+    await db.delete(appRateLimits).where(lt(appRateLimits.expiresAt, new Date()));
   } catch (e) {
     console.warn("[rate-limit] prune failed", e);
   }

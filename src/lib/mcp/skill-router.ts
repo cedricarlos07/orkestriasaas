@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { getMediaBuyingSkill, type MediaBuyingSkill } from "@/lib/mcp/skills-repo";
+import { buildHubBrainPrompt } from "@/lib/ads-core";
 
 export type ConnectedPlatform = "meta_ads" | "google_lsa" | "tiktok_ads" | "google_ads";
 
@@ -149,4 +150,18 @@ export function formatSkillForPrompt(skill: MediaBuyingSkill): string {
     skill.promptExcerpt,
     "Applique ce SOP avec les données live. Cite nom + id du compte et nom de la Page. Ne redemande pas les comptes déjà connectés.",
   ].join("\n\n");
+}
+
+/** Single prompt injection: media SOP + Advertising Hub Buddy route. */
+export function buildMergedSkillPrompt(
+  message: string,
+  connectedConnectors: string[],
+): { mediaSkill: MediaBuyingSkill | null; hubAgent: string; promptBlock: string } {
+  const mediaSkill = matchMediaSkill(message, connectedConnectors);
+  const hub = buildHubBrainPrompt(message);
+  const parts = [
+    mediaSkill ? `--- SOP media buying ---\n${formatSkillForPrompt(mediaSkill)}` : null,
+    hub.promptBlock,
+  ].filter(Boolean);
+  return { mediaSkill, hubAgent: hub.route.agent, promptBlock: parts.join("\n\n") };
 }

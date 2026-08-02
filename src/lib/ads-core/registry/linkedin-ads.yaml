@@ -1,0 +1,21 @@
+name: LinkedIn Ads
+slug: linkedin-ads
+category: social
+status: active
+
+api:
+  documentation: https://learn.microsoft.com/en-us/linkedin/marketing/
+
+login:
+  url: https://www.linkedin.com/campaignmanager
+
+upstream_repos:
+  - repo: linkedin/marketing-api-quickstart
+    advertising_relevant: true
+
+our_tools: []
+agents: []
+
+capabilities:
+  campaign_management: true
+  reporting_api: true

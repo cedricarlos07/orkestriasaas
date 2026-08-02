@@ -1,5 +1,5 @@
 /**
- * Competitor research — Meta Ad Library via official Graph API (no useproxy / ScrapeCreators).
+ * Competitor research — Meta Ad Library via official Graph API.
  */
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -17,8 +17,6 @@ export type CompetitorResearchInput = {
   brands?: string[];
   country?: string;
 };
-
-export { isMetaAdLibraryConfigured as isFbAdsLibraryConfigured, probeMetaAdLibraryHealth as probeFbAdsLibraryHealth };
 
 export async function resolveResearchAccessToken(orgId?: string): Promise<string> {
   if (orgId) {
@@ -68,7 +66,3 @@ export async function probeResearchHealth(): Promise<{ ok: boolean; latencyMs: n
   }
   return probeMetaAdLibraryHealth();
 }
-
-/** @deprecated alias */
-export const probeUseproxyHealth = probeResearchHealth;
-export const humanizeUseproxyError = (raw?: string) => raw ?? "Research probe échoué";

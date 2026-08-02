@@ -1,0 +1,83 @@
+name: Google Ads
+slug: google-ads
+category: search
+status: active
+
+api:
+  base_url: https://googleads.googleapis.com
+  current_version: v18
+  auth_type: oauth2
+  auth_url: https://accounts.google.com/o/oauth2/auth
+  token_url: https://oauth2.googleapis.com/token
+  scopes: ["https://www.googleapis.com/auth/adwords"]
+  documentation: https://developers.google.com/google-ads/api/docs/start
+  rate_limits:
+    requests_per_day: 15000
+    notes: "Rate limits vary by developer token access level (basic vs standard)"
+
+login:
+  url: https://ads.google.com
+  api_console: https://console.cloud.google.com
+  developer_portal: https://developers.google.com/google-ads
+
+upstream_repos:
+  - repo: googleads/google-ads-python
+    description: "Official Python client library"
+    language: python
+    advertising_relevant: true
+  - repo: googleads/google-ads-node
+    description: "Official Node.js client library"
+    language: javascript
+    advertising_relevant: true
+  - repo: googleads/google-ads-dotnet
+    description: "Official .NET client library"
+    language: csharp
+    advertising_relevant: true
+  - repo: googleads/google-ads-java
+    description: "Official Java client library"
+    language: java
+    advertising_relevant: true
+  - repo: googleads/google-ads-php
+    description: "Official PHP client library"
+    language: php
+    advertising_relevant: true
+  - repo: googleads/google-ads-ruby
+    description: "Official Ruby client library"
+    language: ruby
+    advertising_relevant: true
+  - repo: googleads/googleads-shopping-samples
+    description: "Shopping campaign code samples"
+    language: multi
+    advertising_relevant: true
+
+our_tools:
+  - name: google-ads-mcp
+    repo: itallstartedwithaidea/google-ads-mcp
+    type: mcp-server
+    status: live
+  - name: google-ads-api-agent
+    repo: itallstartedwithaidea/google-ads-api-agent
+    type: agent-system
+    status: live
+  - name: google-ads-gemini-extension
+    repo: itallstartedwithaidea/google-ads-gemini-extension
+    type: cli-extension
+    status: live
+
+agents:
+  - ppc-strategist
+  - search-query-analyst
+  - auditor
+  - creative-strategist
+
+capabilities:
+  campaign_management: true
+  audience_targeting: true
+  conversion_tracking: true
+  reporting_api: true
+  bulk_operations: true
+  real_time_bidding: false
+  creative_upload: true
+  offline_conversions: true
+  enhanced_conversions: true
+  customer_match: true

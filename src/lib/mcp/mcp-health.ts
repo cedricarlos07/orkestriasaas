@@ -1,28 +1,10 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { mcpStatusSnapshots } from "@/db/schema/index";
-import {
-  isPipeboardConfigured,
-  probePipeboardMcp,
-  PIPEBOARD_URLS,
-  type PipeboardServer,
-} from "@/mastra/pipeboard-mcp";
 import { probeMetaAdLibraryHealth } from "@/lib/platforms/meta-ad-library";
 import { uid } from "@/functions/utils";
 
-const PIPEBOARD_LABELS: Record<PipeboardServer, string> = {
-  "meta-ads": "Meta Ads",
-  "google-ads": "Google Ads",
-  "tiktok-ads": "TikTok Ads",
-  "snap-ads": "Snap Ads",
-  "reddit-ads": "Reddit Ads",
-};
-
 export async function probeMcpHealth(): Promise<void> {
-  const pipeboardProbe = isPipeboardConfigured()
-    ? await probePipeboardMcp()
-    : { ok: false, error: "PIPEBOARD_API_TOKEN unset", servers: undefined };
-
   const services: {
     serviceId: string;
     label: string;
@@ -30,23 +12,6 @@ export async function probeMcpHealth(): Promise<void> {
     mode: string;
     url: string | null;
   }[] = [
-    ...(Object.keys(PIPEBOARD_URLS) as PipeboardServer[]).map((server) => ({
-      serviceId: `pipeboard_${server.replace(/-/g, "_")}`,
-      label: PIPEBOARD_LABELS[server],
-      probe: async () => {
-        if (!isPipeboardConfigured()) {
-          return { ok: false, latencyMs: 0, error: "PIPEBOARD_API_TOKEN unset" };
-        }
-        const status = pipeboardProbe.servers?.[server] ?? pipeboardProbe.error ?? "unknown";
-        return {
-          ok: status.startsWith("ok"),
-          latencyMs: 0,
-          error: status.startsWith("ok") ? undefined : status,
-        };
-      },
-      mode: "pipeboard_http",
-      url: PIPEBOARD_URLS[server],
-    })),
     {
       serviceId: "meta_ad_library",
       label: "Meta Ad Library (ads_archive)",

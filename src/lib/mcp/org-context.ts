@@ -9,8 +9,11 @@ import type { AuditSummary } from "@/lib/unified-ad-schema";
 const INTERNAL_KEYS = new Set(["linked_ad_accounts"]);
 
 /** Platforms not yet productized when disconnected — never list ones already connected.
- * Pipeboard family (Meta, Google, TikTok, Snap, Reddit) is live — not listed here. */
+ * Live today: Meta + Google only. */
 const COMING_SOON_IF_DISCONNECTED: { connector?: ConnectorId; label: string }[] = [
+  { connector: "tiktok_ads", label: "TikTok Ads" },
+  { connector: "snapchat_ads", label: "Snapchat Ads" },
+  { connector: "reddit_ads", label: "Reddit Ads" },
   { connector: "linkedin_ads", label: "LinkedIn Ads" },
   { connector: "microsoft_ads", label: "Microsoft Ads" },
   { connector: "x_ads", label: "X Ads" },

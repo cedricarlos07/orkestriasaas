@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { adActions, approvals } from "@/db/schema/index";
 import { ensureSession } from "@/lib/auth.functions";
-import { approveAction, proposeAdAction, rejectAction } from "@/lib/mcp/action-pipeline";
+import { approveAction, proposeAdAction, rejectAction } from "@/lib/mcp/policy-engine";
 import { getActiveOrgId } from "./context";
 
 export const listPendingApprovals = createServerFn({ method: "GET" }).handler(async () => {

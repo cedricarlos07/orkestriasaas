@@ -75,8 +75,6 @@ export const getMetaSetupStatus = createServerFn({ method: "GET" }).handler(asyn
     pageId,
     pageName,
     availablePages,
-    /** @deprecated use automationHealth — kept for callers not yet updated */
-    adkitHealth: automationHealth,
     automationHealth,
   };
 });

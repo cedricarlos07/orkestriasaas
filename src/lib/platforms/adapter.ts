@@ -11,6 +11,13 @@ export type CreateCampaignInput = {
   dailyBudget: number;
   objective?: string;
   countries?: string[];
+  cities?: string[];
+  neighborhoods?: string[];
+  radiusKm?: number;
+  geoScope?: "country_wide" | "city";
+  deviceTargeting?: "mobile" | "all";
+  channel?: "website" | "whatsapp" | "messenger";
+  pageId?: string;
   type?: "search" | "pmax" | "traffic" | "leads" | "default";
   keywords?: KeywordInput[];
   finalUrl?: string;
@@ -112,6 +119,7 @@ export type PlatformAdapter = {
     accountId: string,
   ) => Promise<{ id: string; name: string; spend: number; impressions: number; clicks: number; ctr: number }[]>;
   pauseAd?: (tokens: TokenPayload, accountId: string, adId: string) => Promise<void>;
+  enableAd?: (tokens: TokenPayload, accountId: string, adId: string) => Promise<void>;
 };
 
 function micro(amount: number): number {
@@ -143,7 +151,12 @@ const googleAds: PlatformAdapter = {
   },
   addKeywords: async (t, accountId, input) => {
     const { addGoogleKeywords } = await import("./google-ads-api");
-    const res = await addGoogleKeywords(t.accessToken, accountId, input.adGroupId, input.keywords);
+    type Mt = "BROAD" | "PHRASE" | "EXACT";
+    const keywords: { text: string; matchType?: Mt }[] = input.keywords.map((k) => {
+      const mt = k.matchType === "BROAD" || k.matchType === "PHRASE" || k.matchType === "EXACT" ? k.matchType : undefined;
+      return { text: k.text, matchType: mt };
+    });
+    const res = await addGoogleKeywords(t.accessToken, accountId, input.adGroupId, keywords);
     return { count: res.resourceNames.length, details: { resourceNames: res.resourceNames } };
   },
   createCampaign: async (t, accountId, input) => {
@@ -231,6 +244,13 @@ const metaAds: PlatformAdapter = {
       dailyBudget: input.dailyBudget,
       objective: input.objective,
       countries: input.countries,
+      cities: input.cities,
+      neighborhoods: input.neighborhoods,
+      radiusKm: input.radiusKm,
+      geoScope: input.geoScope,
+      deviceTargeting: input.deviceTargeting,
+      channel: input.channel,
+      pageId: input.pageId,
     });
     return { campaignId: result.campaignId, details: { adSetId: result.adSetId, ...result.details } };
   },
@@ -297,6 +317,10 @@ const metaAds: PlatformAdapter = {
   pauseAd: async (t, _accountId, adId) => {
     const { setMetaAdStatus } = await import("./meta-api");
     await setMetaAdStatus(t.accessToken, adId, "PAUSED");
+  },
+  enableAd: async (t, _accountId, adId) => {
+    const { setMetaAdStatus } = await import("./meta-api");
+    await setMetaAdStatus(t.accessToken, adId, "ACTIVE");
   },
 };
 
