@@ -209,6 +209,15 @@ export const AD_CONNECTOR_IDS: ConnectorId[] = Object.values(CONNECTORS)
   .filter((c) => c.group === "ads")
   .map((c) => c.id);
 
+/** Live write platforms only — everything else is product “Bientôt” (no OAuth connect). */
+export const LIVE_WRITE_CONNECTORS = ["meta_ads", "google_ads"] as const satisfies readonly ConnectorId[];
+
+export type LiveWriteConnectorId = (typeof LIVE_WRITE_CONNECTORS)[number];
+
+export function isLiveWriteConnector(id: string): id is LiveWriteConnectorId {
+  return (LIVE_WRITE_CONNECTORS as readonly string[]).includes(id);
+}
+
 export function getBaseUrl(): string {
   return process.env.BETTER_AUTH_URL ?? "http://localhost:8080";
 }

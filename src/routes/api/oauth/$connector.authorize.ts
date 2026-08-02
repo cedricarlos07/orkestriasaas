@@ -1,5 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CONNECTORS, getBaseUrl, type ConnectorId } from "@/lib/oauth/connectors";
+import {
+  CONNECTORS,
+  getBaseUrl,
+  isLiveWriteConnector,
+  type ConnectorId,
+} from "@/lib/oauth/connectors";
 import { getAuthorizeRedirectAsync } from "@/lib/oauth/service";
 import { returnToSetCookie, sanitizeReturnTo } from "@/lib/oauth/return-to";
 import { auth } from "@/lib/auth";
@@ -13,6 +18,13 @@ export const Route = createFileRoute("/api/oauth/$connector/authorize")({
       GET: async ({ request, params }: { request: Request; params: { connector: string } }) => {
         const connector = VALID.has(params.connector) ? (params.connector as ConnectorId) : null;
         if (!connector) return new Response("Unknown connector", { status: 404 });
+
+        // Product lock: Meta + Google only (no Pipeboard / third-party MCP backends).
+        if (!isLiveWriteConnector(connector)) {
+          return Response.redirect(
+            `${getBaseUrl()}/app/connections?oauth=soon&connector=${encodeURIComponent(connector)}`,
+          );
+        }
 
         const session = await auth.api.getSession({ headers: request.headers });
         if (!session) {

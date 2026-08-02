@@ -8,7 +8,7 @@ import {
   type ConnectionView,
 } from "@/functions/connections";
 import { getOAuthAvailability } from "@/functions/platform-config";
-import type { ConnectorId } from "@/lib/oauth/connectors";
+import { CONNECTORS, isLiveWriteConnector, type ConnectorId } from "@/lib/oauth/connectors";
 
 function invalidateConnectionQueries(qc: ReturnType<typeof useQueryClient>) {
   void qc.invalidateQueries({ queryKey: ["connections"] });
@@ -35,6 +35,11 @@ export function useConnections() {
   });
 
   const connect = async (connector: ConnectorId) => {
+    if (!isLiveWriteConnector(connector)) {
+      throw new Error(
+        `${CONNECTORS[connector]?.label ?? connector} arrive bientôt. Aujourd'hui : Meta Ads et Google Ads uniquement.`,
+      );
+    }
     const item = catalog.find((c) => c.id === connector);
     if (item && !item.configured) {
       throw new Error(`${item.label} n'est pas configuré sur le serveur (credentials manquantes).`);

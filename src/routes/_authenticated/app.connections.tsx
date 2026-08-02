@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckCircle2, Loader2, RefreshCw, AlertCircle } from "lucide-react";
-import { CONNECTORS } from "@/lib/oauth/connectors";
+import { CONNECTORS, isLiveWriteConnector } from "@/lib/oauth/connectors";
 import { useConnections } from "@/lib/connections-store";
 import { getMetaSetupStatus, setMetaPage } from "@/functions/meta-settings";
 import { listAdAccounts, listLinkedAdAccounts, selectAdAccount, unlinkAdAccount } from "@/functions/ad-accounts";
@@ -470,7 +470,7 @@ function Connections() {
               c.id !== "google_ads",
           );
           if (!items.length) return null;
-          const LIVE_SOON = new Set<string>(); // TikTok / Snap / Reddit / … → Bientôt (Meta+Google only for now)
+          // Meta + Google only — never show Connect for TikTok/Snap/Reddit (legacy Pipeboard era).
           return (
             <section key={g.title} className="rounded-2xl border border-line/70 bg-white">
               <div className="border-b border-line/60 px-5 py-3 text-[12px] uppercase tracking-wider text-ink-soft">
@@ -478,10 +478,10 @@ function Connections() {
               </div>
               <ul className="divide-y divide-line/60">
                 {items.map((cfg) => {
-                  const live = LIVE_SOON.has(cfg.id);
+                  const live = isLiveWriteConnector(cfg.id);
                   const linked = byConnector(cfg.id)?.status === "connectée";
                   return (
-                  <li key={cfg.id} className="flex items-center justify-between gap-4 px-5 py-4">
+                  <li key={cfg.id} className="flex items-center justify-between gap-4 px-5 py-4 opacity-80">
                     <div className="flex items-center gap-3">
                       <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface-2">
                         <BrandIcon id={cfg.id} className="h-5 w-5" title={cfg.label} />
@@ -489,33 +489,19 @@ function Connections() {
                       <div>
                         <p className="text-[14px] font-medium text-ink">{cfg.label}</p>
                         <p className="text-[12px] text-ink-soft">
-                          {live
-                            ? linked
-                              ? "Connecté"
-                              : "Disponible"
-                            : "Bientôt"}
+                          {live ? (linked ? "Connecté" : "Disponible") : "Bientôt"}
                         </p>
                       </div>
                     </div>
-                    {live ? (
-                      linked ? (
-                        <button
-                          type="button"
-                          className="chip-ghost text-[12px]"
-                          disabled={disconnecting}
-                          onClick={() => void disconnectConnector(cfg.id)}
-                        >
-                          Déconnecter
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="btn-primary text-[13px]"
-                          onClick={() => void connect(cfg.id).catch((e) => alert(e instanceof Error ? e.message : String(e)))}
-                        >
-                          Connecter
-                        </button>
-                      )
+                    {live && linked ? (
+                      <button
+                        type="button"
+                        className="chip-ghost text-[12px]"
+                        disabled={disconnecting}
+                        onClick={() => void disconnectConnector(cfg.id)}
+                      >
+                        Déconnecter
+                      </button>
                     ) : (
                       <span className="chip-ghost text-[12px] text-ink-soft">Bientôt</span>
                     )}

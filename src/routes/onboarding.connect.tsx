@@ -17,8 +17,8 @@ const PLATFORMS = [
     icon: Chrome,
     color: "#4285F4",
   },
-  { id: "tiktok", label: "TikTok Ads", desc: "Publicités TikTok", icon: Music2, color: "#111" },
-  { id: "ga4", label: "Google Analytics", desc: "Bientôt · mesure des ventes", icon: BarChart3, color: "#F9AB00" },
+  { id: "tiktok", label: "TikTok Ads", desc: "Bientôt", icon: Music2, color: "#111", soon: true },
+  { id: "ga4", label: "Google Analytics", desc: "Bientôt · mesure des ventes", icon: BarChart3, color: "#F9AB00", soon: true },
 ];
 
 export const Route = createFileRoute("/onboarding/connect")({ component: Step });
@@ -77,12 +77,12 @@ function Step() {
       <StepHeader
         eyebrow="Étape 3 · Connexions"
         title="Connectez vos comptes publicitaires"
-        desc="Meta, Google et TikTok. Connectez au moins Meta pour commencer."
+        desc="Meta Ads et Google Ads. TikTok et le reste arrivent bientôt."
       />
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        {PLATFORMS.map(({ id, label, desc, icon: Icon, color }) => {
+        {PLATFORMS.map(({ id, label, desc, icon: Icon, color, soon }) => {
           const linked = reallyConnected(id);
-          const ready = configured(id) || (id === "google" && Boolean(googleSetup?.googleReady));
+          const ready = !soon && (configured(id) || (id === "google" && Boolean(googleSetup?.googleReady)));
           return (
             <div key={id} className={`opt-tile p-5 ${linked ? "opt-tile-active" : ""} ${!ready ? "opacity-70" : ""}`}>
               <div className="relative z-10 flex items-start justify-between gap-4">
@@ -96,15 +96,19 @@ function Step() {
                   <div>
                     <p className="text-[15px] font-semibold text-ink">{label}</p>
                     <p className="text-[13px] text-ink-soft">
-                      {id === "google" && googleSetup?.googleReady && !googleSetup.oauthConnected
-                        ? "Compte agence actif"
-                        : ready
-                          ? desc
-                          : "Credentials non configurées sur le serveur"}
+                      {soon
+                        ? desc
+                        : id === "google" && googleSetup?.googleReady && !googleSetup.oauthConnected
+                          ? "Compte agence actif"
+                          : ready
+                            ? desc
+                            : "Credentials non configurées sur le serveur"}
                     </p>
                   </div>
                 </div>
-                {connLoading && id === "meta" ? (
+                {soon ? (
+                  <span className="chip-ghost text-[12px]">Bientôt</span>
+                ) : connLoading && id === "meta" ? (
                   <span className="chip-ghost text-[12px]">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   </span>
@@ -117,6 +121,15 @@ function Step() {
                     Connecter
                   </button>
                 ) : ready ? (
+                  <span className="chip-ghost text-[12px]">Prêt</span>
+                ) : (
+                  <span className="chip-ghost text-[12px]">Indispo</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
                   <span className="chip-ghost text-[12px] text-emerald-700">Disponible</span>
                 ) : (
                   <span className="chip-ghost text-[12px] text-ink-soft">Bientôt</span>
