@@ -130,15 +130,6 @@ function Step() {
           );
         })}
       </div>
-                  <span className="chip-ghost text-[12px] text-emerald-700">Disponible</span>
-                ) : (
-                  <span className="chip-ghost text-[12px] text-ink-soft">Bientôt</span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
       <div className="hint-glass mt-6 text-[13px] text-ink-soft">
         Connexion OAuth officielle. Le statut « Connecté » n&apos;apparaît qu&apos;après autorisation réussie.
       </div>
