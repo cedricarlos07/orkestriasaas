@@ -15,7 +15,7 @@ import { listMetaAdAccounts } from "@/lib/platforms/meta-api";
 import { listTikTokAdvertisers } from "@/lib/platforms/tiktok-api";
 import { uid } from "@/functions/utils";
 
-const STATE_TTL_MS = 15 * 60 * 1000;
+const STATE_TTL_MS = 2 * 60 * 60 * 1000; // 2h — Google Ads verification screens take time
 
 export async function createOAuthState(orgId: string, userId: string, connector: ConnectorId): Promise<string> {
   const state = uid("oauth");
@@ -34,8 +34,19 @@ export async function createOAuthState(orgId: string, userId: string, connector:
 export async function consumeOAuthState(state: string) {
   const rows = await db.select().from(oauthStates).where(eq(oauthStates.id, state)).limit(1);
   const row = rows[0];
+  if (!row) {
+    throw new Error(
+      "Session de connexion introuvable. Cliquez à nouveau sur « Connecter Google Ads » (ne rouvrez pas un ancien onglet Google).",
+    );
+  }
+  // Delete after we know it exists — prevents double-callback races from confusing expiry checks.
   await db.delete(oauthStates).where(eq(oauthStates.id, state));
-  if (!row || row.expiresAt < new Date()) throw new Error("État OAuth invalide ou expiré");
+  const expiresMs = row.expiresAt instanceof Date ? row.expiresAt.getTime() : new Date(row.expiresAt).getTime();
+  if (!Number.isFinite(expiresMs) || expiresMs < Date.now()) {
+    throw new Error(
+      "Session de connexion expirée. Recommencez « Connecter Google Ads » et finalisez Google dans les 2 heures.",
+    );
+  }
   return row;
 }
 
