@@ -4,6 +4,7 @@ import { connections, oauthStates } from "@/db/schema/index";
 import { encryptTokens, type TokenPayload } from "@/lib/crypto/tokens";
 import {
   CONNECTORS,
+  getOAuthClientCredentials,
   hasOAuthCredentials,
   oauthCallbackUrl,
   type ConnectorId,
@@ -39,13 +40,13 @@ export async function consumeOAuthState(state: string) {
 }
 
 export function buildAuthorizeUrl(connector: ConnectorId, state: string): string {
-  if (!hasOAuthCredentials(connector)) {
+  const creds = getOAuthClientCredentials(connector);
+  if (!creds) {
     throw new Error(`OAuth ${CONNECTORS[connector].label} non configuré`);
   }
   const cfg = CONNECTORS[connector];
-  const clientId = process.env[cfg.oauth.clientIdEnv]!;
   const params = new URLSearchParams({
-    client_id: clientId,
+    client_id: creds.clientId,
     redirect_uri: oauthCallbackUrl(connector),
     response_type: "code",
     scope: cfg.oauth.scopes.join(cfg.oauth.scopeSeparator ?? " "),
@@ -61,12 +62,12 @@ export function buildAuthorizeUrl(connector: ConnectorId, state: string): string
 }
 
 async function exchangeCode(connector: ConnectorId, code: string, state?: string): Promise<TokenPayload> {
-  if (!hasOAuthCredentials(connector)) {
+  const creds = getOAuthClientCredentials(connector);
+  if (!creds) {
     throw new Error(`OAuth ${CONNECTORS[connector].label} non configuré`);
   }
   const cfg = CONNECTORS[connector];
-  const clientId = process.env[cfg.oauth.clientIdEnv]!;
-  const clientSecret = process.env[cfg.oauth.clientSecretEnv]!;
+  const { clientId, clientSecret } = creds;
 
   if (connector === "tiktok_ads") {
     const res = await fetch(cfg.oauth.tokenUrl, {

@@ -276,7 +276,18 @@ function Connections() {
                   </button>
                 </>
               ) : (
-                <button type="button" className="btn-primary text-[13px]" onClick={() => void connect("google_ads")}>
+                <button
+                  type="button"
+                  className="btn-primary text-[13px]"
+                  onClick={() => {
+                    void connect("google_ads").catch((e) => {
+                      setOauthBanner({
+                        kind: "err",
+                        text: e instanceof Error ? e.message : "Impossible de connecter Google Ads",
+                      });
+                    });
+                  }}
+                >
                   Connecter Google Ads
                 </button>
               )}

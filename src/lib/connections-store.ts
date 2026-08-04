@@ -49,7 +49,14 @@ export function useConnections() {
         "Ce compte se lie côté Orkestria. Actualisez la page Connexions ou contactez le support.",
       );
     }
-    window.location.href = `/api/oauth/${connector}/authorize`;
+    // Prefer server-built URL so missing credentials surface as a clear error.
+    try {
+      const { url } = await getOAuthAuthorizeUrl({ data: { connector } });
+      window.location.href = url;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Connexion impossible";
+      throw new Error(msg);
+    }
   };
 
   const disconnectMut = useMutation({

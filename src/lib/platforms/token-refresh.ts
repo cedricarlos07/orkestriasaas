@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { connections } from "@/db/schema/index";
 import { encryptTokens, type TokenPayload } from "@/lib/crypto/tokens";
-import { CONNECTORS, type ConnectorId } from "@/lib/oauth/connectors";
+import { CONNECTORS, getOAuthClientCredentials, type ConnectorId } from "@/lib/oauth/connectors";
 
 export async function ensureFreshTokens(
   connectionId: string,
@@ -74,8 +74,9 @@ async function refreshConnectorTokens(
     };
   }
 
-  const clientId = process.env[cfg.oauth.clientIdEnv]!;
-  const clientSecret = process.env[cfg.oauth.clientSecretEnv]!;
+  const creds = getOAuthClientCredentials(connector);
+  if (!creds) throw new Error(`OAuth ${CONNECTORS[connector].label} non configuré`);
+  const { clientId, clientSecret } = creds;
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: refreshToken,

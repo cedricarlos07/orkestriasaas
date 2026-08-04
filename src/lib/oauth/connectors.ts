@@ -226,17 +226,33 @@ export function oauthCallbackUrl(connector: ConnectorId): string {
   return `${getBaseUrl()}/api/oauth/${connector}/callback`;
 }
 
-export function hasOAuthCredentials(connector: ConnectorId): boolean {
+/** Resolve OAuth client id/secret (Google Ads can reuse login client). */
+export function getOAuthClientCredentials(
+  connector: ConnectorId,
+): { clientId: string; clientSecret: string } | null {
   const cfg = CONNECTORS[connector];
-  return !!(process.env[cfg.oauth.clientIdEnv] && process.env[cfg.oauth.clientSecretEnv]);
+  let clientId = process.env[cfg.oauth.clientIdEnv]?.trim() ?? "";
+  let clientSecret = process.env[cfg.oauth.clientSecretEnv]?.trim() ?? "";
+  if (connector === "google_ads") {
+    if (!clientId) clientId = process.env.GOOGLE_CLIENT_ID?.trim() ?? "";
+    if (!clientSecret) clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() ?? "";
+  }
+  if (!clientId || !clientSecret) return null;
+  return { clientId, clientSecret };
+}
+
+export function hasOAuthCredentials(connector: ConnectorId): boolean {
+  return getOAuthClientCredentials(connector) != null;
 }
 
 export function requireOAuthCredentials(connector: ConnectorId): void {
   if (!hasOAuthCredentials(connector)) {
     const cfg = CONNECTORS[connector];
-    throw new Error(
-      `OAuth ${cfg.label} non configuré. Définissez ${cfg.oauth.clientIdEnv} et ${cfg.oauth.clientSecretEnv}`,
-    );
+    const hint =
+      connector === "google_ads"
+        ? `${cfg.oauth.clientIdEnv}/${cfg.oauth.clientSecretEnv} (ou GOOGLE_CLIENT_ID/SECRET)`
+        : `${cfg.oauth.clientIdEnv} et ${cfg.oauth.clientSecretEnv}`;
+    throw new Error(`OAuth ${cfg.label} non configuré. Définissez ${hint}`);
   }
 }
 
