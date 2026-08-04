@@ -214,13 +214,13 @@ export const LANDING_PLANS: LandingPlan[] = [
     name: "Essentiel",
     price: "8 %",
     tag: "Annonceur",
-    text: "Commission sur votre spend Meta + Google. 100 $ de spend offerts, puis plancher 15 $.",
+    text: "Commission simple : 8 % de votre spend Meta + Google. Pas d’abonnement.",
     features: ["Sans abonnement", "Meta + Google", "Chat Orkestria", "Support email"],
     cta: "Commencer",
     kpis: [
       { label: "Commission", value: "8 %" },
-      { label: "Grâce", value: "$100" },
-      { label: "Plafond", value: "$400" },
+      { label: "Base", value: "Spend réel" },
+      { label: "Facture", value: "Mensuelle" },
     ],
   },
   {
@@ -233,8 +233,8 @@ export const LANDING_PLANS: LandingPlan[] = [
     cta: "Commencer",
     kpis: [
       { label: "Commission", value: "8 %" },
-      { label: "Plancher", value: "$15" },
-      { label: "Plafond", value: "$400" },
+      { label: "Base", value: "Spend réel" },
+      { label: "Facture", value: "Mensuelle" },
     ],
   },
   {

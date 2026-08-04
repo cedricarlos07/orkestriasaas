@@ -6,9 +6,6 @@ import { appBaseUrl, getStripe } from "@/lib/stripe/client";
 import type { PlanId } from "@/lib/pricing/plans";
 import { ORKESTRIA_PLANS } from "@/lib/pricing/plans";
 import {
-  COMMISSION_CEILING_USD,
-  COMMISSION_FLOOR_USD,
-  COMMISSION_GRACE_SPEND_USD,
   COMMISSION_RATE,
   currentPeriod,
   getCommissionForOrg,
@@ -304,9 +301,6 @@ export async function getCommissionBillingStatus(orgId: string) {
   const openInvoice = invoices.find((i) => i.period === period && (i.status === "open" || i.status === "draft"));
   return {
     rate: COMMISSION_RATE,
-    floorUsd: COMMISSION_FLOOR_USD,
-    ceilingUsd: COMMISSION_CEILING_USD,
-    graceSpendUsd: COMMISSION_GRACE_SPEND_USD,
     ...commission,
     period,
     openInvoice: openInvoice ?? null,

@@ -322,8 +322,7 @@ function Billing() {
           {ratePct}&nbsp;% du spend Meta + Google
         </p>
         <p className="mt-1 text-[13px] text-ink-soft">
-          Sans abonnement obligatoire. Plancher {formatUsd(c?.floorUsd ?? 15)} · plafond{" "}
-          {formatUsd(c?.ceilingUsd ?? 400)} · {formatUsd(c?.graceSpendUsd ?? 100)} de spend offerts.
+          Sans abonnement obligatoire. Vous payez uniquement {ratePct}&nbsp;% de votre spend Meta + Google.
         </p>
         {c?.writeBlocked || data.writeBlocked ? (
           <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-800">
@@ -341,13 +340,6 @@ function Billing() {
             </p>
             <p className="mt-1 text-[13px] text-ink-soft">
               Spend tracké : {formatUsd(c?.monthSpendUsd ?? 0)}
-              {c?.inGrace
-                ? ` · encore ${formatUsd(c.graceRemainingUsd)} de grâce`
-                : c?.floored
-                  ? " · plancher appliqué"
-                  : c?.capped
-                    ? " · plafond appliqué"
-                    : ""}
             </p>
           </div>
           <button

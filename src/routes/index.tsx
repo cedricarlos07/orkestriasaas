@@ -77,7 +77,7 @@ export const Route = createFileRoute("/")({
           offers: {
             "@type": "Offer",
             priceCurrency: "USD",
-            description: "8% of Meta and Google ad spend. No mandatory subscription. $100 spend grace, $15 floor, $400 monthly ceiling.",
+            description: "8% of Meta and Google ad spend. No mandatory subscription.",
             price: "0",
           },
           aggregateRating: { "@type": "AggregateRating", ratingValue: "4.8", ratingCount: "127" },
@@ -91,7 +91,7 @@ export const Route = createFileRoute("/")({
           mainEntity: [
             { "@type": "Question", name: "Je n'y connais rien en pub, ça marche quand même ?", acceptedAnswer: { "@type": "Answer", text: "Oui. Vous dites ce que vous voulez vendre et à qui, Orkestria s'occupe des réglages compliqués." } },
             { "@type": "Question", name: "Sur quelles plateformes tournent mes pubs ?", acceptedAnswer: { "@type": "Answer", text: "Facebook, Instagram, Google et TikTok — pilotés depuis une seule conversation." } },
-            { "@type": "Question", name: "Combien ça coûte ?", acceptedAnswer: { "@type": "Answer", text: "8 % du spend Meta et Google, sans abonnement obligatoire. 100 $ de spend offerts, plancher 15 $, plafond 400 $/mois." } },
+            { "@type": "Question", name: "Combien ça coûte ?", acceptedAnswer: { "@type": "Answer", text: "8 % du spend Meta et Google, sans abonnement obligatoire." } },
             { "@type": "Question", name: "Est-ce qu'Orkestria peut vider mon budget sans prévenir ?", acceptedAnswer: { "@type": "Answer", text: "Non. Rien ne bouge sans votre accord, vous fixez la limite et coupez tout en un clic." } },
             { "@type": "Question", name: "En combien de temps mes premières ventes ?", acceptedAnswer: { "@type": "Answer", text: "Votre campagne tourne en 15 minutes, les premières commandes tombent souvent en 24 à 48 h." } },
             { "@type": "Question", name: "Je gère une agence, c'est fait pour moi ?", acceptedAnswer: { "@type": "Answer", text: "Oui. Vous suivez tous vos clients au même endroit, sous votre marque." } },
@@ -123,7 +123,7 @@ const STEPS = [
 const FAQ = [
   { q: "Je n'y connais rien en pub, ça marche quand même ?", a: "Oui, c'est justement fait pour ça. Vous dites ce que vous voulez vendre et à qui. Orkestria s'occupe des réglages compliqués à votre place." },
   { q: "Sur quoi mes pubs vont tourner ?", a: "Sur les plus grandes plateformes : Facebook, Instagram, Google et TikTok. Vos clients vous trouvent là où ils passent déjà leur temps." },
-  { q: "Combien ça coûte ?", a: "8 % de ce que vous dépensez en pubs Meta et Google. Pas d'abonnement mensuel obligatoire. Les 100 $ de spend sont offerts, puis plancher 15 $/mois si vous diffusez, plafond 400 $/mois. Les agences : on en parle." },
+  { q: "Combien ça coûte ?", a: "8 % de ce que vous dépensez en pubs Meta et Google. Pas d'abonnement mensuel obligatoire. Les agences : on en parle." },
   { q: "Est-ce qu'Orkestria peut vider mon budget sans prévenir ?", a: "Jamais. Rien ne bouge sans votre accord. Vous fixez la limite, vous validez les changements importants, vous coupez tout en un clic." },
   { q: "En combien de temps je vois mes premières ventes ?", a: "Votre campagne peut tourner en 15 minutes. Les premières commandes tombent souvent dans les 24 à 48 heures." },
   { q: "Je gère une agence, c'est fait pour moi ?", a: "Oui. Vous suivez tous vos clients au même endroit, chacun avec son espace, ses règles et ses rapports automatiques. Sous votre marque." },
@@ -1419,9 +1419,9 @@ function Trust() {
 
 function Pricing() {
   const examples = [
-    { spend: 200, fee: 16, note: "plancher 15 $ → 16 $" },
-    { spend: 1000, fee: 80, note: "8 % nets" },
-    { spend: 5000, fee: 400, note: "plafond atteint" },
+    { spend: 200, fee: 16, note: "8 % exacts" },
+    { spend: 1000, fee: 80, note: "8 % exacts" },
+    { spend: 5000, fee: 400, note: "8 % exacts" },
   ];
   return (
     <section id="pricing" className="mx-auto max-w-[1240px] px-6 py-24">
@@ -1445,9 +1445,8 @@ function Pricing() {
               <span className="text-[15px] text-white/70">du spend Meta + Google</span>
             </div>
             <p className="mt-4 max-w-md text-[15px] text-white/80">
-              Premiers <strong className="font-semibold text-white">100&nbsp;$</strong> de spend offerts. Ensuite plancher{" "}
-              <strong className="font-semibold text-white">15&nbsp;$</strong>/mois si vous diffusez, plafond{" "}
-              <strong className="font-semibold text-white">400&nbsp;$</strong>/mois.
+              Exactement <strong className="font-semibold text-white">8&nbsp;%</strong> de ce que vous dépensez
+              en pubs Meta et Google. Rien d’autre.
             </p>
             <ul className="mt-8 space-y-3">
               {[
