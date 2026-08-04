@@ -1,9 +1,9 @@
 import { requireEnv } from "@/lib/platforms/config";
 import type { UnifiedAccountSnapshot, UnifiedCampaign } from "@/lib/unified-ad-schema";
 
-/** Google Ads REST version — v17–v19 sunset (404). Override with GOOGLE_ADS_API_VERSION. */
+/** Google Ads REST version — v20 sunset (UNSUPPORTED_VERSION). Override with GOOGLE_ADS_API_VERSION. */
 function googleAdsApiBase(): string {
-  const raw = (process.env.GOOGLE_ADS_API_VERSION ?? "v20").trim().replace(/^\/+/, "");
+  const raw = (process.env.GOOGLE_ADS_API_VERSION ?? "v22").trim().replace(/^\/+/, "");
   const ver = raw.startsWith("v") ? raw : `v${raw}`;
   return `https://googleads.googleapis.com/${ver}`;
 }
