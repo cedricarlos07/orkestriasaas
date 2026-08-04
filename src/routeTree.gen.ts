@@ -79,6 +79,8 @@ import { Route as AuthenticatedAppRunsRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedAppSettingsRouteImport } from './routes/_authenticated/app.settings'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiCronAutonomyRouteImport } from './routes/api/cron/autonomy'
+import { Route as ApiCronCommissionBillRouteImport } from './routes/api/cron/commission-bill'
+import { Route as ApiCronSpendSyncRouteImport } from './routes/api/cron/spend-sync'
 import { Route as ApiMcpIndexRouteImport } from './routes/api/mcp/index'
 import { Route as ApiMcpCallRouteImport } from './routes/api/mcp/call'
 import { Route as ApiMcpToolsRouteImport } from './routes/api/mcp/tools'
@@ -450,6 +452,16 @@ const ApiCronAutonomyRoute = ApiCronAutonomyRouteImport.update({
   path: '/api/cron/autonomy',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronCommissionBillRoute = ApiCronCommissionBillRouteImport.update({
+  id: '/api/cron/commission-bill',
+  path: '/api/cron/commission-bill',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronSpendSyncRoute = ApiCronSpendSyncRouteImport.update({
+  id: '/api/cron/spend-sync',
+  path: '/api/cron/spend-sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMcpIndexRoute = ApiMcpIndexRouteImport.update({
   id: '/api/mcp/',
   path: '/api/mcp/',
@@ -599,6 +611,8 @@ export interface FileRoutesByFullPath {
   '/app/settings': typeof AuthenticatedAppSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/cron/autonomy': typeof ApiCronAutonomyRoute
+  '/api/cron/commission-bill': typeof ApiCronCommissionBillRoute
+  '/api/cron/spend-sync': typeof ApiCronSpendSyncRoute
   '/api/mcp/call': typeof ApiMcpCallRoute
   '/api/mcp/tools': typeof ApiMcpToolsRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
@@ -680,6 +694,8 @@ export interface FileRoutesByTo {
   '/app/settings': typeof AuthenticatedAppSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/cron/autonomy': typeof ApiCronAutonomyRoute
+  '/api/cron/commission-bill': typeof ApiCronCommissionBillRoute
+  '/api/cron/spend-sync': typeof ApiCronSpendSyncRoute
   '/api/mcp/call': typeof ApiMcpCallRoute
   '/api/mcp/tools': typeof ApiMcpToolsRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
@@ -768,6 +784,8 @@ export interface FileRoutesById {
   '/_authenticated/app/settings': typeof AuthenticatedAppSettingsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/cron/autonomy': typeof ApiCronAutonomyRoute
+  '/api/cron/commission-bill': typeof ApiCronCommissionBillRoute
+  '/api/cron/spend-sync': typeof ApiCronSpendSyncRoute
   '/api/mcp/call': typeof ApiMcpCallRoute
   '/api/mcp/tools': typeof ApiMcpToolsRoute
   '/api/stripe/webhook': typeof ApiStripeWebhookRoute
@@ -855,6 +873,8 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/api/auth/$'
     | '/api/cron/autonomy'
+    | '/api/cron/commission-bill'
+    | '/api/cron/spend-sync'
     | '/api/mcp/call'
     | '/api/mcp/tools'
     | '/api/stripe/webhook'
@@ -936,6 +956,8 @@ export interface FileRouteTypes {
     | '/app/settings'
     | '/api/auth/$'
     | '/api/cron/autonomy'
+    | '/api/cron/commission-bill'
+    | '/api/cron/spend-sync'
     | '/api/mcp/call'
     | '/api/mcp/tools'
     | '/api/stripe/webhook'
@@ -1023,6 +1045,8 @@ export interface FileRouteTypes {
     | '/_authenticated/app/settings'
     | '/api/auth/$'
     | '/api/cron/autonomy'
+    | '/api/cron/commission-bill'
+    | '/api/cron/spend-sync'
     | '/api/mcp/call'
     | '/api/mcp/tools'
     | '/api/stripe/webhook'
@@ -1062,6 +1086,8 @@ export interface RootRouteChildren {
   SecteursIndexRoute: typeof SecteursIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiCronAutonomyRoute: typeof ApiCronAutonomyRoute
+  ApiCronCommissionBillRoute: typeof ApiCronCommissionBillRoute
+  ApiCronSpendSyncRoute: typeof ApiCronSpendSyncRoute
   ApiMcpCallRoute: typeof ApiMcpCallRoute
   ApiMcpToolsRoute: typeof ApiMcpToolsRoute
   ApiStripeWebhookRoute: typeof ApiStripeWebhookRoute
@@ -1564,6 +1590,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronAutonomyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/commission-bill': {
+      id: '/api/cron/commission-bill'
+      path: '/api/cron/commission-bill'
+      fullPath: '/api/cron/commission-bill'
+      preLoaderRoute: typeof ApiCronCommissionBillRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/spend-sync': {
+      id: '/api/cron/spend-sync'
+      path: '/api/cron/spend-sync'
+      fullPath: '/api/cron/spend-sync'
+      preLoaderRoute: typeof ApiCronSpendSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mcp/': {
       id: '/api/mcp/'
       path: '/api/mcp'
@@ -1909,6 +1949,8 @@ const rootRouteChildren: RootRouteChildren = {
   SecteursIndexRoute: SecteursIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiCronAutonomyRoute: ApiCronAutonomyRoute,
+  ApiCronCommissionBillRoute: ApiCronCommissionBillRoute,
+  ApiCronSpendSyncRoute: ApiCronSpendSyncRoute,
   ApiMcpCallRoute: ApiMcpCallRoute,
   ApiMcpToolsRoute: ApiMcpToolsRoute,
   ApiStripeWebhookRoute: ApiStripeWebhookRoute,

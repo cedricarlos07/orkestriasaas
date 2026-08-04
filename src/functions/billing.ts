@@ -4,17 +4,26 @@ import { getActiveOrgId } from "@/functions/context";
 import {
   createBillingPortalSession,
   createCheckoutSession,
+  createCommissionInvoice,
+  getCommissionBillingStatus,
   getOrgBilling,
 } from "@/lib/stripe/billing";
 import type { PlanId } from "@/lib/pricing/plans";
 import { isStripeConfigured } from "@/lib/stripe/client";
 import { getQuotaStatus } from "@/lib/quotas/enforce";
+import { syncOrgAdSpend } from "@/lib/billing/spend-sync";
 
 export const getBillingStatus = createServerFn({ method: "GET" }).handler(async () => {
   const session = await ensureSession();
   const orgId = await getActiveOrgId(session);
-  const [billing, quotas] = await Promise.all([getOrgBilling(orgId), getQuotaStatus(orgId)]);
-  return { ...billing, quotas };
+  // Best-effort refresh so commission card is not empty.
+  void syncOrgAdSpend(orgId).catch(() => undefined);
+  const [billing, quotas, commission] = await Promise.all([
+    getOrgBilling(orgId),
+    getQuotaStatus(orgId),
+    getCommissionBillingStatus(orgId),
+  ]);
+  return { ...billing, quotas, commission };
 });
 
 export const getUsageQuotas = createServerFn({ method: "GET" }).handler(async () => {
@@ -45,4 +54,17 @@ export const openBillingPortal = createServerFn({ method: "POST" }).handler(asyn
   const orgId = await getActiveOrgId(session);
   const url = await createBillingPortalSession(orgId);
   return { url };
+});
+
+export const payCommission = createServerFn({ method: "POST" }).handler(async () => {
+  if (!isStripeConfigured()) throw new Error("Stripe non configuré");
+  const session = await ensureSession();
+  const orgId = await getActiveOrgId(session);
+  await syncOrgAdSpend(orgId).catch(() => undefined);
+  const result = await createCommissionInvoice({
+    orgId,
+    email: session.user.email,
+    name: session.user.name ?? undefined,
+  });
+  return result;
 });

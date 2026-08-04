@@ -1,7 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe/client";
-import { applySubscriptionToOrg, markOrgCanceled } from "@/lib/stripe/billing";
+import {
+  applyCommissionInvoiceFailed,
+  applyCommissionInvoicePaid,
+  applySubscriptionToOrg,
+  markOrgCanceled,
+} from "@/lib/stripe/billing";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { organizationMetadata } from "@/db/schema/index";
@@ -78,19 +83,22 @@ export const Route = createFileRoute("/api/stripe/webhook")({
             }
             case "invoice.payment_failed": {
               const invoice = event.data.object as Stripe.Invoice;
-              const customerId =
-                typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
-              if (customerId) {
-                const rows = await db
-                  .select()
-                  .from(organizationMetadata)
-                  .where(eq(organizationMetadata.stripeCustomerId, customerId))
-                  .limit(1);
-                if (rows[0]) {
-                  await db
-                    .update(organizationMetadata)
-                    .set({ status: "impayée", writeBlocked: true, updatedAt: new Date() })
-                    .where(eq(organizationMetadata.organizationId, rows[0].organizationId));
+              const handled = await applyCommissionInvoiceFailed(invoice);
+              if (!handled) {
+                const customerId =
+                  typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+                if (customerId) {
+                  const rows = await db
+                    .select()
+                    .from(organizationMetadata)
+                    .where(eq(organizationMetadata.stripeCustomerId, customerId))
+                    .limit(1);
+                  if (rows[0]) {
+                    await db
+                      .update(organizationMetadata)
+                      .set({ status: "impayée", writeBlocked: true, updatedAt: new Date() })
+                      .where(eq(organizationMetadata.organizationId, rows[0].organizationId));
+                  }
                 }
               }
               break;
@@ -99,6 +107,10 @@ export const Route = createFileRoute("/api/stripe/webhook")({
               const invoice = event.data.object as Stripe.Invoice & {
                 subscription?: string | { id: string } | null;
               };
+              if (invoice.metadata?.kind === "commission") {
+                await applyCommissionInvoicePaid(invoice);
+                break;
+              }
               const subRef = invoice.subscription;
               if (subRef) {
                 const subId = typeof subRef === "string" ? subRef : subRef.id;

@@ -1,10 +1,20 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { organizationMetadata, subscriptions } from "@/db/schema/index";
+import { commissionInvoices, organizationMetadata, subscriptions } from "@/db/schema/index";
 import { STRIPE_CATALOG, STRIPE_PRICE_TO_PLAN } from "@/lib/stripe/catalog.generated";
 import { appBaseUrl, getStripe } from "@/lib/stripe/client";
 import type { PlanId } from "@/lib/pricing/plans";
 import { ORKESTRIA_PLANS } from "@/lib/pricing/plans";
+import {
+  COMMISSION_CEILING_USD,
+  COMMISSION_FLOOR_USD,
+  COMMISSION_GRACE_SPEND_USD,
+  COMMISSION_RATE,
+  currentPeriod,
+  getCommissionForOrg,
+  previousPeriod,
+} from "@/lib/billing/commission";
+import { uid } from "@/functions/utils";
 import type Stripe from "stripe";
 
 export function resolvePriceId(planId: PlanId, interval: "month" | "year"): string {
@@ -260,4 +270,255 @@ export async function markOrgCanceled(orgId: string) {
     .update(subscriptions)
     .set({ status: "canceled", renewsAt: null })
     .where(and(eq(subscriptions.organizationId, orgId)));
+}
+
+export async function listCommissionInvoices(orgId: string) {
+  const rows = await db
+    .select()
+    .from(commissionInvoices)
+    .where(eq(commissionInvoices.organizationId, orgId));
+  return rows
+    .sort((a, b) => b.period.localeCompare(a.period))
+    .map((r) => ({
+      id: r.id,
+      period: r.period,
+      spendUsd: Number(r.spendUsd),
+      commissionUsd: Number(r.commissionUsd),
+      status: r.status,
+      stripeInvoiceId: r.stripeInvoiceId,
+      hostedUrl: r.stripeHostedUrl,
+    }));
+}
+
+export async function getCommissionBillingStatus(orgId: string) {
+  const period = currentPeriod();
+  const [commission, invoices, meta] = await Promise.all([
+    getCommissionForOrg(orgId, period),
+    listCommissionInvoices(orgId),
+    db
+      .select()
+      .from(organizationMetadata)
+      .where(eq(organizationMetadata.organizationId, orgId))
+      .limit(1),
+  ]);
+  const openInvoice = invoices.find((i) => i.period === period && (i.status === "open" || i.status === "draft"));
+  return {
+    rate: COMMISSION_RATE,
+    floorUsd: COMMISSION_FLOOR_USD,
+    ceilingUsd: COMMISSION_CEILING_USD,
+    graceSpendUsd: COMMISSION_GRACE_SPEND_USD,
+    ...commission,
+    period,
+    openInvoice: openInvoice ?? null,
+    invoices,
+    writeBlocked: meta[0]?.writeBlocked ?? false,
+    status: meta[0]?.status ?? "essai",
+    configured: Boolean(process.env.STRIPE_SECRET_KEY?.trim()),
+  };
+}
+
+/**
+ * Create (or reuse) a Stripe Invoice for commission on a period.
+ * Defaults to current month estimate; cron uses previousPeriod after month end.
+ */
+export async function createCommissionInvoice(opts: {
+  orgId: string;
+  email: string;
+  name?: string;
+  period?: string;
+}): Promise<{ invoiceId: string; url: string | null; commissionUsd: number }> {
+  const period = opts.period ?? currentPeriod();
+  const commission = await getCommissionForOrg(opts.orgId, period);
+  if (commission.commissionUsd <= 0) {
+    throw new Error("Aucune commission à facturer pour cette période.");
+  }
+
+  const existing = await db
+    .select()
+    .from(commissionInvoices)
+    .where(
+      and(eq(commissionInvoices.organizationId, opts.orgId), eq(commissionInvoices.period, period)),
+    )
+    .limit(1);
+
+  if (existing[0]?.stripeInvoiceId && existing[0].status === "paid") {
+    throw new Error("Cette période est déjà payée.");
+  }
+  if (existing[0]?.stripeHostedUrl && existing[0].status === "open") {
+    return {
+      invoiceId: existing[0].stripeInvoiceId!,
+      url: existing[0].stripeHostedUrl,
+      commissionUsd: Number(existing[0].commissionUsd),
+    };
+  }
+
+  const stripe = getStripe();
+  const customerId = await ensureStripeCustomer({
+    orgId: opts.orgId,
+    email: opts.email,
+    name: opts.name,
+  });
+
+  const amountCents = Math.round(commission.commissionUsd * 100);
+  await stripe.invoiceItems.create({
+    customer: customerId,
+    amount: amountCents,
+    currency: "usd",
+    description: `Commission Orkestria ${Math.round(COMMISSION_RATE * 100)}% · ${period} (spend $${commission.monthSpendUsd.toFixed(2)})`,
+    metadata: {
+      organizationId: opts.orgId,
+      kind: "commission",
+      period,
+    },
+  });
+
+  const invoice = await stripe.invoices.create({
+    customer: customerId,
+    auto_advance: true,
+    collection_method: "send_invoice",
+    days_until_due: 7,
+    metadata: {
+      organizationId: opts.orgId,
+      kind: "commission",
+      period,
+    },
+  });
+
+  const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
+  const hostedUrl = finalized.hosted_invoice_url ?? null;
+
+  const rowId = existing[0]?.id ?? uid("cominv");
+  if (existing[0]) {
+    await db
+      .update(commissionInvoices)
+      .set({
+        spendUsd: String(commission.monthSpendUsd),
+        commissionUsd: String(commission.commissionUsd),
+        stripeInvoiceId: finalized.id,
+        stripeHostedUrl: hostedUrl,
+        status: finalized.status === "paid" ? "paid" : "open",
+        updatedAt: new Date(),
+      })
+      .where(eq(commissionInvoices.id, existing[0].id));
+  } else {
+    await db.insert(commissionInvoices).values({
+      id: rowId,
+      organizationId: opts.orgId,
+      period,
+      spendUsd: String(commission.monthSpendUsd),
+      commissionUsd: String(commission.commissionUsd),
+      stripeInvoiceId: finalized.id,
+      stripeHostedUrl: hostedUrl,
+      status: finalized.status === "paid" ? "paid" : "open",
+      updatedAt: new Date(),
+    });
+  }
+
+  return {
+    invoiceId: finalized.id,
+    url: hostedUrl,
+    commissionUsd: commission.commissionUsd,
+  };
+}
+
+export async function applyCommissionInvoicePaid(invoice: Stripe.Invoice) {
+  if (invoice.metadata?.kind !== "commission") return;
+  const orgId = invoice.metadata.organizationId;
+  const period = invoice.metadata.period;
+  if (!orgId || !period) return;
+
+  await db
+    .update(commissionInvoices)
+    .set({
+      status: "paid",
+      stripeInvoiceId: invoice.id,
+      stripeHostedUrl: invoice.hosted_invoice_url ?? null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(eq(commissionInvoices.organizationId, orgId), eq(commissionInvoices.period, period)),
+    );
+
+  await db
+    .update(organizationMetadata)
+    .set({ status: "active", writeBlocked: false, updatedAt: new Date() })
+    .where(eq(organizationMetadata.organizationId, orgId));
+}
+
+export async function applyCommissionInvoiceFailed(invoice: Stripe.Invoice) {
+  if (invoice.metadata?.kind !== "commission") {
+    // Legacy: any failed invoice without subscription still blocks (handled by caller for non-commission)
+    return false;
+  }
+  const orgId = invoice.metadata.organizationId;
+  if (!orgId) return true;
+
+  const period = invoice.metadata.period;
+  if (period) {
+    await db
+      .update(commissionInvoices)
+      .set({ status: "open", updatedAt: new Date() })
+      .where(
+        and(eq(commissionInvoices.organizationId, orgId), eq(commissionInvoices.period, period)),
+      );
+  }
+
+  await db
+    .update(organizationMetadata)
+    .set({ status: "impayée", writeBlocked: true, updatedAt: new Date() })
+    .where(eq(organizationMetadata.organizationId, orgId));
+  return true;
+}
+
+/** Bill previous calendar month for all orgs with commission > 0. */
+export async function billAllOrgsPreviousMonth() {
+  const period = previousPeriod();
+  const orgs = await db.select({ organizationId: organizationMetadata.organizationId }).from(organizationMetadata);
+  const results: { orgId: string; ok: boolean; error?: string; commissionUsd?: number }[] = [];
+
+  for (const { organizationId: orgId } of orgs) {
+    try {
+      const commission = await getCommissionForOrg(orgId, period);
+      if (commission.commissionUsd <= 0) {
+        results.push({ orgId, ok: true, commissionUsd: 0 });
+        continue;
+      }
+      const existing = await db
+        .select()
+        .from(commissionInvoices)
+        .where(and(eq(commissionInvoices.organizationId, orgId), eq(commissionInvoices.period, period)))
+        .limit(1);
+      if (existing[0]?.status === "paid" || existing[0]?.status === "open") {
+        results.push({ orgId, ok: true, commissionUsd: Number(existing[0].commissionUsd) });
+        continue;
+      }
+      // Need an email — use Stripe customer or skip
+      const meta = await db
+        .select()
+        .from(organizationMetadata)
+        .where(eq(organizationMetadata.organizationId, orgId))
+        .limit(1);
+      const customerId = meta[0]?.stripeCustomerId;
+      if (!customerId) {
+        results.push({ orgId, ok: false, error: "no_stripe_customer" });
+        continue;
+      }
+      const stripe = getStripe();
+      const customer = await stripe.customers.retrieve(customerId);
+      if (customer.deleted || !("email" in customer) || !customer.email) {
+        results.push({ orgId, ok: false, error: "no_customer_email" });
+        continue;
+      }
+      const created = await createCommissionInvoice({
+        orgId,
+        email: customer.email,
+        name: customer.name ?? undefined,
+        period,
+      });
+      results.push({ orgId, ok: true, commissionUsd: created.commissionUsd });
+    } catch (e) {
+      results.push({ orgId, ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return { period, results };
 }

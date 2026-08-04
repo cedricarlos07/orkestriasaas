@@ -71,6 +71,35 @@ export async function gaqlSearch(
   return data.results ?? [];
 }
 
+/** Customer-level spend for a single calendar day (YYYY-MM-DD). */
+export async function fetchGoogleAdsSpendForDay(
+  accessToken: string,
+  customerId: string,
+  dayYYYYMMDD: string,
+  loginCustomerId?: string,
+): Promise<{ spend: number; currency: string }> {
+  const cid = customerId.replace(/\D/g, "");
+  const query = `
+    SELECT
+      metrics.cost_micros,
+      customer.currency_code
+    FROM customer
+    WHERE segments.date = '${dayYYYYMMDD}'
+  `;
+  const rows = await gaqlSearch(cid, accessToken, query, loginCustomerId);
+  let spend = 0;
+  let currency = "USD";
+  for (const row of rows) {
+    const r = row as {
+      metrics?: { costMicros?: string };
+      customer?: { currencyCode?: string };
+    };
+    spend += Number(r.metrics?.costMicros ?? 0) / 1_000_000;
+    if (r.customer?.currencyCode) currency = r.customer.currencyCode;
+  }
+  return { spend, currency };
+}
+
 export async function fetchGoogleAdsSnapshot(
   accessToken: string,
   customerId: string,

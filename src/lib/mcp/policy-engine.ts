@@ -1,4 +1,4 @@
-import { and, eq, like } from "drizzle-orm";
+import { and, eq, like, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   actionRuns,
@@ -800,8 +800,11 @@ export async function recordSpend(opts: {
   accountId?: string;
   spend: number;
   currency?: string;
+  /** YYYY-MM-DD — defaults to today (UTC). */
+  day?: string;
 }): Promise<void> {
-  const day = new Date().toISOString().slice(0, 10);
+  const day = opts.day ?? new Date().toISOString().slice(0, 10);
+  const accountId = opts.accountId ?? null;
   const rows = await db
     .select()
     .from(spendTracking)
@@ -810,20 +813,23 @@ export async function recordSpend(opts: {
         eq(spendTracking.organizationId, opts.orgId),
         eq(spendTracking.connector, opts.connector),
         eq(spendTracking.day, day),
+        accountId
+          ? eq(spendTracking.accountId, accountId)
+          : sql`${spendTracking.accountId} is null`,
       ),
     )
     .limit(1);
   if (rows[0]) {
     await db
       .update(spendTracking)
-      .set({ spend: String(opts.spend), updatedAt: new Date() })
+      .set({ spend: String(opts.spend), currency: opts.currency ?? "USD", updatedAt: new Date() })
       .where(eq(spendTracking.id, rows[0].id));
   } else {
     await db.insert(spendTracking).values({
       id: uid("spend"),
       organizationId: opts.orgId,
       connector: opts.connector,
-      accountId: opts.accountId ?? null,
+      accountId,
       day,
       spend: String(opts.spend),
       currency: opts.currency ?? "USD",

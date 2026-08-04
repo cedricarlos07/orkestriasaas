@@ -12,10 +12,10 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { getProfile, saveUserProfile } from "@/functions/profiles";
-import { getBillingStatus, getUsageQuotas, openBillingPortal, startCheckout } from "@/functions/billing";
+import { getBillingStatus, getUsageQuotas, openBillingPortal, payCommission, startCheckout } from "@/functions/billing";
 import { listLinkedAdAccounts } from "@/functions/ad-accounts";
 import { authClient } from "@/lib/auth-client";
-import { formatPriceCents } from "@/lib/pricing/money";
+import { formatPriceCents, formatUsd } from "@/lib/pricing/money";
 import type { PlanId } from "@/lib/pricing/plans";
 
 export const Route = createFileRoute("/_authenticated/app/settings")({ component: Settings });
@@ -270,6 +270,7 @@ function UsagePanel({ onUpgrade }: { onUpgrade: () => void }) {
 function Billing() {
   const qc = useQueryClient();
   const [interval, setInterval] = useState<"month" | "year">("month");
+  const [agencyOpen, setAgencyOpen] = useState(false);
   const { data, isLoading, error } = useQuery({
     queryKey: ["billing"],
     queryFn: () => getBillingStatus(),
@@ -283,6 +284,13 @@ function Billing() {
   const portal = useMutation({
     mutationFn: () => openBillingPortal(),
     onSuccess: (res) => {
+      if (res.url) window.location.href = res.url;
+    },
+  });
+  const pay = useMutation({
+    mutationFn: () => payCommission(),
+    onSuccess: (res) => {
+      void qc.invalidateQueries({ queryKey: ["billing"] });
       if (res.url) window.location.href = res.url;
     },
   });
@@ -302,100 +310,171 @@ function Billing() {
     );
   }
 
-  const plans = data.catalog.filter((p) => p.audience !== "enterprise" || p.id === "enterprise");
+  const c = data.commission;
+  const ratePct = Math.round((c?.rate ?? 0.08) * 100);
+  const agencyPlans = data.catalog.filter((p) => p.audience === "agence" || p.id === "enterprise");
 
   return (
     <div id="billing" className="space-y-5">
       <div className="rounded-2xl border border-line/60 bg-gradient-to-br from-white to-[#faf6ef] p-5">
+        <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Commission sur budget pub</p>
+        <p className="mt-1 font-display text-[22px] font-semibold text-ink">
+          {ratePct}&nbsp;% du spend Meta + Google
+        </p>
+        <p className="mt-1 text-[13px] text-ink-soft">
+          Sans abonnement obligatoire. Plancher {formatUsd(c?.floorUsd ?? 15)} · plafond{" "}
+          {formatUsd(c?.ceilingUsd ?? 400)} · {formatUsd(c?.graceSpendUsd ?? 100)} de spend offerts.
+        </p>
+        {c?.writeBlocked || data.writeBlocked ? (
+          <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-800">
+            Écritures bloquées — une facture de commission est en retard. Payez pour reprendre.
+          </p>
+        ) : null}
+      </div>
+
+      <div className="rounded-2xl border border-line/60 bg-white p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-[12px] uppercase tracking-wider text-[#ff6c02]">Abonnement actuel</p>
-            <p className="mt-1 font-display text-[22px] font-semibold text-ink">{data.planName}</p>
+            <p className="text-[12px] uppercase tracking-wider text-ink-soft">Ce mois ({c?.period})</p>
+            <p className="mt-2 font-display text-[28px] font-semibold text-ink">
+              {formatUsd(c?.commissionUsd ?? 0)}
+            </p>
             <p className="mt-1 text-[13px] text-ink-soft">
-              Statut : <span className="font-medium text-ink">{data.status}</span>
-              {data.billingInterval ? ` · ${data.billingInterval === "year" ? "annuel" : "mensuel"}` : ""}
-              {" · USD"}
+              Spend tracké : {formatUsd(c?.monthSpendUsd ?? 0)}
+              {c?.inGrace
+                ? ` · encore ${formatUsd(c.graceRemainingUsd)} de grâce`
+                : c?.floored
+                  ? " · plancher appliqué"
+                  : c?.capped
+                    ? " · plafond appliqué"
+                    : ""}
             </p>
           </div>
-          {data.stripeCustomerId && (
-            <button type="button" className="btn-dark" disabled={portal.isPending} onClick={() => portal.mutate()}>
-              {portal.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-              Gérer dans Stripe
-            </button>
-          )}
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={!data.configured || (c?.commissionUsd ?? 0) <= 0 || pay.isPending}
+            onClick={() => pay.mutate()}
+          >
+            {pay.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {(c?.commissionUsd ?? 0) > 0 ? "Payer la commission" : "Rien à payer"}
+          </button>
         </div>
         {!data.configured && (
           <p className="mt-3 text-[13px] text-amber-700">Stripe n’est pas encore configuré côté serveur.</p>
         )}
-        {(checkout.error || portal.error) && (
+        {(pay.error || portal.error || checkout.error) && (
           <p className="mt-3 text-[13px] text-rose-600">
-            {(checkout.error || portal.error)?.message ?? "Erreur Stripe"}
+            {(pay.error || portal.error || checkout.error)?.message ?? "Erreur Stripe"}
           </p>
         )}
+        {c?.openInvoice?.hostedUrl ? (
+          <p className="mt-3 text-[13px] text-ink-soft">
+            Facture ouverte :{" "}
+            <a href={c.openInvoice.hostedUrl} className="font-medium text-[#ff6c02] underline" target="_blank" rel="noreferrer">
+              ouvrir dans Stripe
+            </a>
+          </p>
+        ) : null}
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <p className="font-display text-[16px] font-semibold text-ink">Changer de plan</p>
-        <div className="inline-flex rounded-full bg-surface-2 p-1 ring-1 ring-black/5">
-          <button
-            type="button"
-            onClick={() => setInterval("month")}
-            className={`rounded-full px-3 py-1.5 text-[12px] font-medium ${interval === "month" ? "bg-ink text-white" : "text-ink-soft"}`}
-          >
-            Mensuel
-          </button>
-          <button
-            type="button"
-            onClick={() => setInterval("year")}
-            className={`rounded-full px-3 py-1.5 text-[12px] font-medium ${interval === "year" ? "bg-ink text-white" : "text-ink-soft"}`}
-          >
-            Annuel (−17 %)
-          </button>
+      {(c?.invoices?.length ?? 0) > 0 ? (
+        <div className="rounded-2xl border border-line/60 bg-white p-5">
+          <p className="font-display text-[16px] font-semibold text-ink">Factures commission</p>
+          <ul className="mt-3 divide-y divide-line/50">
+            {c!.invoices.map((inv) => (
+              <li key={inv.id} className="flex items-center justify-between gap-3 py-2.5 text-[13px]">
+                <div>
+                  <p className="font-medium text-ink">{inv.period}</p>
+                  <p className="text-ink-soft">
+                    Spend {formatUsd(inv.spendUsd)} · {formatUsd(inv.commissionUsd)} · {inv.status}
+                  </p>
+                </div>
+                {inv.hostedUrl ? (
+                  <a href={inv.hostedUrl} className="chip-ghost text-[12px]" target="_blank" rel="noreferrer">
+                    Voir
+                  </a>
+                ) : null}
+              </li>
+            ))}
+          </ul>
         </div>
-      </div>
+      ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {plans.map((p) => {
-          const cents = interval === "year" ? p.priceYearlyCents : p.priceMonthlyCents;
-          const current = p.id === data.planId;
-          return (
-            <div
-              key={p.id}
-              className={`rounded-2xl border p-4 ${current ? "border-[#ff6c02]/40 bg-[#fff6ee]" : "border-line/60 bg-white"}`}
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="font-display text-[16px] font-semibold text-ink">{p.name}</p>
-                {current && (
-                  <span className="rounded-full bg-[#ff6c02] px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
-                    Actuel
-                  </span>
-                )}
+      {data.stripeCustomerId ? (
+        <button type="button" className="chip-ghost" disabled={portal.isPending} onClick={() => portal.mutate()}>
+          {portal.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+          Portail Stripe
+        </button>
+      ) : null}
+
+      <div className="rounded-2xl border border-dashed border-line/70 bg-surface-2/40 p-4">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between text-left"
+          onClick={() => setAgencyOpen((v) => !v)}
+        >
+          <div>
+            <p className="font-display text-[15px] font-semibold text-ink">Forfait agence (optionnel)</p>
+            <p className="text-[12px] text-ink-soft">Abonnement fixe pour multi-comptes — pas le chemin principal.</p>
+          </div>
+          <span className="text-[12px] text-ink-soft">{agencyOpen ? "Masquer" : "Afficher"}</span>
+        </button>
+
+        {agencyOpen ? (
+          <div className="mt-4 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[13px] text-ink-soft">
+                Plan actuel (legacy) : <span className="font-medium text-ink">{data.planName}</span>
+              </p>
+              <div className="inline-flex rounded-full bg-white p-1 ring-1 ring-black/5">
+                <button
+                  type="button"
+                  onClick={() => setInterval("month")}
+                  className={`rounded-full px-3 py-1.5 text-[12px] font-medium ${interval === "month" ? "bg-ink text-white" : "text-ink-soft"}`}
+                >
+                  Mensuel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInterval("year")}
+                  className={`rounded-full px-3 py-1.5 text-[12px] font-medium ${interval === "year" ? "bg-ink text-white" : "text-ink-soft"}`}
+                >
+                  Annuel
+                </button>
               </div>
-              <p className="mt-1 text-[12px] text-ink-soft">
-                Jusqu&apos;à {p.quotas.adAccounts < 0 ? "∞" : p.quotas.adAccounts} comptes pubs · crédit IA $
-                {p.quotas.aiBudgetUsdMonthly}
-              </p>
-              <p className="mt-2 font-display text-[24px] font-semibold text-ink">
-                {formatPriceCents(cents)}
-                <span className="text-[12px] font-normal text-ink-soft">
-                  /{interval === "year" ? "an" : "mois"}
-                </span>
-              </p>
-              <button
-                type="button"
-                className="btn-primary mt-4 w-full justify-center"
-                disabled={!data.configured || current || checkout.isPending || !p.stripe}
-                onClick={() => {
-                  checkout.mutate(p.id as PlanId);
-                  void qc;
-                }}
-              >
-                {checkout.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {current ? "Plan actuel" : "Souscrire"}
-              </button>
             </div>
-          );
-        })}
+            <div className="grid gap-3 sm:grid-cols-2">
+              {agencyPlans.map((p) => {
+                const cents = interval === "year" ? p.priceYearlyCents : p.priceMonthlyCents;
+                const current = p.id === data.planId;
+                return (
+                  <div
+                    key={p.id}
+                    className={`rounded-2xl border p-4 ${current ? "border-[#ff6c02]/40 bg-[#fff6ee]" : "border-line/60 bg-white"}`}
+                  >
+                    <p className="font-display text-[16px] font-semibold text-ink">{p.name}</p>
+                    <p className="mt-2 font-display text-[22px] font-semibold text-ink">
+                      {formatPriceCents(cents)}
+                      <span className="text-[12px] font-normal text-ink-soft">
+                        /{interval === "year" ? "an" : "mois"}
+                      </span>
+                    </p>
+                    <button
+                      type="button"
+                      className="btn-primary mt-4 w-full justify-center"
+                      disabled={!data.configured || current || checkout.isPending || !p.stripe}
+                      onClick={() => checkout.mutate(p.id as PlanId)}
+                    >
+                      {checkout.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      {current ? "Plan actuel" : "Souscrire"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

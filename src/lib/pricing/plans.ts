@@ -1,5 +1,3 @@
-import { formatPriceCents } from "./money";
-
 export type PlanId =
   | "solo"
   | "business"
@@ -213,44 +211,44 @@ export type LandingPlan = {
 export const LANDING_PLANS: LandingPlan[] = [
   {
     id: "solo",
-    name: "Solo",
-    price: formatPriceCents(2900),
-    tag: "Pour démarrer",
-    text: "Une marque, un objectif. Idéal pour lancer vos premières campagnes en 15 minutes.",
-    features: ["1 marque · 40 runs/mois", "Meta + Google + TikTok", "Alertes budget & performance", "Support email 48 h"],
+    name: "Essentiel",
+    price: "8 %",
+    tag: "Annonceur",
+    text: "Commission sur votre spend Meta + Google. 100 $ de spend offerts, puis plancher 15 $.",
+    features: ["Sans abonnement", "Meta + Google", "Chat Orkestria", "Support email"],
     cta: "Commencer",
     kpis: [
-      { label: "Marques", value: "1" },
-      { label: "Runs", value: "40/mo" },
-      { label: "Support", value: "48 h" },
+      { label: "Commission", value: "8 %" },
+      { label: "Grâce", value: "$100" },
+      { label: "Plafond", value: "$400" },
     ],
   },
   {
     id: "business",
-    name: "Business",
-    price: formatPriceCents(8900),
-    tag: "Le plus choisi",
-    text: "Pour scaler sans embaucher. Automations avancées et rapports hebdo.",
-    features: ["3 marques · 250 runs/mois", "Automations avancées", "Rapports hebdo par email", "Support prioritaire 24 h"],
+    name: "Croissance",
+    price: "8 %",
+    tag: "Le plus simple",
+    text: "Même commission, plus de volume. Vous payez seulement quand vos pubs tournent.",
+    features: ["Sans abonnement", "Multi-comptes selon usage", "Alertes budget", "Support prioritaire"],
     cta: "Commencer",
     kpis: [
-      { label: "Marques", value: "3" },
-      { label: "Runs", value: "250/mo" },
-      { label: "Support", value: "24 h" },
+      { label: "Commission", value: "8 %" },
+      { label: "Plancher", value: "$15" },
+      { label: "Plafond", value: "$400" },
     ],
   },
   {
     id: "growth",
-    name: "Growth",
-    price: formatPriceCents(14900),
-    tag: "Scale-up",
-    text: "Multi-marques, automations complètes et pilotage supervisé.",
-    features: ["5 marques · 800 runs/mois", "Autopilot supervisé", "Historique 6 mois", "Chat support 12 h"],
-    cta: "Commencer",
+    name: "Agence",
+    price: "Sur devis",
+    tag: "Multi-clients",
+    text: "Forfait optionnel pour agences — ou commission négociée sur gros volumes.",
+    features: ["Multi-marques", "Équipe", "SLA", "Onboarding dédié"],
+    cta: "Nous contacter",
     kpis: [
-      { label: "Marques", value: "5" },
-      { label: "Runs", value: "800/mo" },
-      { label: "Support", value: "12 h" },
+      { label: "Comptes", value: "∞" },
+      { label: "Marques", value: "∞" },
+      { label: "Support", value: "SLA" },
     ],
   },
 ];

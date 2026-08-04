@@ -70,6 +70,10 @@ export const getDashboardKpis = createServerFn({ method: "GET" }).handler(async 
       meta.tokens.accountId!,
       "30 derniers jours",
     );
+    // Best-effort: persist yesterday spend so commission UI works without waiting for cron.
+    void import("@/lib/billing/spend-sync")
+      .then(({ syncOrgAdSpend }) => syncOrgAdSpend(orgId))
+      .catch(() => undefined);
   } catch {
     return {
       greeting,

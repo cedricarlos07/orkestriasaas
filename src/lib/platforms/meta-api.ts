@@ -29,6 +29,38 @@ export async function getMetaPageName(accessToken: string, pageId: string): Prom
   }
 }
 
+/** Account-level spend for a single calendar day (YYYY-MM-DD). */
+export async function fetchMetaAccountSpendForDay(
+  accessToken: string,
+  adAccountId: string,
+  dayYYYYMMDD: string,
+): Promise<{ spend: number; currency: string }> {
+  const actId = adAccountId.startsWith("act_") ? adAccountId : `act_${adAccountId.replace(/\D/g, "")}`;
+  const insightsUrl = new URL(`${GRAPH}/${actId}/insights`);
+  insightsUrl.searchParams.set("fields", "spend");
+  insightsUrl.searchParams.set("level", "account");
+  insightsUrl.searchParams.set(
+    "time_range",
+    JSON.stringify({ since: dayYYYYMMDD, until: dayYYYYMMDD }),
+  );
+  insightsUrl.searchParams.set("access_token", accessToken);
+
+  const accountUrl = new URL(`${GRAPH}/${actId}`);
+  accountUrl.searchParams.set("fields", "currency");
+  accountUrl.searchParams.set("access_token", accessToken);
+
+  const [insightsRes, accRes] = await Promise.all([fetch(insightsUrl), fetch(accountUrl)]);
+  if (!insightsRes.ok) throw new Error(`Meta day insights: ${await insightsRes.text()}`);
+  const insights = (await insightsRes.json()) as { data?: { spend?: string }[] };
+  const spend = Number(insights.data?.[0]?.spend ?? 0);
+  let currency = "USD";
+  if (accRes.ok) {
+    const acc = (await accRes.json()) as { currency?: string };
+    if (acc.currency) currency = acc.currency;
+  }
+  return { spend, currency };
+}
+
 /**
  * Pages usable for Meta ads.
  * Personal /me/accounts is often empty for Business Manager assets — also probe

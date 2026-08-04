@@ -3,7 +3,6 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { authClient } from "@/lib/auth-client";
 import { getProfile } from "@/functions/profiles";
-import { LANDING_PLANS } from "@/lib/pricing/plans";
 import { useQuery } from "@tanstack/react-query";
 import { saveContactSubmission } from "@/lib/contact-store";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -75,7 +74,12 @@ export const Route = createFileRoute("/")({
           applicationCategory: "BusinessApplication",
           operatingSystem: "Web",
           description: "Agent IA qui lance et pilote vos publicités Meta, Google et TikTok depuis une conversation.",
-          offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+          offers: {
+            "@type": "Offer",
+            priceCurrency: "USD",
+            description: "8% of Meta and Google ad spend. No mandatory subscription. $100 spend grace, $15 floor, $400 monthly ceiling.",
+            price: "0",
+          },
           aggregateRating: { "@type": "AggregateRating", ratingValue: "4.8", ratingCount: "127" },
         }),
       },
@@ -87,6 +91,7 @@ export const Route = createFileRoute("/")({
           mainEntity: [
             { "@type": "Question", name: "Je n'y connais rien en pub, ça marche quand même ?", acceptedAnswer: { "@type": "Answer", text: "Oui. Vous dites ce que vous voulez vendre et à qui, Orkestria s'occupe des réglages compliqués." } },
             { "@type": "Question", name: "Sur quelles plateformes tournent mes pubs ?", acceptedAnswer: { "@type": "Answer", text: "Facebook, Instagram, Google et TikTok — pilotés depuis une seule conversation." } },
+            { "@type": "Question", name: "Combien ça coûte ?", acceptedAnswer: { "@type": "Answer", text: "8 % du spend Meta et Google, sans abonnement obligatoire. 100 $ de spend offerts, plancher 15 $, plafond 400 $/mois." } },
             { "@type": "Question", name: "Est-ce qu'Orkestria peut vider mon budget sans prévenir ?", acceptedAnswer: { "@type": "Answer", text: "Non. Rien ne bouge sans votre accord, vous fixez la limite et coupez tout en un clic." } },
             { "@type": "Question", name: "En combien de temps mes premières ventes ?", acceptedAnswer: { "@type": "Answer", text: "Votre campagne tourne en 15 minutes, les premières commandes tombent souvent en 24 à 48 h." } },
             { "@type": "Question", name: "Je gère une agence, c'est fait pour moi ?", acceptedAnswer: { "@type": "Answer", text: "Oui. Vous suivez tous vos clients au même endroit, sous votre marque." } },
@@ -118,6 +123,7 @@ const STEPS = [
 const FAQ = [
   { q: "Je n'y connais rien en pub, ça marche quand même ?", a: "Oui, c'est justement fait pour ça. Vous dites ce que vous voulez vendre et à qui. Orkestria s'occupe des réglages compliqués à votre place." },
   { q: "Sur quoi mes pubs vont tourner ?", a: "Sur les plus grandes plateformes : Facebook, Instagram, Google et TikTok. Vos clients vous trouvent là où ils passent déjà leur temps." },
+  { q: "Combien ça coûte ?", a: "8 % de ce que vous dépensez en pubs Meta et Google. Pas d'abonnement mensuel obligatoire. Les 100 $ de spend sont offerts, puis plancher 15 $/mois si vous diffusez, plafond 400 $/mois. Les agences : on en parle." },
   { q: "Est-ce qu'Orkestria peut vider mon budget sans prévenir ?", a: "Jamais. Rien ne bouge sans votre accord. Vous fixez la limite, vous validez les changements importants, vous coupez tout en un clic." },
   { q: "En combien de temps je vois mes premières ventes ?", a: "Votre campagne peut tourner en 15 minutes. Les premières commandes tombent souvent dans les 24 à 48 heures." },
   { q: "Je gère une agence, c'est fait pour moi ?", a: "Oui. Vous suivez tous vos clients au même endroit, chacun avec son espace, ses règles et ses rapports automatiques. Sous votre marque." },
@@ -133,7 +139,7 @@ const COMPARE = {
   ],
   after: [
     "Vous parlez en français, l'agent fait le reste",
-    "Un tarif clair, aucune commission cachée sur vos dépenses",
+    "8 % du budget pub — sans abonnement obligatoire",
     "Un œil qui veille 24/7 et bloque les dérapages avant vous",
     "Chaque dollar relié à une commande, en clair, sur votre téléphone",
     "Meta, Google et TikTok pilotés depuis une seule conversation",
@@ -155,8 +161,6 @@ const TRUST = [
   { icon: PauseCircle, title: "Bouton stop, tout de suite", text: "Un clic met tout en pause. Rien ne repart sans votre feu vert." },
   { icon: ShieldCheck, title: "Données hébergées en Europe", text: "RGPD, chiffrement et sauvegardes quotidiennes de série." },
 ];
-
-const PLANS = LANDING_PLANS;
 
 // ---------- Shared context helpers ----------
 
@@ -310,9 +314,8 @@ function ContactModal() {
               <select value={topic} onChange={(e) => setTopic(e.target.value)} className="block w-full rounded-xl border border-line bg-white px-3 py-2.5 text-[14px] text-ink focus:border-[#ff6c02] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6c02]/40">
                 <option>Question générale</option>
                 <option>Démo produit</option>
-                <option>Plan Solo</option>
-                <option>Plan Business</option>
-                <option>Plan Agence</option>
+                <option>Commission 8 %</option>
+                <option>Offre agence</option>
                 <option>Support</option>
               </select>
             </label>
@@ -440,7 +443,7 @@ const PRODUCT_GROUPS: { title: string; items: { icon: React.ElementType; label: 
     title: "Ressources",
     items: [
       { icon: Zap, label: "Comment ça marche", desc: "Connexion des comptes, objectif, validation, diffusion : le parcours en 4 étapes.", hash: "how" },
-      { icon: Star, label: "Tarifs", desc: "Plans mensuels et annuels, formules dédiées pour les agences.", hash: "pricing" },
+      { icon: Star, label: "Tarifs", desc: "8 % du spend Meta et Google, sans abonnement obligatoire. Offre agence sur devis.", hash: "pricing" },
       { icon: Bell, label: "FAQ", desc: "Plateformes couvertes, contrôle humain, budgets minimum : les réponses claires.", hash: "faq" },
       { icon: Lock, label: "Sécurité & conformité", desc: "Hébergement UE, RGPD, chiffrement et journaux d'audit consultables.", hash: "security" },
     ],
@@ -1150,8 +1153,8 @@ function Stats() {
           <p className="mt-2 text-[15px] text-ink-soft">Vos campagnes sont pilotées en continu, même la nuit</p>
         </div>
         <div className="rounded-3xl bg-surface-2 p-10 ring-1 ring-black/5">
-          <p className="font-display text-[64px] font-semibold text-ink">0 %</p>
-          <p className="mt-2 text-[15px] text-ink-soft">Commission sur vos dépenses publicitaires — vous payez Orkestria, pas un pourcentage</p>
+          <p className="font-display text-[64px] font-semibold text-ink">8 %</p>
+          <p className="mt-2 text-[15px] text-ink-soft">Du budget pub Meta et Google — sans abonnement obligatoire</p>
         </div>
       </div>
     </section>
@@ -1415,101 +1418,90 @@ function Trust() {
 }
 
 function Pricing() {
-  const [selected, setSelected] = useState<string>("business");
+  const examples = [
+    { spend: 200, fee: 16, note: "plancher 15 $ → 16 $" },
+    { spend: 1000, fee: 80, note: "8 % nets" },
+    { spend: 5000, fee: 400, note: "plafond atteint" },
+  ];
   return (
     <section id="pricing" className="mx-auto max-w-[1240px] px-6 py-24">
-      <div className="mb-10 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-        <div className="max-w-2xl">
-          <p className="text-[13px] font-semibold uppercase tracking-wider text-[#ff6c02]">Tarifs</p>
-          <h2 className="mt-2 font-display text-[40px] font-semibold leading-tight tracking-tight text-ink md:text-[52px]">
-            Un tarif clair. Zéro commission sur vos dépenses.
-          </h2>
-          <p className="mt-4 text-[16px] text-ink-soft">
-            Vous payez Orkestria, pas un pourcentage de votre budget pub.
-          </p>
-        </div>
-        <div role="tablist" aria-label="Choisir un plan" className="inline-flex items-center gap-1 rounded-full bg-surface-2 p-1 ring-1 ring-black/5">
-          {PLANS.map((p) => (
-            <button
-              key={p.id}
-              role="tab"
-              aria-selected={selected === p.id}
-              onClick={() => setSelected(p.id)}
-              className={
-                "rounded-full px-4 py-2 text-[13px] font-medium transition " +
-                (selected === p.id ? "bg-ink text-white shadow-sm" : "text-ink-soft hover:text-ink")
-              }
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
+      <div className="max-w-2xl">
+        <p className="text-[13px] font-semibold uppercase tracking-wider text-[#ff6c02]">Tarifs</p>
+        <h2 className="mt-2 font-display text-[40px] font-semibold leading-tight tracking-tight text-ink md:text-[52px]">
+          8&nbsp;% du budget pub. Sans abonnement.
+        </h2>
+        <p className="mt-4 text-[16px] text-ink-soft">
+          Vous ne payez Orkestria que sur ce que vous dépensez en pubs Meta et Google. Pas de forfait mensuel obligatoire.
+        </p>
       </div>
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        {PLANS.map((p) => {
-          const isSelected = selected === p.id;
-          return (
-            <div
-              key={p.id}
-              role="presentation"
-              onClick={() => setSelected(p.id)}
-              className={
-                "group relative overflow-hidden rounded-3xl p-8 text-left transition duration-300 " +
-                (isSelected
-                  ? "-translate-y-1 bg-ink text-white shadow-[0_30px_60px_-25px_rgba(0,0,0,0.4)] ring-1 ring-black/10"
-                  : "cursor-pointer bg-surface-2 text-ink ring-1 ring-black/5 hover:-translate-y-0.5 hover:shadow-[0_20px_40px_-25px_rgba(0,0,0,0.25)]")
-              }
-            >
-              {isSelected && (
-                <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[#ff6c02]/30 blur-3xl" />
-              )}
-              <div className="relative">
-                <div className="flex items-center justify-between">
-                  <p className="font-display text-[22px] font-semibold">{p.name}</p>
-                  <span
-                    className={
-                      isSelected
-                        ? "rounded-full bg-[#ff6c02] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-white"
-                        : "rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-ink-soft ring-1 ring-black/5"
-                    }
-                  >
-                    {p.tag}
-                  </span>
-                </div>
-                <div className="mt-5 flex items-baseline gap-1">
-                  <span className="font-display text-[44px] font-semibold">{p.price}</span>
-                  {p.price !== "Sur devis" && (
-                    <span className={isSelected ? "text-[13px] text-white/70" : "text-[13px] text-ink-soft"}>/mois · USD</span>
-                  )}
-                </div>
-                <p className={isSelected ? "mt-3 text-[14px] text-white/80" : "mt-3 text-[14px] text-ink-soft"}>{p.text}</p>
-                <div className={"mt-5 grid grid-cols-3 gap-2 rounded-2xl p-3 " + (isSelected ? "bg-white/10" : "bg-white ring-1 ring-black/5")}>
-                  {p.kpis.map((k) => (
-                    <div key={k.label} className="text-center">
-                      <p className={"font-display text-[15px] font-semibold " + (isSelected ? "text-white" : "text-ink")}>{k.value}</p>
-                      <p className={"mt-0.5 text-[11px] uppercase tracking-wider " + (isSelected ? "text-white/60" : "text-ink-soft")}>{k.label}</p>
-                    </div>
-                  ))}
-                </div>
-                <ul className="mt-6 space-y-3">
-                  {p.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-[14px]">
-                      <span className="mt-1 flex h-4 w-4 flex-none items-center justify-center rounded-full bg-[#ff6c02] text-white">
-                        <Check className="h-2.5 w-2.5" />
-                      </span>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <div onClick={(e) => e.stopPropagation()}>
-                  <SmartCta variant={isSelected ? "primary" : "dark"} className="mt-8 w-full justify-center">
-                    {p.cta}
-                  </SmartCta>
-                </div>
-              </div>
+
+      <div className="mt-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="relative overflow-hidden rounded-3xl bg-ink p-8 text-white shadow-[0_30px_60px_-25px_rgba(0,0,0,0.4)] md:p-10">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-[#ff6c02]/30 blur-3xl" />
+          <div className="relative">
+            <p className="text-[13px] font-semibold uppercase tracking-wider text-[#ff9040]">Annonceurs</p>
+            <div className="mt-4 flex flex-wrap items-baseline gap-2">
+              <span className="font-display text-[64px] font-semibold leading-none">8&nbsp;%</span>
+              <span className="text-[15px] text-white/70">du spend Meta + Google</span>
             </div>
-          );
-        })}
+            <p className="mt-4 max-w-md text-[15px] text-white/80">
+              Premiers <strong className="font-semibold text-white">100&nbsp;$</strong> de spend offerts. Ensuite plancher{" "}
+              <strong className="font-semibold text-white">15&nbsp;$</strong>/mois si vous diffusez, plafond{" "}
+              <strong className="font-semibold text-white">400&nbsp;$</strong>/mois.
+            </p>
+            <ul className="mt-8 space-y-3">
+              {[
+                "Gratuit pour connecter Meta / Google et préparer vos campagnes",
+                "Commission seulement quand vos pubs tournent (spend réel)",
+                "Facture claire chaque mois — payez via Stripe",
+              ].map((f) => (
+                <li key={f} className="flex items-start gap-2 text-[14px] text-white/90">
+                  <span className="mt-1 flex h-4 w-4 flex-none items-center justify-center rounded-full bg-[#ff6c02] text-white">
+                    <Check className="h-2.5 w-2.5" />
+                  </span>
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-8">
+              <SmartCta variant="primary" className="w-full justify-center sm:w-auto">
+                Commencer gratuitement
+              </SmartCta>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <div className="rounded-3xl bg-surface-2 p-6 ring-1 ring-black/5 md:p-8">
+            <p className="text-[13px] font-semibold uppercase tracking-wider text-ink-soft">Exemples</p>
+            <ul className="mt-4 space-y-3">
+              {examples.map((ex) => (
+                <li
+                  key={ex.spend}
+                  className="flex items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-black/5"
+                >
+                  <div>
+                    <p className="text-[14px] font-medium text-ink">{ex.spend.toLocaleString("en-US")}&nbsp;$ de pubs</p>
+                    <p className="text-[12px] text-ink-soft">{ex.note}</p>
+                  </div>
+                  <p className="font-display text-[22px] font-semibold text-ink">{ex.fee}&nbsp;$</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-3xl border border-dashed border-line/80 bg-white p-6 md:p-8">
+            <p className="font-display text-[18px] font-semibold text-ink">Agences</p>
+            <p className="mt-2 text-[14px] text-ink-soft">
+              Multi-clients, SLA et volume : forfait optionnel ou commission négociée — on en parle.
+            </p>
+            <Link
+              to="/contact"
+              className="mt-4 inline-flex text-[14px] font-medium text-[#e55a00] underline-offset-2 hover:underline"
+            >
+              Nous contacter
+            </Link>
+          </div>
+        </div>
       </div>
     </section>
   );

@@ -261,3 +261,27 @@ export const connections = pgTable(
   (t) => [index("connections_org_id_idx").on(t.organizationId)],
 );
 
+/** Monthly Orkestria commission invoices (8% of ad spend). */
+export const commissionInvoices = pgTable(
+  "commission_invoices",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** Billing period YYYY-MM */
+    period: text("period").notNull(),
+    spendUsd: numeric("spend_usd", { precision: 14, scale: 2 }).notNull().default("0"),
+    commissionUsd: numeric("commission_usd", { precision: 14, scale: 2 }).notNull().default("0"),
+    stripeInvoiceId: text("stripe_invoice_id"),
+    stripeHostedUrl: text("stripe_hosted_url"),
+    status: text("status").notNull().default("draft"), // draft | open | paid | void | uncollectible
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    index("commission_invoices_org_idx").on(t.organizationId),
+    index("commission_invoices_org_period_idx").on(t.organizationId, t.period),
+  ],
+);
+
